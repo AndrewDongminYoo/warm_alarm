@@ -22,7 +22,7 @@ lint:
   enabled:
     - cspell@10.0.0
     - actionlint@1.7.12
-    - checkov@3.2.524
+    - checkov@3.2.525
     - git-diff-check
     - ktlint@1.8.0
     - markdownlint@0.48.0
