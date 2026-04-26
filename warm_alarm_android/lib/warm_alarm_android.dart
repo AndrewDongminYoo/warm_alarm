@@ -243,6 +243,22 @@ WarmAlarmSupportStatus _supportStatusFromWire(WarmAlarmSupportStatusWire wire) {
   }
 }
 
+int _requireSnoozeDuration(int? millis) {
+  assert(
+    millis != null,
+    'WarmAlarmEventsApi: snoozed event received without snoozeDurationMillis (Kotlin contract violation)',
+  );
+  return millis ?? 0;
+}
+
+WarmAlarmFailureWire _requireFailure(WarmAlarmFailureWire? failure) {
+  assert(
+    failure != null,
+    'WarmAlarmEventsApi: failed event received without failure payload (Kotlin contract violation)',
+  );
+  return failure ?? WarmAlarmFailureWire(code: WarmAlarmFailureCodeWire.unknown);
+}
+
 WarmAlarmEvent _eventFromWire(WarmAlarmEventWire wire) {
   final alarmId = wire.alarmId;
   final occurredAt = DateTime.fromMillisecondsSinceEpoch(wire.occurredAtMillis);
@@ -262,14 +278,14 @@ WarmAlarmEvent _eventFromWire(WarmAlarmEventWire wire) {
     WarmAlarmEventTypeWire.snoozed => WarmAlarmSnoozed(
       alarmId: alarmId,
       occurredAt: occurredAt,
-      duration: Duration(milliseconds: wire.snoozeDurationMillis ?? 0),
+      duration: Duration(
+        milliseconds: _requireSnoozeDuration(wire.snoozeDurationMillis),
+      ),
     ),
     WarmAlarmEventTypeWire.failed => WarmAlarmFailed(
       alarmId: alarmId,
       occurredAt: occurredAt,
-      failure: _failureFromWire(
-        wire.failure ?? WarmAlarmFailureWire(code: WarmAlarmFailureCodeWire.unknown),
-      ),
+      failure: _failureFromWire(_requireFailure(wire.failure)),
     ),
   };
 }
