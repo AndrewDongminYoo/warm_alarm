@@ -1,5 +1,6 @@
 # Custom Dictionary Words
 AABB
+backgrounded
 CBUUID
 fluttium
 gitmoji
