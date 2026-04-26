@@ -1,7 +1,16 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:warm_alarm/warm_alarm.dart';
+import 'package:warm_alarm_android/warm_alarm_android.dart';
 
-void main() => runApp(const MyApp());
+void main() {
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    WarmAlarmAndroid.registerWith();
+  }
+  runApp(const MyApp());
+}
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -25,18 +34,23 @@ class _HomePageState extends State<HomePage> {
   int? _lastScheduledAlarmId;
   String? _scheduleWarning;
   final List<String> _events = <String>[];
-  Stream<WarmAlarmEvent>? _eventsStream;
+  StreamSubscription<WarmAlarmEvent>? _eventsSubscription;
 
   @override
   void initState() {
     super.initState();
-    _eventsStream = WarmAlarm.events;
-    _eventsStream?.listen((event) {
+    _eventsSubscription = WarmAlarm.events.listen((event) {
       if (!mounted) return;
       setState(() {
         _events.insert(0, '${event.runtimeType} #${event.alarmId}');
       });
     });
+  }
+
+  @override
+  void dispose() {
+    _eventsSubscription?.cancel();
+    super.dispose();
   }
 
   @override

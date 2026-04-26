@@ -16,7 +16,13 @@ void main() {
 
       await tester.ensureVisible(find.textContaining('Scheduled alarm id:'));
       await tester.ensureVisible(find.textContaining('Readiness:'));
-      await tester.ensureVisible(find.textContaining('WarmAlarmScheduled #42'));
+
+      final scheduledEvent = find.textContaining('WarmAlarmScheduled #42');
+      for (var i = 0; i < 20 && scheduledEvent.evaluate().isEmpty; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+
+      await tester.ensureVisible(scheduledEvent);
     });
   });
 }

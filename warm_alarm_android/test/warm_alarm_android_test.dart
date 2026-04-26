@@ -234,6 +234,7 @@ void main() {
             occurredAtMillis: now,
             failure: WarmAlarmFailureWire(
               code: WarmAlarmFailureCodeWire.schedulingFailed,
+              message: 'Unable to schedule alarm.',
             ),
           ),
         );
