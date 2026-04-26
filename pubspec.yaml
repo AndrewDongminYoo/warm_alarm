@@ -1,7 +1,7 @@
 name: warm_alarm_root
 publish_to: none
 environment:
-  sdk: ^3.11.0
+  sdk: ">=3.11.5 <4.0.0"
 workspace:
   - warm_alarm
   - warm_alarm_android
