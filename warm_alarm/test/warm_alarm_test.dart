@@ -12,14 +12,11 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group(WarmAlarmPlatform, () {
-    late WarmAlarmPlatform
-    warmAlarmPlatform;
+    late WarmAlarmPlatform warmAlarmPlatform;
 
     setUp(() {
-      warmAlarmPlatform =
-          MockWarmAlarmPlatform();
-      WarmAlarmPlatform.instance =
-          warmAlarmPlatform;
+      warmAlarmPlatform = MockWarmAlarmPlatform();
+      WarmAlarmPlatform.instance = warmAlarmPlatform;
     });
 
     group('getPlatformName', () {

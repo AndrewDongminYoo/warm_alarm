@@ -1,7 +1,6 @@
 import 'package:warm_alarm_platform_interface/warm_alarm_platform_interface.dart';
 
-WarmAlarmPlatform get _platform =>
-    WarmAlarmPlatform.instance;
+WarmAlarmPlatform get _platform => WarmAlarmPlatform.instance;
 
 /// Returns the name of the current platform.
 Future<String> getPlatformName() async {

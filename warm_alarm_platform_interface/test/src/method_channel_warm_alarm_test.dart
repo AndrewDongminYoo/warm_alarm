@@ -7,8 +7,7 @@ void main() {
   const kPlatformName = 'platformName';
 
   group('$MethodChannelWarmAlarm', () {
-    late MethodChannelWarmAlarm
-    methodChannelWarmAlarm;
+    late MethodChannelWarmAlarm methodChannelWarmAlarm;
     final log = <MethodCall>[];
 
     setUp(() {
@@ -31,8 +30,7 @@ void main() {
     tearDown(log.clear);
 
     test('getPlatformName', () async {
-      final platformName = await methodChannelWarmAlarm
-          .getPlatformName();
+      final platformName = await methodChannelWarmAlarm.getPlatformName();
       expect(
         log,
         <Matcher>[isMethodCall('getPlatformName', arguments: null)],

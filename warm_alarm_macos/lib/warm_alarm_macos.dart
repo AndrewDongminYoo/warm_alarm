@@ -17,8 +17,7 @@ class WarmAlarmMacOS extends WarmAlarmPlatform {
   /// Registers this class as the default instance of
   /// [WarmAlarmPlatform].
   static void registerWith() {
-    WarmAlarmPlatform.instance =
-        WarmAlarmMacOS();
+    WarmAlarmPlatform.instance = WarmAlarmMacOS();
   }
 
   @override

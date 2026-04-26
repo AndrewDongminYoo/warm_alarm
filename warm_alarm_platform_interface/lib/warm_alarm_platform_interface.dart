@@ -19,8 +19,7 @@ abstract class WarmAlarmPlatform extends PlatformInterface {
 
   static final Object _token = Object();
 
-  static WarmAlarmPlatform _instance =
-      MethodChannelWarmAlarm();
+  static WarmAlarmPlatform _instance = MethodChannelWarmAlarm();
 
   /// The default instance of [WarmAlarmPlatform] to use.
   ///

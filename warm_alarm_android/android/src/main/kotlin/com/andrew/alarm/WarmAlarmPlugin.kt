@@ -3,7 +3,9 @@ package com.andrew.alarm
 import WarmAlarmApi
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 
-class WarmAlarmPlugin : FlutterPlugin, WarmAlarmApi {
+class WarmAlarmPlugin :
+    FlutterPlugin,
+    WarmAlarmApi {
     companion object {
         private const val TAG = "WarmAlarmPlugin"
     }

@@ -1,8 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:warm_alarm_platform_interface/warm_alarm_platform_interface.dart';
 
-class WarmAlarmMock
-    extends WarmAlarmPlatform {
+class WarmAlarmMock extends WarmAlarmPlatform {
   static const mockPlatformName = 'Mock';
 
   @override
@@ -12,13 +11,11 @@ class WarmAlarmMock
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   group('WarmAlarmPlatformInterface', () {
-    late WarmAlarmPlatform
-    warmAlarmPlatform;
+    late WarmAlarmPlatform warmAlarmPlatform;
 
     setUp(() {
       warmAlarmPlatform = WarmAlarmMock();
-      WarmAlarmPlatform.instance =
-          warmAlarmPlatform;
+      WarmAlarmPlatform.instance = warmAlarmPlatform;
     });
 
     group('getPlatformName', () {

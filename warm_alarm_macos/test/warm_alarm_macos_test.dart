@@ -4,8 +4,7 @@ import 'package:warm_alarm_macos/src/messages.g.dart';
 import 'package:warm_alarm_macos/warm_alarm_macos.dart';
 import 'package:warm_alarm_platform_interface/warm_alarm_platform_interface.dart';
 
-class _MockWarmAlarmApi extends Mock
-    implements WarmAlarmApi {}
+class _MockWarmAlarmApi extends Mock implements WarmAlarmApi {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

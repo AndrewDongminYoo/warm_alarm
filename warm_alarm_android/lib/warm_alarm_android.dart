@@ -17,8 +17,7 @@ class WarmAlarmAndroid extends WarmAlarmPlatform {
   /// Registers this class as the default instance of
   /// [WarmAlarmPlatform].
   static void registerWith() {
-    WarmAlarmPlatform.instance =
-        WarmAlarmAndroid();
+    WarmAlarmPlatform.instance = WarmAlarmAndroid();
   }
 
   @override

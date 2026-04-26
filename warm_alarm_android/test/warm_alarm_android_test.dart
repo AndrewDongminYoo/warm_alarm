@@ -4,8 +4,7 @@ import 'package:warm_alarm_android/src/messages.g.dart';
 import 'package:warm_alarm_android/warm_alarm_android.dart';
 import 'package:warm_alarm_platform_interface/warm_alarm_platform_interface.dart';
 
-class _MockWarmAlarmApi extends Mock
-    implements WarmAlarmApi {}
+class _MockWarmAlarmApi extends Mock implements WarmAlarmApi {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
