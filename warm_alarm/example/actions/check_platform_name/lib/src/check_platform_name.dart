@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:fluttium/fluttium.dart';
 
 /// {@template check_platform_name}
-/// An action that checks the expected platform name.
+/// An action that checks the example alarm inspection state.
 ///
 /// Usage:
 ///
@@ -40,25 +40,37 @@ class CheckPlatformName extends Action {
 
   final bool Function() _isWindows;
 
-  String get _expectedPlatformName {
-    if (_isWeb) return 'Web';
-    if (_isAndroid()) return 'Android';
-    if (_isIOS()) return 'iOS';
-    if (_isLinux()) return 'Linux';
-    if (_isMacOS()) return 'MacOS';
-    if (_isWindows()) return 'Windows';
+  String get _expectedExactScheduling {
+    if (_isAndroid()) return 'supported';
+    if (_isIOS()) return 'limited';
+    if (_isMacOS()) return 'unsupported';
+    if (_isWeb || _isLinux() || _isWindows()) return 'unsupported';
+    throw UnsupportedError('Unsupported platform ${Platform.operatingSystem}');
+  }
+
+  String get _expectedReadiness {
+    if (_isAndroid()) return 'blocked';
+    if (_isIOS()) return 'limited';
+    if (_isMacOS()) return 'limited';
+    if (_isWeb || _isLinux() || _isWindows()) return 'unsupported';
     throw UnsupportedError('Unsupported platform ${Platform.operatingSystem}');
   }
 
   @override
   Future<bool> execute(Tester tester) async {
-    return ExpectVisible(
-      text: 'Platform Name: $_expectedPlatformName',
+    final readinessVisible = await ExpectVisible(
+      text: 'Readiness: $_expectedReadiness',
     ).execute(tester);
+    final exactSchedulingVisible = await ExpectVisible(
+      text: 'Exact scheduling: $_expectedExactScheduling',
+    ).execute(tester);
+
+    return readinessVisible && exactSchedulingVisible;
   }
 
   @override
-  String description() => 'Check platform name: "$_expectedPlatformName"';
+  String description() =>
+      'Check alarm inspection state: readiness="$_expectedReadiness", exactScheduling="$_expectedExactScheduling"';
 }
 
 // coverage:ignore-start these are just wrappers for overloading

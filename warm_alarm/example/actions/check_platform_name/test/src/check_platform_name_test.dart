@@ -45,7 +45,7 @@ void main() {
 
       final testCases = [
         (
-          'Android',
+          'Check alarm inspection state: readiness="blocked", exactScheduling="supported"',
           CheckPlatformName(
             isAndroid: isTrue,
             isIOS: isFalse,
@@ -56,7 +56,7 @@ void main() {
           ),
         ),
         (
-          'iOS',
+          'Check alarm inspection state: readiness="limited", exactScheduling="limited"',
           CheckPlatformName(
             isAndroid: isFalse,
             isIOS: isTrue,
@@ -67,7 +67,7 @@ void main() {
           ),
         ),
         (
-          'Web',
+          'Check alarm inspection state: readiness="unsupported", exactScheduling="unsupported"',
           CheckPlatformName(
             isAndroid: isFalse,
             isIOS: isFalse,
@@ -78,7 +78,7 @@ void main() {
           ),
         ),
         (
-          'Linux',
+          'Check alarm inspection state: readiness="unsupported", exactScheduling="unsupported"',
           CheckPlatformName(
             isAndroid: isFalse,
             isIOS: isFalse,
@@ -89,7 +89,7 @@ void main() {
           ),
         ),
         (
-          'MacOS',
+          'Check alarm inspection state: readiness="limited", exactScheduling="unsupported"',
           CheckPlatformName(
             isAndroid: isFalse,
             isIOS: isFalse,
@@ -100,7 +100,7 @@ void main() {
           ),
         ),
         (
-          'Windows',
+          'Check alarm inspection state: readiness="unsupported", exactScheduling="unsupported"',
           CheckPlatformName(
             isAndroid: isFalse,
             isIOS: isFalse,
@@ -115,7 +115,7 @@ void main() {
       for (final testCase in testCases) {
         expect(
           testCase.$2.description(),
-          equals('Check platform name: "${testCase.$1}"'),
+          equals(testCase.$1),
         );
       }
     });

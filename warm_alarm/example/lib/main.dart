@@ -20,7 +20,8 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  String? _platformName;
+  String? _readiness;
+  String? _exactScheduling;
 
   @override
   Widget build(BuildContext context) {
@@ -32,20 +33,30 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (_platformName == null)
+            if (_readiness == null)
               const SizedBox.shrink()
             else
-              Text(
-                'Platform Name: $_platformName',
-                style: Theme.of(context).textTheme.headlineSmall,
+              Column(
+                children: [
+                  Text(
+                    'Readiness: $_readiness',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text('Exact scheduling: $_exactScheduling'),
+                ],
               ),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () async {
                 if (!context.mounted) return;
                 try {
-                  final result = await getPlatformName();
-                  setState(() => _platformName = result);
+                  final readiness = await WarmAlarm.getReadiness();
+                  final capabilities = await WarmAlarm.getCapabilities();
+                  setState(() {
+                    _readiness = readiness.level.name;
+                    _exactScheduling = capabilities.exactScheduling.name;
+                  });
                 } on Exception catch (error) {
                   if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -56,7 +67,7 @@ class _HomePageState extends State<HomePage> {
                   );
                 }
               },
-              child: const Text('Get Platform Name'),
+              child: const Text('Inspect Alarm API'),
             ),
           ],
         ),
