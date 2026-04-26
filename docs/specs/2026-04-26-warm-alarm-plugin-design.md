@@ -129,7 +129,7 @@ In particular:
 
 Apps must use capabilities, permission state, readiness, and lifecycle events to determine the actual level of alarm reliability.
 
-Returning `WarmAlarmScheduleResult` instead of `void` allows limited-success outcomes to be represented without pretending that every accepted schedule has the same runtime guarantees.
+Returning `WarmAlarmScheduleResult` instead of `void` allows schedule-time readiness and warnings to be represented without pretending that every accepted schedule has the same runtime guarantees.
 
 ## Internal Architecture
 
@@ -290,6 +290,8 @@ final class WarmAlarmReadiness {
 }
 ```
 
+When `level` is `ready`, `reasons` should normally be empty.
+
 ```dart
 enum WarmAlarmReadinessLevel {
   ready,
@@ -301,7 +303,6 @@ enum WarmAlarmReadinessLevel {
 
 ```dart
 enum WarmAlarmReadinessReason {
-  ready,
   notificationPermissionDenied,
   exactAlarmPermissionDenied,
   fullScreenPermissionDenied,
@@ -317,13 +318,11 @@ enum WarmAlarmReadinessReason {
 final class WarmAlarmScheduleResult {
   const WarmAlarmScheduleResult({
     required this.alarmId,
-    required this.accepted,
     required this.readiness,
     this.warning,
   });
 
   final int alarmId;
-  final bool accepted;
   final WarmAlarmReadiness readiness;
   final WarmAlarmWarning? warning;
 }
@@ -451,7 +450,7 @@ The repo is early enough that we should avoid freezing the wrong abstraction.
 - add separate capability, permission-state, and readiness reporting
 - implement public API replacement and platform stubs first
 - provide explicit unsupported or reduced behavior on iOS and macOS
-- wire native-to-Dart lifecycle events through `@FlutterApi`
+- define native-to-Dart lifecycle event transport through `@FlutterApi`
 
 #### Phase 1A: API replacement and stubs
 

@@ -114,7 +114,6 @@ class WarmAlarmMock extends WarmAlarmPlatform {
   Future<WarmAlarmScheduleResult> scheduleAlarm(WarmAlarmSchedule schedule) async =>
       const WarmAlarmScheduleResult(
         alarmId: 7,
-        accepted: true,
         readiness: WarmAlarmReadiness(
           level: WarmAlarmReadinessLevel.limited,
           reasons: <WarmAlarmReadinessReason>[
@@ -200,7 +199,6 @@ enum WarmAlarmReadinessLevel {
 }
 
 enum WarmAlarmReadinessReason {
-  ready,
   notificationPermissionDenied,
   exactAlarmPermissionDenied,
   fullScreenPermissionDenied,
@@ -297,10 +295,9 @@ void main() {
 
     const result = WarmAlarmScheduleResult(
       alarmId: 1,
-      accepted: true,
       readiness: WarmAlarmReadiness(
         level: WarmAlarmReadinessLevel.ready,
-        reasons: <WarmAlarmReadinessReason>[WarmAlarmReadinessReason.ready],
+        reasons: <WarmAlarmReadinessReason>[],
       ),
     );
 
@@ -555,6 +552,8 @@ abstract class WarmAlarmEventsApi {
   void emitEvent(WarmAlarmEventWire event);
 }
 ```
+
+Keep the Phase 1A event contract transport-only: define the event channel and message types now, but do not promise durable history or full runtime event delivery until Phase 1B validation.
 
 ```dart
 // warm_alarm_android/lib/warm_alarm_android.dart (shape)
