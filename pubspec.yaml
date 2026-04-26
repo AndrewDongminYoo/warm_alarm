@@ -1,0 +1,49 @@
+name: warm_alarm_root
+publish_to: none
+environment:
+  sdk: ^3.11.0
+workspace:
+  - warm_alarm
+  - warm_alarm_android
+  - warm_alarm_ios
+  - warm_alarm_macos
+  - warm_alarm_platform_interface
+homepage: https://github.com/AndrewDongminYoo/warm_alarm
+repository: https://github.com/AndrewDongminYoo/warm_alarm
+issue_tracker: https://github.com/AndrewDongminYoo/warm_alarm/issues
+topics:
+  - alarm
+
+dev_dependencies:
+  melos: ^7.5.1
+
+melos:
+  name: warm_alarm
+
+  packages:
+    - warm_alarm
+    - warm_alarm_android
+    - warm_alarm_ios
+    - warm_alarm_macos
+    - warm_alarm_platform_interface
+
+  scripts:
+    generate:
+      run: melos exec --depends-on=pigeon -- "dart run pigeon --input pigeons/messages.dart"
+      description: Build all generated files for Dart & Flutter packages in this project.
+
+    test:
+      run: melos exec --dir-exists=test --fail-fast -- "flutter test --test-randomize-ordering-seed random"
+      description: Run Flutter tests for a specific package in this project.
+
+    test:ci:
+      run: melos exec --dir-exists=test --fail-fast -- "flutter test --concurrency 4 --coverage --test-randomize-ordering-seed random"
+      description: Run Flutter tests for a specific package in this project and generate a coverage report.
+
+    format:
+      run: melos exec -- "dart fix --apply ; dart format --line-length 120 ."
+      description: Format all Dart files in this project.
+
+    format:ci:
+      run: melos exec -- "dart format --line-length 120 . --set-exit-if-changed"
+      description: Check Dart file formatting for all packages in this project.
