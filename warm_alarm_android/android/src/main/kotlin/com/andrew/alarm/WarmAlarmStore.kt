@@ -31,6 +31,17 @@ internal object WarmAlarmStore {
         persist(context, all)
     }
 
+    fun reschedule(
+        context: Context,
+        id: Long,
+        scheduledAtMillis: Long,
+    ) {
+        val existing = loadAll(context).toMutableMap()
+        val schedule = existing[id] ?: return
+        existing[id] = schedule.copy(scheduledAtMillis = scheduledAtMillis)
+        persist(context, existing)
+    }
+
     fun loadAll(context: Context): Map<Long, WarmAlarmScheduleWire> {
         val json = prefs(context).getString(KEY, "[]") ?: "[]"
         val arr = JSONArray(json)

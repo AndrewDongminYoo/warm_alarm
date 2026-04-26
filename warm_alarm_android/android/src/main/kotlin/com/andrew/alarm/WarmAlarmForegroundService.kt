@@ -26,6 +26,7 @@ class WarmAlarmForegroundService : Service() {
     }
 
     private var mediaPlayer: MediaPlayer? = null
+    private var currentSchedule: WarmAlarmScheduleWire? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -56,6 +57,8 @@ class WarmAlarmForegroundService : Service() {
             return
         }
         val schedule = WarmAlarmStore.load(this, alarmId)
+        currentSchedule = schedule
+        WarmAlarmStore.remove(this, alarmId)
         startForeground(NOTIF_ID, buildNotification(alarmId, schedule))
         startAudio(alarmId, schedule)
     }
@@ -76,10 +79,13 @@ class WarmAlarmForegroundService : Service() {
 
     private fun handleSnooze(alarmId: Long) {
         stopAudio()
-        val schedule = WarmAlarmStore.load(this, alarmId)
+        val schedule = currentSchedule ?: WarmAlarmStore.load(this, alarmId)
         val snoozeDurationMillis = schedule?.snooze?.durationMillis ?: (5L * 60 * 1000)
         val fireAt = System.currentTimeMillis() + snoozeDurationMillis
 
+        if (schedule != null) {
+            WarmAlarmStore.reschedule(this, alarmId, fireAt)
+        }
         WarmAlarmPlugin.rescheduleAlarm(this, alarmId, fireAt)
 
         WarmAlarmPlugin.emitEventFromBackground(
