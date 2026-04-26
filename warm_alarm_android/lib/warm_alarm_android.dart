@@ -18,12 +18,11 @@ class WarmAlarmAndroid extends WarmAlarmPlatform implements WarmAlarmEventsApi {
 
   final StreamController<WarmAlarmEvent> _events = StreamController<WarmAlarmEvent>.broadcast();
 
-  /// Registers this class as the default instance of
-  /// [WarmAlarmPlatform].
+  bool _eventsApiSetUp = false;
+
+  /// Registers this class as the default instance of [WarmAlarmPlatform].
   static void registerWith() {
-    final instance = WarmAlarmAndroid();
-    WarmAlarmEventsApi.setUp(instance);
-    WarmAlarmPlatform.instance = instance;
+    WarmAlarmPlatform.instance = WarmAlarmAndroid();
   }
 
   @override
@@ -32,8 +31,17 @@ class WarmAlarmAndroid extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   @override
   Future<void> cancelAllAlarms() => api.cancelAllAlarms();
 
+  void _ensureEventsApiSetUp() {
+    if (_eventsApiSetUp) return;
+    WarmAlarmEventsApi.setUp(this);
+    _eventsApiSetUp = true;
+  }
+
   @override
-  Stream<WarmAlarmEvent> get events => _events.stream;
+  Stream<WarmAlarmEvent> get events {
+    _ensureEventsApiSetUp();
+    return _events.stream;
+  }
 
   @override
   Future<WarmAlarmCapabilities> getCapabilities() async => _capabilitiesFromWire(await api.getCapabilities());

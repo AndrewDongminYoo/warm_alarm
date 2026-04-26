@@ -1,17 +1,10 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:warm_alarm/warm_alarm.dart';
-import 'package:warm_alarm_android/warm_alarm_android.dart';
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
-  if (defaultTargetPlatform == TargetPlatform.android) {
-    WarmAlarmAndroid.registerWith();
-  }
-
   runApp(const MyApp());
 }
 

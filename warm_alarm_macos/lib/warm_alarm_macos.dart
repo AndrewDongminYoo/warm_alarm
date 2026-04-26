@@ -18,8 +18,7 @@ class WarmAlarmMacOS extends WarmAlarmPlatform {
 
   final StreamController<WarmAlarmEvent> _events = StreamController<WarmAlarmEvent>.broadcast();
 
-  /// Registers this class as the default instance of
-  /// [WarmAlarmPlatform].
+  /// Registers this class as the default instance of [WarmAlarmPlatform].
   static void registerWith() {
     WarmAlarmPlatform.instance = WarmAlarmMacOS();
   }
