@@ -64,7 +64,7 @@ class WarmAlarmPlugin :
         callback: (Result<WarmAlarmScheduleResultWire>) -> Unit,
     ) {
         WarmAlarmStore.save(context, schedule)
-        val pending = alarmPendingIntent(schedule.id, PendingIntent.FLAG_UPDATE_CURRENT)
+        val pending = alarmPendingIntent(schedule.id, PendingIntent.FLAG_UPDATE_CURRENT)!!
         val inexact = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()
         if (inexact) {
             alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, schedule.scheduledAtMillis, pending)
