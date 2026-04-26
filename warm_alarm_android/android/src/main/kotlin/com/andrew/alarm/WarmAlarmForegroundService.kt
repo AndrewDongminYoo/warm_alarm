@@ -57,7 +57,7 @@ class WarmAlarmForegroundService : Service() {
         }
         val schedule = WarmAlarmStore.load(this, alarmId)
         startForeground(NOTIF_ID, buildNotification(alarmId, schedule))
-        startAudio(schedule)
+        startAudio(alarmId, schedule)
     }
 
     private fun handleStop(alarmId: Long) {
@@ -95,7 +95,10 @@ class WarmAlarmForegroundService : Service() {
         stopSelf()
     }
 
-    private fun startAudio(schedule: WarmAlarmScheduleWire?) {
+    private fun startAudio(
+        alarmId: Long,
+        schedule: WarmAlarmScheduleWire?,
+    ) {
         val audio = schedule?.audio
         val player = MediaPlayer()
         try {
@@ -130,6 +133,23 @@ class WarmAlarmForegroundService : Service() {
             mediaPlayer = player
         } catch (e: Exception) {
             player.release()
+            if (alarmId != -1L) {
+                WarmAlarmPlugin.emitEventFromBackground(
+                    WarmAlarmEventWire(
+                        alarmId = alarmId,
+                        type = WarmAlarmEventTypeWire.FAILED,
+                        occurredAtMillis = System.currentTimeMillis(),
+                        failure =
+                            WarmAlarmFailureWire(
+                                code = WarmAlarmFailureCodeWire.AUDIO_PLAYBACK_FAILED,
+                                message = e.message ?: "Unable to start media player.",
+                            ),
+                    ),
+                )
+            }
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+            stopSelf()
         }
     }
 

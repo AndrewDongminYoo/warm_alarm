@@ -66,16 +66,32 @@ class WarmAlarmPlugin :
         WarmAlarmStore.save(context, schedule)
         val pending = alarmPendingIntent(schedule.id, PendingIntent.FLAG_UPDATE_CURRENT)!!
         val inexact = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()
+        val readiness =
+            if (inexact) {
+                WarmAlarmReadinessWire(
+                    level = WarmAlarmReadinessLevelWire.LIMITED,
+                    reasons = listOf(WarmAlarmReadinessReasonWire.EXACT_ALARM_PERMISSION_DENIED),
+                )
+            } else {
+                deriveReadiness(currentPermissionState())
+            }
         if (inexact) {
             alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, schedule.scheduledAtMillis, pending)
         } else {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, schedule.scheduledAtMillis, pending)
         }
+        emitEventFromBackground(
+            WarmAlarmEventWire(
+                alarmId = schedule.id,
+                type = WarmAlarmEventTypeWire.SCHEDULED,
+                occurredAtMillis = System.currentTimeMillis(),
+            ),
+        )
         callback(
             Result.success(
                 WarmAlarmScheduleResultWire(
                     alarmId = schedule.id,
-                    readiness = deriveReadiness(currentPermissionState()),
+                    readiness = readiness,
                     warning =
                         if (inexact) {
                             WarmAlarmWarningWire(message = "SCHEDULE_EXACT_ALARM not granted; alarm may fire late.")
@@ -153,7 +169,7 @@ class WarmAlarmPlugin :
         val level =
             when {
                 reasons.isEmpty() -> WarmAlarmReadinessLevelWire.READY
-                !perm.exactAlarmGranted -> WarmAlarmReadinessLevelWire.BLOCKED
+                !perm.exactAlarmGranted -> WarmAlarmReadinessLevelWire.LIMITED
                 else -> WarmAlarmReadinessLevelWire.LIMITED
             }
         return WarmAlarmReadinessWire(level = level, reasons = reasons)
