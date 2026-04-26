@@ -11,9 +11,9 @@ import 'package:flutter/services.dart';
 import 'package:meta/meta.dart' show immutable, protected, visibleForTesting;
 
 Object? _extractReplyValueOrThrow(
-    List<Object?>? replyList,
-    String channelName, {
-    required bool isNullValid,
+  List<Object?>? replyList,
+  String channelName, {
+  required bool isNullValid,
 }) {
   if (replyList == null) {
     throw PlatformException(
@@ -35,7 +35,824 @@ Object? _extractReplyValueOrThrow(
   return replyList.firstOrNull;
 }
 
+List<Object?> wrapResponse({Object? result, PlatformException? error, bool empty = false}) {
+  if (empty) {
+    return <Object?>[];
+  }
+  if (error == null) {
+    return <Object?>[result];
+  }
+  return <Object?>[error.code, error.message, error.details];
+}
 
+bool _deepEquals(Object? a, Object? b) {
+  if (identical(a, b)) {
+    return true;
+  }
+  if (a is double && b is double) {
+    if (a.isNaN && b.isNaN) {
+      return true;
+    }
+    return a == b;
+  }
+  if (a is List && b is List) {
+    return a.length == b.length && a.indexed.every(((int, dynamic) item) => _deepEquals(item.$2, b[item.$1]));
+  }
+  if (a is Map && b is Map) {
+    if (a.length != b.length) {
+      return false;
+    }
+    for (final MapEntry<Object?, Object?> entryA in a.entries) {
+      bool found = false;
+      for (final MapEntry<Object?, Object?> entryB in b.entries) {
+        if (_deepEquals(entryA.key, entryB.key)) {
+          if (_deepEquals(entryA.value, entryB.value)) {
+            found = true;
+            break;
+          } else {
+            return false;
+          }
+        }
+      }
+      if (!found) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return a == b;
+}
+
+int _deepHash(Object? value) {
+  if (value is List) {
+    return Object.hashAll(value.map(_deepHash));
+  }
+  if (value is Map) {
+    int result = 0;
+    for (final MapEntry<Object?, Object?> entry in value.entries) {
+      result += (_deepHash(entry.key) * 31) ^ _deepHash(entry.value);
+    }
+    return result;
+  }
+  if (value is double && value.isNaN) {
+    // Normalize NaN to a consistent hash.
+    return 0x7FF8000000000000.hashCode;
+  }
+  if (value is double && value == 0.0) {
+    // Normalize -0.0 to 0.0 so they have the same hash code.
+    return 0.0.hashCode;
+  }
+  return value.hashCode;
+}
+
+enum WarmAlarmSupportStatusWire {
+  supported,
+  limited,
+  unsupported,
+  unknown,
+}
+
+enum WarmAlarmReadinessLevelWire {
+  ready,
+  limited,
+  blocked,
+  unsupported,
+}
+
+enum WarmAlarmReadinessReasonWire {
+  notificationPermissionDenied,
+  exactAlarmPermissionDenied,
+  fullScreenPermissionDenied,
+  backgroundExecutionLimited,
+  backgroundAudioLimited,
+  platformUnsupported,
+  batteryOptimizationMayDelay,
+  unknown,
+}
+
+enum WarmAlarmFailureCodeWire {
+  unknown,
+  invalidArguments,
+  permissionDenied,
+  exactAlarmUnavailable,
+  notificationUnavailable,
+  audioFileNotFound,
+  audioPlaybackFailed,
+  schedulingFailed,
+  platformInternalError,
+}
+
+enum WarmAlarmEventTypeWire {
+  scheduled,
+  fired,
+  stopped,
+  snoozed,
+  failed,
+}
+
+class WarmAlarmCapabilitiesWire {
+  WarmAlarmCapabilitiesWire({
+    required this.exactScheduling,
+    required this.notificationScheduling,
+    required this.backgroundAudioPlayback,
+    required this.fullScreenPresentation,
+    required this.wakeCheck,
+    required this.liveActivity,
+  });
+
+  WarmAlarmSupportStatusWire exactScheduling;
+
+  WarmAlarmSupportStatusWire notificationScheduling;
+
+  WarmAlarmSupportStatusWire backgroundAudioPlayback;
+
+  WarmAlarmSupportStatusWire fullScreenPresentation;
+
+  WarmAlarmSupportStatusWire wakeCheck;
+
+  WarmAlarmSupportStatusWire liveActivity;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      exactScheduling,
+      notificationScheduling,
+      backgroundAudioPlayback,
+      fullScreenPresentation,
+      wakeCheck,
+      liveActivity,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static WarmAlarmCapabilitiesWire decode(Object result) {
+    result as List<Object?>;
+    return WarmAlarmCapabilitiesWire(
+      exactScheduling: result[0]! as WarmAlarmSupportStatusWire,
+      notificationScheduling: result[1]! as WarmAlarmSupportStatusWire,
+      backgroundAudioPlayback: result[2]! as WarmAlarmSupportStatusWire,
+      fullScreenPresentation: result[3]! as WarmAlarmSupportStatusWire,
+      wakeCheck: result[4]! as WarmAlarmSupportStatusWire,
+      liveActivity: result[5]! as WarmAlarmSupportStatusWire,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! WarmAlarmCapabilitiesWire || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(exactScheduling, other.exactScheduling) &&
+        _deepEquals(notificationScheduling, other.notificationScheduling) &&
+        _deepEquals(backgroundAudioPlayback, other.backgroundAudioPlayback) &&
+        _deepEquals(fullScreenPresentation, other.fullScreenPresentation) &&
+        _deepEquals(wakeCheck, other.wakeCheck) &&
+        _deepEquals(liveActivity, other.liveActivity);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
+class WarmAlarmPermissionStateWire {
+  WarmAlarmPermissionStateWire({
+    required this.notificationsGranted,
+    required this.exactAlarmGranted,
+    required this.fullScreenIntentGranted,
+  });
+
+  bool notificationsGranted;
+
+  bool exactAlarmGranted;
+
+  bool fullScreenIntentGranted;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      notificationsGranted,
+      exactAlarmGranted,
+      fullScreenIntentGranted,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static WarmAlarmPermissionStateWire decode(Object result) {
+    result as List<Object?>;
+    return WarmAlarmPermissionStateWire(
+      notificationsGranted: result[0]! as bool,
+      exactAlarmGranted: result[1]! as bool,
+      fullScreenIntentGranted: result[2]! as bool,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! WarmAlarmPermissionStateWire || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(notificationsGranted, other.notificationsGranted) &&
+        _deepEquals(exactAlarmGranted, other.exactAlarmGranted) &&
+        _deepEquals(fullScreenIntentGranted, other.fullScreenIntentGranted);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
+class WarmAlarmReadinessWire {
+  WarmAlarmReadinessWire({
+    required this.level,
+    required this.reasons,
+  });
+
+  WarmAlarmReadinessLevelWire level;
+
+  List<WarmAlarmReadinessReasonWire> reasons;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      level,
+      reasons,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static WarmAlarmReadinessWire decode(Object result) {
+    result as List<Object?>;
+    return WarmAlarmReadinessWire(
+      level: result[0]! as WarmAlarmReadinessLevelWire,
+      reasons: (result[1]! as List<Object?>).cast<WarmAlarmReadinessReasonWire>(),
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! WarmAlarmReadinessWire || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(level, other.level) && _deepEquals(reasons, other.reasons);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
+class WarmAlarmWarningWire {
+  WarmAlarmWarningWire({
+    required this.message,
+  });
+
+  String message;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      message,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static WarmAlarmWarningWire decode(Object result) {
+    result as List<Object?>;
+    return WarmAlarmWarningWire(
+      message: result[0]! as String,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! WarmAlarmWarningWire || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(message, other.message);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
+class WarmAlarmFailureWire {
+  WarmAlarmFailureWire({
+    required this.code,
+    this.message,
+  });
+
+  WarmAlarmFailureCodeWire code;
+
+  String? message;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      code,
+      message,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static WarmAlarmFailureWire decode(Object result) {
+    result as List<Object?>;
+    return WarmAlarmFailureWire(
+      code: result[0]! as WarmAlarmFailureCodeWire,
+      message: result[1] as String?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! WarmAlarmFailureWire || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(code, other.code) && _deepEquals(message, other.message);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
+class WarmAlarmScheduleResultWire {
+  WarmAlarmScheduleResultWire({
+    required this.alarmId,
+    required this.readiness,
+    this.warning,
+  });
+
+  int alarmId;
+
+  WarmAlarmReadinessWire readiness;
+
+  WarmAlarmWarningWire? warning;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      alarmId,
+      readiness,
+      warning,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static WarmAlarmScheduleResultWire decode(Object result) {
+    result as List<Object?>;
+    return WarmAlarmScheduleResultWire(
+      alarmId: result[0]! as int,
+      readiness: result[1]! as WarmAlarmReadinessWire,
+      warning: result[2] as WarmAlarmWarningWire?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! WarmAlarmScheduleResultWire || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(alarmId, other.alarmId) &&
+        _deepEquals(readiness, other.readiness) &&
+        _deepEquals(warning, other.warning);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
+class WarmAlarmNotificationWire {
+  WarmAlarmNotificationWire({
+    required this.title,
+    required this.body,
+    this.stopActionTitle,
+    this.snoozeActionTitle,
+  });
+
+  String title;
+
+  String body;
+
+  String? stopActionTitle;
+
+  String? snoozeActionTitle;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      title,
+      body,
+      stopActionTitle,
+      snoozeActionTitle,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static WarmAlarmNotificationWire decode(Object result) {
+    result as List<Object?>;
+    return WarmAlarmNotificationWire(
+      title: result[0]! as String,
+      body: result[1]! as String,
+      stopActionTitle: result[2] as String?,
+      snoozeActionTitle: result[3] as String?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! WarmAlarmNotificationWire || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(title, other.title) &&
+        _deepEquals(body, other.body) &&
+        _deepEquals(stopActionTitle, other.stopActionTitle) &&
+        _deepEquals(snoozeActionTitle, other.snoozeActionTitle);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
+class WarmAlarmAudioWire {
+  WarmAlarmAudioWire({
+    this.filePath,
+    this.assetPath,
+    required this.loop,
+    this.volume,
+    this.fadeInDurationMillis,
+    required this.vibrate,
+  });
+
+  String? filePath;
+
+  String? assetPath;
+
+  bool loop;
+
+  double? volume;
+
+  int? fadeInDurationMillis;
+
+  bool vibrate;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      filePath,
+      assetPath,
+      loop,
+      volume,
+      fadeInDurationMillis,
+      vibrate,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static WarmAlarmAudioWire decode(Object result) {
+    result as List<Object?>;
+    return WarmAlarmAudioWire(
+      filePath: result[0] as String?,
+      assetPath: result[1] as String?,
+      loop: result[2]! as bool,
+      volume: result[3] as double?,
+      fadeInDurationMillis: result[4] as int?,
+      vibrate: result[5]! as bool,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! WarmAlarmAudioWire || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(filePath, other.filePath) &&
+        _deepEquals(assetPath, other.assetPath) &&
+        _deepEquals(loop, other.loop) &&
+        _deepEquals(volume, other.volume) &&
+        _deepEquals(fadeInDurationMillis, other.fadeInDurationMillis) &&
+        _deepEquals(vibrate, other.vibrate);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
+class WarmAlarmRecurrenceWire {
+  WarmAlarmRecurrenceWire({
+    required this.weekdays,
+  });
+
+  List<int> weekdays;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      weekdays,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static WarmAlarmRecurrenceWire decode(Object result) {
+    result as List<Object?>;
+    return WarmAlarmRecurrenceWire(
+      weekdays: (result[0]! as List<Object?>).cast<int>(),
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! WarmAlarmRecurrenceWire || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(weekdays, other.weekdays);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
+class WarmAlarmSnoozeWire {
+  WarmAlarmSnoozeWire({
+    required this.durationMillis,
+  });
+
+  int durationMillis;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      durationMillis,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static WarmAlarmSnoozeWire decode(Object result) {
+    result as List<Object?>;
+    return WarmAlarmSnoozeWire(
+      durationMillis: result[0]! as int,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! WarmAlarmSnoozeWire || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(durationMillis, other.durationMillis);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
+class WarmAlarmScheduleWire {
+  WarmAlarmScheduleWire({
+    required this.id,
+    required this.scheduledAtMillis,
+    required this.notification,
+    required this.audio,
+    this.recurrence,
+    this.snooze,
+  });
+
+  int id;
+
+  int scheduledAtMillis;
+
+  WarmAlarmNotificationWire notification;
+
+  WarmAlarmAudioWire audio;
+
+  WarmAlarmRecurrenceWire? recurrence;
+
+  WarmAlarmSnoozeWire? snooze;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      id,
+      scheduledAtMillis,
+      notification,
+      audio,
+      recurrence,
+      snooze,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static WarmAlarmScheduleWire decode(Object result) {
+    result as List<Object?>;
+    return WarmAlarmScheduleWire(
+      id: result[0]! as int,
+      scheduledAtMillis: result[1]! as int,
+      notification: result[2]! as WarmAlarmNotificationWire,
+      audio: result[3]! as WarmAlarmAudioWire,
+      recurrence: result[4] as WarmAlarmRecurrenceWire?,
+      snooze: result[5] as WarmAlarmSnoozeWire?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! WarmAlarmScheduleWire || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(id, other.id) &&
+        _deepEquals(scheduledAtMillis, other.scheduledAtMillis) &&
+        _deepEquals(notification, other.notification) &&
+        _deepEquals(audio, other.audio) &&
+        _deepEquals(recurrence, other.recurrence) &&
+        _deepEquals(snooze, other.snooze);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
+class WarmAlarmSnapshotWire {
+  WarmAlarmSnapshotWire({
+    required this.id,
+    required this.scheduledAtMillis,
+  });
+
+  int id;
+
+  int scheduledAtMillis;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      id,
+      scheduledAtMillis,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static WarmAlarmSnapshotWire decode(Object result) {
+    result as List<Object?>;
+    return WarmAlarmSnapshotWire(
+      id: result[0]! as int,
+      scheduledAtMillis: result[1]! as int,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! WarmAlarmSnapshotWire || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(id, other.id) && _deepEquals(scheduledAtMillis, other.scheduledAtMillis);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
+class WarmAlarmEventWire {
+  WarmAlarmEventWire({
+    required this.alarmId,
+    required this.type,
+    required this.occurredAtMillis,
+    this.snoozeDurationMillis,
+    this.failure,
+  });
+
+  int alarmId;
+
+  WarmAlarmEventTypeWire type;
+
+  int occurredAtMillis;
+
+  int? snoozeDurationMillis;
+
+  WarmAlarmFailureWire? failure;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      alarmId,
+      type,
+      occurredAtMillis,
+      snoozeDurationMillis,
+      failure,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static WarmAlarmEventWire decode(Object result) {
+    result as List<Object?>;
+    return WarmAlarmEventWire(
+      alarmId: result[0]! as int,
+      type: result[1]! as WarmAlarmEventTypeWire,
+      occurredAtMillis: result[2]! as int,
+      snoozeDurationMillis: result[3] as int?,
+      failure: result[4] as WarmAlarmFailureWire?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! WarmAlarmEventWire || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(alarmId, other.alarmId) &&
+        _deepEquals(type, other.type) &&
+        _deepEquals(occurredAtMillis, other.occurredAtMillis) &&
+        _deepEquals(snoozeDurationMillis, other.snoozeDurationMillis) &&
+        _deepEquals(failure, other.failure);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
 
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
@@ -44,6 +861,60 @@ class _PigeonCodec extends StandardMessageCodec {
     if (value is int) {
       buffer.putUint8(4);
       buffer.putInt64(value);
+    } else if (value is WarmAlarmSupportStatusWire) {
+      buffer.putUint8(129);
+      writeValue(buffer, value.index);
+    } else if (value is WarmAlarmReadinessLevelWire) {
+      buffer.putUint8(130);
+      writeValue(buffer, value.index);
+    } else if (value is WarmAlarmReadinessReasonWire) {
+      buffer.putUint8(131);
+      writeValue(buffer, value.index);
+    } else if (value is WarmAlarmFailureCodeWire) {
+      buffer.putUint8(132);
+      writeValue(buffer, value.index);
+    } else if (value is WarmAlarmEventTypeWire) {
+      buffer.putUint8(133);
+      writeValue(buffer, value.index);
+    } else if (value is WarmAlarmCapabilitiesWire) {
+      buffer.putUint8(134);
+      writeValue(buffer, value.encode());
+    } else if (value is WarmAlarmPermissionStateWire) {
+      buffer.putUint8(135);
+      writeValue(buffer, value.encode());
+    } else if (value is WarmAlarmReadinessWire) {
+      buffer.putUint8(136);
+      writeValue(buffer, value.encode());
+    } else if (value is WarmAlarmWarningWire) {
+      buffer.putUint8(137);
+      writeValue(buffer, value.encode());
+    } else if (value is WarmAlarmFailureWire) {
+      buffer.putUint8(138);
+      writeValue(buffer, value.encode());
+    } else if (value is WarmAlarmScheduleResultWire) {
+      buffer.putUint8(139);
+      writeValue(buffer, value.encode());
+    } else if (value is WarmAlarmNotificationWire) {
+      buffer.putUint8(140);
+      writeValue(buffer, value.encode());
+    } else if (value is WarmAlarmAudioWire) {
+      buffer.putUint8(141);
+      writeValue(buffer, value.encode());
+    } else if (value is WarmAlarmRecurrenceWire) {
+      buffer.putUint8(142);
+      writeValue(buffer, value.encode());
+    } else if (value is WarmAlarmSnoozeWire) {
+      buffer.putUint8(143);
+      writeValue(buffer, value.encode());
+    } else if (value is WarmAlarmScheduleWire) {
+      buffer.putUint8(144);
+      writeValue(buffer, value.encode());
+    } else if (value is WarmAlarmSnapshotWire) {
+      buffer.putUint8(145);
+      writeValue(buffer, value.encode());
+    } else if (value is WarmAlarmEventWire) {
+      buffer.putUint8(146);
+      writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
     }
@@ -52,6 +923,47 @@ class _PigeonCodec extends StandardMessageCodec {
   @override
   Object? readValueOfType(int type, ReadBuffer buffer) {
     switch (type) {
+      case 129:
+        final value = readValue(buffer) as int?;
+        return value == null ? null : WarmAlarmSupportStatusWire.values[value];
+      case 130:
+        final value = readValue(buffer) as int?;
+        return value == null ? null : WarmAlarmReadinessLevelWire.values[value];
+      case 131:
+        final value = readValue(buffer) as int?;
+        return value == null ? null : WarmAlarmReadinessReasonWire.values[value];
+      case 132:
+        final value = readValue(buffer) as int?;
+        return value == null ? null : WarmAlarmFailureCodeWire.values[value];
+      case 133:
+        final value = readValue(buffer) as int?;
+        return value == null ? null : WarmAlarmEventTypeWire.values[value];
+      case 134:
+        return WarmAlarmCapabilitiesWire.decode(readValue(buffer)!);
+      case 135:
+        return WarmAlarmPermissionStateWire.decode(readValue(buffer)!);
+      case 136:
+        return WarmAlarmReadinessWire.decode(readValue(buffer)!);
+      case 137:
+        return WarmAlarmWarningWire.decode(readValue(buffer)!);
+      case 138:
+        return WarmAlarmFailureWire.decode(readValue(buffer)!);
+      case 139:
+        return WarmAlarmScheduleResultWire.decode(readValue(buffer)!);
+      case 140:
+        return WarmAlarmNotificationWire.decode(readValue(buffer)!);
+      case 141:
+        return WarmAlarmAudioWire.decode(readValue(buffer)!);
+      case 142:
+        return WarmAlarmRecurrenceWire.decode(readValue(buffer)!);
+      case 143:
+        return WarmAlarmSnoozeWire.decode(readValue(buffer)!);
+      case 144:
+        return WarmAlarmScheduleWire.decode(readValue(buffer)!);
+      case 145:
+        return WarmAlarmSnapshotWire.decode(readValue(buffer)!);
+      case 146:
+        return WarmAlarmEventWire.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -63,16 +975,17 @@ class WarmAlarmApi {
   /// available for dependency injection.  If it is left null, the default
   /// BinaryMessenger will be used which routes to the host platform.
   WarmAlarmApi({BinaryMessenger? binaryMessenger, String messageChannelSuffix = ''})
-      : pigeonVar_binaryMessenger = binaryMessenger,
-        pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
+    : pigeonVar_binaryMessenger = binaryMessenger,
+      pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
   final BinaryMessenger? pigeonVar_binaryMessenger;
 
   static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
 
   final String pigeonVar_messageChannelSuffix;
 
-  Future<String?> getPlatformName() async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.getPlatformName$pigeonVar_messageChannelSuffix';
+  Future<WarmAlarmCapabilitiesWire> getCapabilities() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.getCapabilities$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -82,11 +995,161 @@ class WarmAlarmApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: true,
-    )
-    ;
-    return pigeonVar_replyValue as String?;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as WarmAlarmCapabilitiesWire;
+  }
+
+  Future<WarmAlarmPermissionStateWire> getPermissionState() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.getPermissionState$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as WarmAlarmPermissionStateWire;
+  }
+
+  Future<WarmAlarmReadinessWire> getReadiness() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.getReadiness$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as WarmAlarmReadinessWire;
+  }
+
+  Future<WarmAlarmScheduleResultWire> scheduleAlarm(WarmAlarmScheduleWire schedule) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.scheduleAlarm$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[schedule]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as WarmAlarmScheduleResultWire;
+  }
+
+  Future<void> cancelAlarm(int id) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.cancelAlarm$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[id]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+  }
+
+  Future<void> cancelAllAlarms() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.cancelAllAlarms$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+  }
+
+  Future<List<WarmAlarmSnapshotWire>> getScheduledAlarms() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.getScheduledAlarms$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return (pigeonVar_replyValue! as List<Object?>).cast<WarmAlarmSnapshotWire>();
+  }
+}
+
+abstract class WarmAlarmEventsApi {
+  static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
+
+  Future<void> emitEvent(WarmAlarmEventWire event);
+
+  static void setUp(
+    WarmAlarmEventsApi? api, {
+    BinaryMessenger? binaryMessenger,
+    String messageChannelSuffix = '',
+  }) {
+    messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+        'dev.flutter.pigeon.warm_alarm.WarmAlarmEventsApi.emitEvent$messageChannelSuffix',
+        pigeonChannelCodec,
+        binaryMessenger: binaryMessenger,
+      );
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final WarmAlarmEventWire arg_event = args[0]! as WarmAlarmEventWire;
+          try {
+            await api.emitEvent(arg_event);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          } catch (e) {
+            return wrapResponse(
+              error: PlatformException(code: 'error', message: e.toString()),
+            );
+          }
+        });
+      }
+    }
   }
 }
