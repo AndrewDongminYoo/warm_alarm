@@ -36,8 +36,11 @@ class MethodChannelWarmAlarm extends WarmAlarmPlatform {
   );
 
   @override
-  Future<WarmAlarmReadiness> getReadiness() async => _readinessFromMap(
-    await methodChannel.invokeMapMethod<String, Object?>('getReadiness'),
+  Future<WarmAlarmReadiness> getReadiness() async => const WarmAlarmReadiness(
+    level: WarmAlarmReadinessLevel.unsupported,
+    reasons: <WarmAlarmReadinessReason>[
+      WarmAlarmReadinessReason.platformUnsupported,
+    ],
   );
 
   @override
@@ -55,58 +58,4 @@ class MethodChannelWarmAlarm extends WarmAlarmPlatform {
       ],
     ),
   );
-
-  WarmAlarmReadiness _readinessFromMap(Map<String, Object?>? map) {
-    if (map == null) {
-      return const WarmAlarmReadiness(
-        level: WarmAlarmReadinessLevel.unsupported,
-        reasons: <WarmAlarmReadinessReason>[
-          WarmAlarmReadinessReason.platformUnsupported,
-        ],
-      );
-    }
-
-    final rawReasons = map['reasons'] as List<Object?>? ?? const <Object?>[];
-
-    return WarmAlarmReadiness(
-      level: _readinessLevelFromName(map['level'] as String? ?? 'unsupported'),
-      reasons: rawReasons.whereType<String>().map(_readinessReasonFromName).toList(growable: false),
-    );
-  }
-
-  WarmAlarmReadinessLevel _readinessLevelFromName(String name) {
-    switch (name) {
-      case 'ready':
-        return WarmAlarmReadinessLevel.ready;
-      case 'limited':
-        return WarmAlarmReadinessLevel.limited;
-      case 'blocked':
-        return WarmAlarmReadinessLevel.blocked;
-      case 'unsupported':
-      default:
-        return WarmAlarmReadinessLevel.unsupported;
-    }
-  }
-
-  WarmAlarmReadinessReason _readinessReasonFromName(String name) {
-    switch (name) {
-      case 'notificationPermissionDenied':
-        return WarmAlarmReadinessReason.notificationPermissionDenied;
-      case 'exactAlarmPermissionDenied':
-        return WarmAlarmReadinessReason.exactAlarmPermissionDenied;
-      case 'fullScreenPermissionDenied':
-        return WarmAlarmReadinessReason.fullScreenPermissionDenied;
-      case 'backgroundExecutionLimited':
-        return WarmAlarmReadinessReason.backgroundExecutionLimited;
-      case 'backgroundAudioLimited':
-        return WarmAlarmReadinessReason.backgroundAudioLimited;
-      case 'platformUnsupported':
-        return WarmAlarmReadinessReason.platformUnsupported;
-      case 'batteryOptimizationMayDelay':
-        return WarmAlarmReadinessReason.batteryOptimizationMayDelay;
-      case 'unknown':
-      default:
-        return WarmAlarmReadinessReason.unknown;
-    }
-  }
 }

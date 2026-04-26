@@ -1,10 +1,25 @@
 import 'package:warm_alarm_platform_interface/warm_alarm_platform_interface.dart';
 
-WarmAlarmPlatform get _platform => WarmAlarmPlatform.instance;
+export 'package:warm_alarm_platform_interface/warm_alarm_platform_interface.dart';
 
-/// Returns the name of the current platform.
-Future<String> getPlatformName() async {
-  final platformName = await _platform.getPlatformName();
-  if (platformName == null) throw Exception('Unable to get platform name.');
-  return platformName;
+class WarmAlarm {
+  static WarmAlarmPlatform get _platform => WarmAlarmPlatform.instance;
+
+  static Future<WarmAlarmCapabilities> getCapabilities() => _platform.getCapabilities();
+
+  static Future<WarmAlarmPermissionState> getPermissionState() => _platform.getPermissionState();
+
+  static Future<WarmAlarmReadiness> getReadiness() => _platform.getReadiness();
+
+  static Future<WarmAlarmScheduleResult> scheduleAlarm(
+    WarmAlarmSchedule schedule,
+  ) => _platform.scheduleAlarm(schedule);
+
+  static Future<void> cancelAlarm(int id) => _platform.cancelAlarm(id);
+
+  static Future<void> cancelAllAlarms() => _platform.cancelAllAlarms();
+
+  static Future<List<WarmAlarmSnapshot>> getScheduledAlarms() => _platform.getScheduledAlarms();
+
+  static Stream<WarmAlarmEvent> get events => _platform.events;
 }
