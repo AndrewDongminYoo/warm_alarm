@@ -1,5 +1,7 @@
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:warm_alarm_platform_interface/src/method_channel_warm_alarm.dart';
+import 'package:warm_alarm_platform_interface/src/models/models.dart';
+export 'package:warm_alarm_platform_interface/src/models/models.dart';
 
 /// {@template warm_alarm_platform}
 /// The interface that implementations of
@@ -34,6 +36,19 @@ abstract class WarmAlarmPlatform extends PlatformInterface {
     _instance = instance;
   }
 
-  /// Return the current platform name.
-  Future<String?> getPlatformName();
+  Future<WarmAlarmCapabilities> getCapabilities();
+
+  Future<WarmAlarmPermissionState> getPermissionState();
+
+  Future<WarmAlarmReadiness> getReadiness();
+
+  Future<WarmAlarmScheduleResult> scheduleAlarm(WarmAlarmSchedule schedule);
+
+  Future<void> cancelAlarm(int id);
+
+  Future<void> cancelAllAlarms();
+
+  Future<List<WarmAlarmSnapshot>> getScheduledAlarms();
+
+  Stream<WarmAlarmEvent> get events;
 }
