@@ -8,7 +8,7 @@ void main() {
 
   group('E2E', () {
     testWidgets('shows schedule result and event log entries', (tester) async {
-      app.main();
+      await app.main();
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Schedule 1 minute alarm'));
