@@ -4,9 +4,7 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:warm_alarm/warm_alarm.dart';
 import 'package:warm_alarm_platform_interface/warm_alarm_platform_interface.dart';
 
-class MockWarmAlarmPlatform extends Mock
-    with MockPlatformInterfaceMixin
-    implements WarmAlarmPlatform {}
+class MockWarmAlarmPlatform extends Mock with MockPlatformInterfaceMixin implements WarmAlarmPlatform {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

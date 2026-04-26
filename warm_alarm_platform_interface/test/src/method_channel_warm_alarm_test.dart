@@ -12,19 +12,18 @@ void main() {
 
     setUp(() {
       methodChannelWarmAlarm = MethodChannelWarmAlarm();
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(
-            methodChannelWarmAlarm.methodChannel,
-            (methodCall) async {
-              log.add(methodCall);
-              switch (methodCall.method) {
-                case 'getPlatformName':
-                  return kPlatformName;
-                default:
-                  return null;
-              }
-            },
-          );
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+        methodChannelWarmAlarm.methodChannel,
+        (methodCall) async {
+          log.add(methodCall);
+          switch (methodCall.method) {
+            case 'getPlatformName':
+              return kPlatformName;
+            default:
+              return null;
+          }
+        },
+      );
     });
 
     tearDown(log.clear);
