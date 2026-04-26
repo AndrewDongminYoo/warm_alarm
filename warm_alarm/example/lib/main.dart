@@ -49,7 +49,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
-    _eventsSubscription?.cancel();
+    unawaited(_eventsSubscription?.cancel());
     super.dispose();
   }
 
