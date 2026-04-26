@@ -9,20 +9,29 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   group('E2E', () {
-    testWidgets('getPlatformName', (tester) async {
+    testWidgets('inspects the warm alarm api surface', (tester) async {
       app.main();
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Get Platform Name'));
+      await tester.tap(find.text('Inspect Alarm API'));
       await tester.pumpAndSettle();
-      final expected = expectedPlatformName();
-      await tester.ensureVisible(find.text('Platform Name: $expected'));
+      await tester.ensureVisible(find.text('Readiness: ${expectedReadiness()}'));
+      await tester.ensureVisible(
+        find.text('Exact scheduling: ${expectedExactScheduling()}'),
+      );
     });
   });
 }
 
-String expectedPlatformName() {
-  if (Platform.isAndroid) return 'Android';
-  if (Platform.isIOS) return 'iOS';
-  if (Platform.isMacOS) return 'MacOS';
+String expectedReadiness() {
+  if (Platform.isAndroid) return 'blocked';
+  if (Platform.isIOS) return 'limited';
+  if (Platform.isMacOS) return 'limited';
+  throw UnsupportedError('Unsupported platform ${Platform.operatingSystem}');
+}
+
+String expectedExactScheduling() {
+  if (Platform.isAndroid) return 'supported';
+  if (Platform.isIOS) return 'limited';
+  if (Platform.isMacOS) return 'unsupported';
   throw UnsupportedError('Unsupported platform ${Platform.operatingSystem}');
 }
