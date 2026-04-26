@@ -1,5 +1,5 @@
 version: "0.2"
-"$schema": https://raw.githubusercontent.com/streetsidesoftware/cspell/main/cspell.schema.json
+$schema: https://raw.githubusercontent.com/streetsidesoftware/cspell/main/cspell.schema.json
 dictionaries:
   - custom-dictionary
   - vgv_allowed
@@ -20,4 +20,5 @@ ignoreWords:
   - meta-data
   - datatype
 words:
+  - Dongmin
   - fluttium
