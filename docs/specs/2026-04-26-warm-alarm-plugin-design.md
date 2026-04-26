@@ -70,18 +70,63 @@ Instead:
 
 ## Recommended Public API Shape
 
-The first stable public surface should be centered on alarm scheduling plus capabilities/state.
+The first stable public surface should be centered on alarm scheduling plus explicit platform inspection.
+
+The API must expose three separate concepts:
+
+- `getCapabilities()` — what this platform and OS version can support in principle
+- `getPermissionState()` — what the user or system currently allows
+- `getReadiness()` — whether the plugin can currently schedule and deliver the best available alarm behavior
 
 Representative operations:
 
-- `scheduleAlarm(...)`
+- `scheduleAlarm(WarmAlarmSchedule schedule)`
 - `cancelAlarm(int id)`
 - `cancelAllAlarms()`
-- `getScheduledAlarms()` or `getAlarmState(int id)`
-- `getCapabilities()` or `getPermissionState()`
-- event delivery for alarm lifecycle changes
+- `getScheduledAlarms()`
+- `getAlarmState(int id)`
+- `getCapabilities()`
+- `getPermissionState()`
+- `getReadiness()`
+- `events`
 
 This keeps the public contract honest while still allowing rich internal behavior.
+
+An approximate public shape is:
+
+```dart
+abstract interface class WarmAlarmPlatform {
+  Future<WarmAlarmCapabilities> getCapabilities();
+
+  Future<WarmAlarmPermissionState> getPermissionState();
+
+  Future<WarmAlarmReadiness> getReadiness();
+
+  Future<void> scheduleAlarm(WarmAlarmSchedule schedule);
+
+  Future<void> cancelAlarm(int id);
+
+  Future<void> cancelAllAlarms();
+
+  Future<List<WarmAlarmSnapshot>> getScheduledAlarms();
+
+  Stream<WarmAlarmEvent> get events;
+}
+```
+
+## Semantics Of Schedule Success
+
+`scheduleAlarm` success means the platform implementation accepted the best available scheduling request.
+
+It does not guarantee identical behavior across Android, iOS, and macOS.
+
+In particular:
+
+- Android may support exact alarms, full-screen presentation, foreground playback, and retrigger flows when permissions allow.
+- iOS scheduling primarily means local notification scheduling unless the app is already active or the user interacts with the notification.
+- macOS scheduling primarily means desktop notification or reminder behavior and optional playback while the app can run.
+
+Apps must use capabilities, permission state, readiness, and lifecycle events to determine the actual level of alarm reliability.
 
 ## Internal Architecture
 
@@ -144,6 +189,140 @@ Two model layers must exist:
 
 This prevents transport concerns from locking the public API.
 
+## Public Model Draft
+
+The implementation plan should begin from hand-written public models at roughly this level of specificity.
+
+```dart
+final class WarmAlarmSchedule {
+  const WarmAlarmSchedule({
+    required this.id,
+    required this.scheduledAt,
+    required this.notification,
+    required this.audio,
+    this.recurrence,
+    this.snooze,
+  });
+
+  final int id;
+  final DateTime scheduledAt;
+  final WarmAlarmNotification notification;
+  final WarmAlarmAudio audio;
+  final WarmAlarmRecurrence? recurrence;
+  final WarmAlarmSnooze? snooze;
+}
+```
+
+```dart
+final class WarmAlarmAudio {
+  const WarmAlarmAudio({
+    this.filePath,
+    this.assetPath,
+    this.loop = true,
+    this.volume,
+    this.fadeInDuration,
+    this.vibrate = true,
+  });
+
+  final String? filePath;
+  final String? assetPath;
+  final bool loop;
+  final double? volume;
+  final Duration? fadeInDuration;
+  final bool vibrate;
+}
+```
+
+```dart
+final class WarmAlarmNotification {
+  const WarmAlarmNotification({
+    required this.title,
+    required this.body,
+    this.stopActionTitle,
+    this.snoozeActionTitle,
+  });
+
+  final String title;
+  final String body;
+  final String? stopActionTitle;
+  final String? snoozeActionTitle;
+}
+```
+
+```dart
+final class WarmAlarmCapabilities {
+  const WarmAlarmCapabilities({
+    required this.exactScheduling,
+    required this.notificationScheduling,
+    required this.backgroundAudioPlayback,
+    required this.fullScreenPresentation,
+    required this.wakeCheck,
+    required this.liveActivity,
+  });
+
+  final WarmAlarmSupportStatus exactScheduling;
+  final WarmAlarmSupportStatus notificationScheduling;
+  final WarmAlarmSupportStatus backgroundAudioPlayback;
+  final WarmAlarmSupportStatus fullScreenPresentation;
+  final WarmAlarmSupportStatus wakeCheck;
+  final WarmAlarmSupportStatus liveActivity;
+}
+```
+
+```dart
+enum WarmAlarmReadinessLevel {
+  ready,
+  limited,
+  blocked,
+  unsupported,
+}
+```
+
+Additional value types such as `WarmAlarmPermissionState`, `WarmAlarmReadiness`, `WarmAlarmSnapshot`, `WarmAlarmRecurrence`, and `WarmAlarmSnooze` should be hand-written beside these models during planning.
+
+## Event Model Draft
+
+Phase 1 should expose lifecycle events for the core alarm loop without freezing wake-check configuration into the public schedule model.
+
+Initial public event types:
+
+```dart
+sealed class WarmAlarmEvent {
+  const WarmAlarmEvent({required this.alarmId, required this.occurredAt});
+
+  final int alarmId;
+  final DateTime occurredAt;
+}
+
+final class WarmAlarmScheduled extends WarmAlarmEvent {}
+
+final class WarmAlarmFired extends WarmAlarmEvent {}
+
+final class WarmAlarmStopped extends WarmAlarmEvent {}
+
+final class WarmAlarmSnoozed extends WarmAlarmEvent {
+  final Duration duration;
+}
+
+final class WarmAlarmFailed extends WarmAlarmEvent {
+  final WarmAlarmFailure failure;
+}
+```
+
+Phase 2 may extend the public event stream with:
+
+```dart
+final class WarmAlarmWakeCheckShown extends WarmAlarmEvent {}
+
+final class WarmAlarmWakeCheckDismissed extends WarmAlarmEvent {}
+
+final class WarmAlarmWakeCheckExpired extends WarmAlarmEvent {}
+
+final class WarmAlarmRetriggered extends WarmAlarmEvent {}
+```
+
+This keeps wake-check experimentation possible internally before its scheduling model is promoted into the stable public request type.
+
 ## Pigeon Boundary Rule
 
 Use:
@@ -152,6 +331,42 @@ Use:
 - `@FlutterApi` for native to Flutter callbacks such as alarm fired, stopped, snoozed, wake-check expired, or failure events
 
 Pigeon files should stay self-contained and local to each implementation package.
+
+## Unsupported Versus Failed Behavior
+
+Unsupported behavior is not a runtime failure.
+
+- `unsupported`: the platform or OS does not provide the requested capability
+- `limited`: the platform supports a reduced version of the behavior
+- `permissionDenied`: the capability may exist, but the user or system has not granted access
+- `failed`: the implementation attempted the behavior and it failed unexpectedly
+
+The plugin must not silently no-op unsupported behavior.
+
+Recommended public distinctions:
+
+```dart
+enum WarmAlarmSupportStatus {
+  supported,
+  limited,
+  unsupported,
+  unknown,
+}
+```
+
+```dart
+enum WarmAlarmFailureCode {
+  unknown,
+  invalidArguments,
+  permissionDenied,
+  exactAlarmUnavailable,
+  notificationUnavailable,
+  audioFileNotFound,
+  audioPlaybackFailed,
+  schedulingFailed,
+  platformInternalError,
+}
+```
 
 ## Why Not Split The Public API Now
 
@@ -170,10 +385,50 @@ The repo is early enough that we should avoid freezing the wrong abstraction.
 ### Phase 1
 
 - replace `getPlatformName()` with the first real public alarm facade
-- add capability and permission-state reporting
+- add separate capability, permission-state, and readiness reporting
 - implement Android scheduling end to end
 - provide explicit unsupported or reduced behavior on iOS and macOS
 - wire native-to-Dart lifecycle events through `@FlutterApi`
+
+#### Phase 1A: API replacement and stubs
+
+- remove or deprecate `getPlatformName()`
+- add hand-written public models and platform interface methods
+- add per-platform stub implementations with accurate `supported`, `limited`, or `unsupported` reporting
+- generate Pigeon schemas and bindings without publicly exporting wire DTOs
+
+Definition of done:
+
+- example app can call schedule, cancel, `getCapabilities()`, `getPermissionState()`, and `getReadiness()`
+- Android, iOS, and macOS all build successfully
+- generated Pigeon DTOs are not publicly exported
+- unsupported and limited states are surfaced explicitly per platform
+
+#### Phase 1B: Android alarm proof
+
+- add exact-alarm permission checks
+- implement native alarm scheduling and event delivery
+- wire local file audio playback and stop or snooze actions
+
+Definition of done:
+
+- an alarm can fire while the app is backgrounded
+- local file audio playback works in the validated Android path
+- stop and snooze arrive on the Dart event stream
+- permission-denied or unavailable cases return explicit failure or blocked readiness states
+
+#### Phase 1C: Apple reduced behavior
+
+- implement iOS local notification scheduling
+- implement macOS notification scheduling
+- return accurate limited or unsupported capability states
+- connect notification interaction events where available
+
+Definition of done:
+
+- Apple platforms do not promise Android-equivalent wake behavior
+- the public API exposes which behaviors are limited or unsupported
+- `scheduleAlarm` success semantics match the documented contract
 
 ### Phase 2
 
@@ -199,6 +454,8 @@ Examples:
 - live activity available, unavailable, or unsupported
 
 Unsupported must be explicit, not a silent no-op.
+
+Readiness must remain a separate product-facing concept. Capability says what the platform can do in principle, permission state says what access is currently granted, and readiness says whether the plugin can currently deliver the best available alarm behavior for this device state.
 
 ## Android-First Validation Requirement
 
