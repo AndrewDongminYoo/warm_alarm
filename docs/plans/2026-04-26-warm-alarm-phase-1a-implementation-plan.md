@@ -8,6 +8,15 @@
 
 **Tech Stack:** Dart 3.11, Flutter federated plugin packages, Pigeon, flutter_test, mocktail, melos.
 
+**Phase 1A Definition of Done:**
+
+- `getPlatformName()` is removed or clearly deprecated.
+- The public API is replaced with a schedule/cancel/capability/readiness/events-centered surface.
+- Generated Pigeon DTOs are not publicly exported.
+- Android, iOS, and macOS stub implementations all build.
+- The example app can call the new API surface.
+- Tests cover the new platform interface contract and stub behavior.
+
 ---
 
 ## File Map
