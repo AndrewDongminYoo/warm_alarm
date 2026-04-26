@@ -1,5 +1,7 @@
 name: warm_alarm_platform_interface
 
+permissions: read-all
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -7,22 +9,22 @@ concurrency:
 on:
   pull_request:
     paths:
-      - ".github/workflows/warm_alarm_platform_interface.yaml"
-      - "warm_alarm_platform_interface/**"
+      - .github/workflows/warm_alarm_platform_interface.yaml
+      - warm_alarm_platform_interface/**
   push:
     branches:
       - main
     paths:
-      - ".github/workflows/warm_alarm_platform_interface.yaml"
-      - "warm_alarm_platform_interface/**"
+      - .github/workflows/warm_alarm_platform_interface.yaml
+      - warm_alarm_platform_interface/**
 
 jobs:
   build:
     uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/flutter_package.yml@v1
     with:
-      flutter_version: 3.41.1
+      flutter_version: 3.35.0
+      format_line_length: 120
       working_directory: warm_alarm_platform_interface
 
   pana:
     uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/pana.yml@v1
-

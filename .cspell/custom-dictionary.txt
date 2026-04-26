@@ -1,0 +1,22 @@
+# Custom Dictionary Words
+AABB
+CBUUID
+fluttium
+gitmoji
+gsub
+libblkid
+libx
+millis
+noaudio
+reactivecircus
+renancaraujo
+RSSI
+simctl
+subosito
+swiftshader
+temurin
+UDID
+xcprivacy
+xcrun
+xctrace
+xcuserdata

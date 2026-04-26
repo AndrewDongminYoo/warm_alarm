@@ -1,5 +1,7 @@
 name: warm_alarm_macos
 
+permissions: read-all
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -7,14 +9,14 @@ concurrency:
 on:
   pull_request:
     paths:
-      - ".github/workflows/warm_alarm_macos.yaml"
-      - "warm_alarm_macos/**"
+      - .github/workflows/warm_alarm_macos.yaml
+      - warm_alarm_macos/**
   push:
     branches:
       - main
     paths:
-      - ".github/workflows/warm_alarm_macos.yaml"
-      - "warm_alarm_macos/**"
+      - .github/workflows/warm_alarm_macos.yaml
+      - warm_alarm_macos/**
 
 jobs:
   build:
@@ -25,4 +27,3 @@ jobs:
 
   pana:
     uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/pana.yml@v1
-
