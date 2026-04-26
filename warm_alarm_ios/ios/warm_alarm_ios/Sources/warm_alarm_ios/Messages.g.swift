@@ -56,6 +56,10 @@ private func wrapError(_ error: Any) -> [Any?] {
   ]
 }
 
+private func createConnectionError(withChannelName channelName: String) -> PigeonError {
+  return PigeonError(code: "channel-error", message: "Unable to establish connection on channel: '\(channelName)'.", details: "")
+}
+
 private func isNullish(_ value: Any?) -> Bool {
   return value is NSNull || value == nil
 }
@@ -65,11 +69,834 @@ private func nilOrValue<T>(_ value: Any?) -> T? {
   return value as! T?
 }
 
+private func doubleEqualsMessages(_ lhs: Double, _ rhs: Double) -> Bool {
+  return (lhs.isNaN && rhs.isNaN) || lhs == rhs
+}
+
+private func doubleHashMessages(_ value: Double, _ hasher: inout Hasher) {
+  if value.isNaN {
+    hasher.combine(0x7FF8000000000000)
+  } else {
+    // Normalize -0.0 to 0.0
+    hasher.combine(value == 0 ? 0 : value)
+  }
+}
+
+func deepEqualsMessages(_ lhs: Any?, _ rhs: Any?) -> Bool {
+  let cleanLhs = nilOrValue(lhs) as Any?
+  let cleanRhs = nilOrValue(rhs) as Any?
+  switch (cleanLhs, cleanRhs) {
+  case (nil, nil):
+    return true
+
+  case (nil, _), (_, nil):
+    return false
+
+  case (let lhs as AnyObject, let rhs as AnyObject) where lhs === rhs:
+    return true
+
+  case is (Void, Void):
+    return true
+
+  case (let lhsArray, let rhsArray) as ([Any?], [Any?]):
+    guard lhsArray.count == rhsArray.count else { return false }
+    for (index, element) in lhsArray.enumerated() {
+      if !deepEqualsMessages(element, rhsArray[index]) {
+        return false
+      }
+    }
+    return true
+
+  case (let lhsArray, let rhsArray) as ([Double], [Double]):
+    guard lhsArray.count == rhsArray.count else { return false }
+    for (index, element) in lhsArray.enumerated() {
+      if !doubleEqualsMessages(element, rhsArray[index]) {
+        return false
+      }
+    }
+    return true
+
+  case (let lhsDictionary, let rhsDictionary) as ([AnyHashable: Any?], [AnyHashable: Any?]):
+    guard lhsDictionary.count == rhsDictionary.count else { return false }
+    for (lhsKey, lhsValue) in lhsDictionary {
+      var found = false
+      for (rhsKey, rhsValue) in rhsDictionary {
+        if deepEqualsMessages(lhsKey, rhsKey) {
+          if deepEqualsMessages(lhsValue, rhsValue) {
+            found = true
+            break
+          } else {
+            return false
+          }
+        }
+      }
+      if !found { return false }
+    }
+    return true
+
+  case (let lhs as Double, let rhs as Double):
+    return doubleEqualsMessages(lhs, rhs)
+
+  case (let lhsHashable, let rhsHashable) as (AnyHashable, AnyHashable):
+    return lhsHashable == rhsHashable
+
+  default:
+    return false
+  }
+}
+
+func deepHashMessages(value: Any?, hasher: inout Hasher) {
+  let cleanValue = nilOrValue(value) as Any?
+  if let cleanValue = cleanValue {
+    if let doubleValue = cleanValue as? Double {
+      doubleHashMessages(doubleValue, &hasher)
+    } else if let valueList = cleanValue as? [Any?] {
+      for item in valueList {
+        deepHashMessages(value: item, hasher: &hasher)
+      }
+    } else if let valueList = cleanValue as? [Double] {
+      for item in valueList {
+        doubleHashMessages(item, &hasher)
+      }
+    } else if let valueDict = cleanValue as? [AnyHashable: Any?] {
+      var result = 0
+      for (key, value) in valueDict {
+        var entryKeyHasher = Hasher()
+        deepHashMessages(value: key, hasher: &entryKeyHasher)
+        var entryValueHasher = Hasher()
+        deepHashMessages(value: value, hasher: &entryValueHasher)
+        result = result &+ ((entryKeyHasher.finalize() &* 31) ^ entryValueHasher.finalize())
+      }
+      hasher.combine(result)
+    } else if let hashableValue = cleanValue as? AnyHashable {
+      hasher.combine(hashableValue)
+    } else {
+      hasher.combine(String(describing: cleanValue))
+    }
+  } else {
+    hasher.combine(0)
+  }
+}
+
+
+enum WarmAlarmSupportStatusWire: Int {
+  case supported = 0
+  case limited = 1
+  case unsupported = 2
+  case unknown = 3
+}
+
+enum WarmAlarmReadinessLevelWire: Int {
+  case ready = 0
+  case limited = 1
+  case blocked = 2
+  case unsupported = 3
+}
+
+enum WarmAlarmReadinessReasonWire: Int {
+  case notificationPermissionDenied = 0
+  case exactAlarmPermissionDenied = 1
+  case fullScreenPermissionDenied = 2
+  case backgroundExecutionLimited = 3
+  case backgroundAudioLimited = 4
+  case platformUnsupported = 5
+  case batteryOptimizationMayDelay = 6
+  case unknown = 7
+}
+
+enum WarmAlarmFailureCodeWire: Int {
+  case unknown = 0
+  case invalidArguments = 1
+  case permissionDenied = 2
+  case exactAlarmUnavailable = 3
+  case notificationUnavailable = 4
+  case audioFileNotFound = 5
+  case audioPlaybackFailed = 6
+  case schedulingFailed = 7
+  case platformInternalError = 8
+}
+
+enum WarmAlarmEventTypeWire: Int {
+  case scheduled = 0
+  case fired = 1
+  case stopped = 2
+  case snoozed = 3
+  case failed = 4
+}
+
+/// Generated class from Pigeon that represents data sent in messages.
+struct WarmAlarmCapabilitiesWire: Hashable {
+  var exactScheduling: WarmAlarmSupportStatusWire
+  var notificationScheduling: WarmAlarmSupportStatusWire
+  var backgroundAudioPlayback: WarmAlarmSupportStatusWire
+  var fullScreenPresentation: WarmAlarmSupportStatusWire
+  var wakeCheck: WarmAlarmSupportStatusWire
+  var liveActivity: WarmAlarmSupportStatusWire
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> WarmAlarmCapabilitiesWire? {
+    let exactScheduling = pigeonVar_list[0] as! WarmAlarmSupportStatusWire
+    let notificationScheduling = pigeonVar_list[1] as! WarmAlarmSupportStatusWire
+    let backgroundAudioPlayback = pigeonVar_list[2] as! WarmAlarmSupportStatusWire
+    let fullScreenPresentation = pigeonVar_list[3] as! WarmAlarmSupportStatusWire
+    let wakeCheck = pigeonVar_list[4] as! WarmAlarmSupportStatusWire
+    let liveActivity = pigeonVar_list[5] as! WarmAlarmSupportStatusWire
+
+    return WarmAlarmCapabilitiesWire(
+      exactScheduling: exactScheduling,
+      notificationScheduling: notificationScheduling,
+      backgroundAudioPlayback: backgroundAudioPlayback,
+      fullScreenPresentation: fullScreenPresentation,
+      wakeCheck: wakeCheck,
+      liveActivity: liveActivity
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      exactScheduling,
+      notificationScheduling,
+      backgroundAudioPlayback,
+      fullScreenPresentation,
+      wakeCheck,
+      liveActivity,
+    ]
+  }
+  static func == (lhs: WarmAlarmCapabilitiesWire, rhs: WarmAlarmCapabilitiesWire) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return deepEqualsMessages(lhs.exactScheduling, rhs.exactScheduling) && deepEqualsMessages(lhs.notificationScheduling, rhs.notificationScheduling) && deepEqualsMessages(lhs.backgroundAudioPlayback, rhs.backgroundAudioPlayback) && deepEqualsMessages(lhs.fullScreenPresentation, rhs.fullScreenPresentation) && deepEqualsMessages(lhs.wakeCheck, rhs.wakeCheck) && deepEqualsMessages(lhs.liveActivity, rhs.liveActivity)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("WarmAlarmCapabilitiesWire")
+    deepHashMessages(value: exactScheduling, hasher: &hasher)
+    deepHashMessages(value: notificationScheduling, hasher: &hasher)
+    deepHashMessages(value: backgroundAudioPlayback, hasher: &hasher)
+    deepHashMessages(value: fullScreenPresentation, hasher: &hasher)
+    deepHashMessages(value: wakeCheck, hasher: &hasher)
+    deepHashMessages(value: liveActivity, hasher: &hasher)
+  }
+}
+
+/// Generated class from Pigeon that represents data sent in messages.
+struct WarmAlarmPermissionStateWire: Hashable {
+  var notificationsGranted: Bool
+  var exactAlarmGranted: Bool
+  var fullScreenIntentGranted: Bool
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> WarmAlarmPermissionStateWire? {
+    let notificationsGranted = pigeonVar_list[0] as! Bool
+    let exactAlarmGranted = pigeonVar_list[1] as! Bool
+    let fullScreenIntentGranted = pigeonVar_list[2] as! Bool
+
+    return WarmAlarmPermissionStateWire(
+      notificationsGranted: notificationsGranted,
+      exactAlarmGranted: exactAlarmGranted,
+      fullScreenIntentGranted: fullScreenIntentGranted
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      notificationsGranted,
+      exactAlarmGranted,
+      fullScreenIntentGranted,
+    ]
+  }
+  static func == (lhs: WarmAlarmPermissionStateWire, rhs: WarmAlarmPermissionStateWire) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return deepEqualsMessages(lhs.notificationsGranted, rhs.notificationsGranted) && deepEqualsMessages(lhs.exactAlarmGranted, rhs.exactAlarmGranted) && deepEqualsMessages(lhs.fullScreenIntentGranted, rhs.fullScreenIntentGranted)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("WarmAlarmPermissionStateWire")
+    deepHashMessages(value: notificationsGranted, hasher: &hasher)
+    deepHashMessages(value: exactAlarmGranted, hasher: &hasher)
+    deepHashMessages(value: fullScreenIntentGranted, hasher: &hasher)
+  }
+}
+
+/// Generated class from Pigeon that represents data sent in messages.
+struct WarmAlarmReadinessWire: Hashable {
+  var level: WarmAlarmReadinessLevelWire
+  var reasons: [WarmAlarmReadinessReasonWire]
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> WarmAlarmReadinessWire? {
+    let level = pigeonVar_list[0] as! WarmAlarmReadinessLevelWire
+    let reasons = pigeonVar_list[1] as! [WarmAlarmReadinessReasonWire]
+
+    return WarmAlarmReadinessWire(
+      level: level,
+      reasons: reasons
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      level,
+      reasons,
+    ]
+  }
+  static func == (lhs: WarmAlarmReadinessWire, rhs: WarmAlarmReadinessWire) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return deepEqualsMessages(lhs.level, rhs.level) && deepEqualsMessages(lhs.reasons, rhs.reasons)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("WarmAlarmReadinessWire")
+    deepHashMessages(value: level, hasher: &hasher)
+    deepHashMessages(value: reasons, hasher: &hasher)
+  }
+}
+
+/// Generated class from Pigeon that represents data sent in messages.
+struct WarmAlarmWarningWire: Hashable {
+  var message: String
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> WarmAlarmWarningWire? {
+    let message = pigeonVar_list[0] as! String
+
+    return WarmAlarmWarningWire(
+      message: message
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      message
+    ]
+  }
+  static func == (lhs: WarmAlarmWarningWire, rhs: WarmAlarmWarningWire) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return deepEqualsMessages(lhs.message, rhs.message)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("WarmAlarmWarningWire")
+    deepHashMessages(value: message, hasher: &hasher)
+  }
+}
+
+/// Generated class from Pigeon that represents data sent in messages.
+struct WarmAlarmFailureWire: Hashable {
+  var code: WarmAlarmFailureCodeWire
+  var message: String? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> WarmAlarmFailureWire? {
+    let code = pigeonVar_list[0] as! WarmAlarmFailureCodeWire
+    let message: String? = nilOrValue(pigeonVar_list[1])
+
+    return WarmAlarmFailureWire(
+      code: code,
+      message: message
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      code,
+      message,
+    ]
+  }
+  static func == (lhs: WarmAlarmFailureWire, rhs: WarmAlarmFailureWire) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return deepEqualsMessages(lhs.code, rhs.code) && deepEqualsMessages(lhs.message, rhs.message)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("WarmAlarmFailureWire")
+    deepHashMessages(value: code, hasher: &hasher)
+    deepHashMessages(value: message, hasher: &hasher)
+  }
+}
+
+/// Generated class from Pigeon that represents data sent in messages.
+struct WarmAlarmScheduleResultWire: Hashable {
+  var alarmId: Int64
+  var readiness: WarmAlarmReadinessWire
+  var warning: WarmAlarmWarningWire? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> WarmAlarmScheduleResultWire? {
+    let alarmId = pigeonVar_list[0] as! Int64
+    let readiness = pigeonVar_list[1] as! WarmAlarmReadinessWire
+    let warning: WarmAlarmWarningWire? = nilOrValue(pigeonVar_list[2])
+
+    return WarmAlarmScheduleResultWire(
+      alarmId: alarmId,
+      readiness: readiness,
+      warning: warning
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      alarmId,
+      readiness,
+      warning,
+    ]
+  }
+  static func == (lhs: WarmAlarmScheduleResultWire, rhs: WarmAlarmScheduleResultWire) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return deepEqualsMessages(lhs.alarmId, rhs.alarmId) && deepEqualsMessages(lhs.readiness, rhs.readiness) && deepEqualsMessages(lhs.warning, rhs.warning)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("WarmAlarmScheduleResultWire")
+    deepHashMessages(value: alarmId, hasher: &hasher)
+    deepHashMessages(value: readiness, hasher: &hasher)
+    deepHashMessages(value: warning, hasher: &hasher)
+  }
+}
+
+/// Generated class from Pigeon that represents data sent in messages.
+struct WarmAlarmNotificationWire: Hashable {
+  var title: String
+  var body: String
+  var stopActionTitle: String? = nil
+  var snoozeActionTitle: String? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> WarmAlarmNotificationWire? {
+    let title = pigeonVar_list[0] as! String
+    let body = pigeonVar_list[1] as! String
+    let stopActionTitle: String? = nilOrValue(pigeonVar_list[2])
+    let snoozeActionTitle: String? = nilOrValue(pigeonVar_list[3])
+
+    return WarmAlarmNotificationWire(
+      title: title,
+      body: body,
+      stopActionTitle: stopActionTitle,
+      snoozeActionTitle: snoozeActionTitle
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      title,
+      body,
+      stopActionTitle,
+      snoozeActionTitle,
+    ]
+  }
+  static func == (lhs: WarmAlarmNotificationWire, rhs: WarmAlarmNotificationWire) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return deepEqualsMessages(lhs.title, rhs.title) && deepEqualsMessages(lhs.body, rhs.body) && deepEqualsMessages(lhs.stopActionTitle, rhs.stopActionTitle) && deepEqualsMessages(lhs.snoozeActionTitle, rhs.snoozeActionTitle)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("WarmAlarmNotificationWire")
+    deepHashMessages(value: title, hasher: &hasher)
+    deepHashMessages(value: body, hasher: &hasher)
+    deepHashMessages(value: stopActionTitle, hasher: &hasher)
+    deepHashMessages(value: snoozeActionTitle, hasher: &hasher)
+  }
+}
+
+/// Generated class from Pigeon that represents data sent in messages.
+struct WarmAlarmAudioWire: Hashable {
+  var filePath: String? = nil
+  var assetPath: String? = nil
+  var loop: Bool
+  var volume: Double? = nil
+  var fadeInDurationMillis: Int64? = nil
+  var vibrate: Bool
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> WarmAlarmAudioWire? {
+    let filePath: String? = nilOrValue(pigeonVar_list[0])
+    let assetPath: String? = nilOrValue(pigeonVar_list[1])
+    let loop = pigeonVar_list[2] as! Bool
+    let volume: Double? = nilOrValue(pigeonVar_list[3])
+    let fadeInDurationMillis: Int64? = nilOrValue(pigeonVar_list[4])
+    let vibrate = pigeonVar_list[5] as! Bool
+
+    return WarmAlarmAudioWire(
+      filePath: filePath,
+      assetPath: assetPath,
+      loop: loop,
+      volume: volume,
+      fadeInDurationMillis: fadeInDurationMillis,
+      vibrate: vibrate
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      filePath,
+      assetPath,
+      loop,
+      volume,
+      fadeInDurationMillis,
+      vibrate,
+    ]
+  }
+  static func == (lhs: WarmAlarmAudioWire, rhs: WarmAlarmAudioWire) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return deepEqualsMessages(lhs.filePath, rhs.filePath) && deepEqualsMessages(lhs.assetPath, rhs.assetPath) && deepEqualsMessages(lhs.loop, rhs.loop) && deepEqualsMessages(lhs.volume, rhs.volume) && deepEqualsMessages(lhs.fadeInDurationMillis, rhs.fadeInDurationMillis) && deepEqualsMessages(lhs.vibrate, rhs.vibrate)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("WarmAlarmAudioWire")
+    deepHashMessages(value: filePath, hasher: &hasher)
+    deepHashMessages(value: assetPath, hasher: &hasher)
+    deepHashMessages(value: loop, hasher: &hasher)
+    deepHashMessages(value: volume, hasher: &hasher)
+    deepHashMessages(value: fadeInDurationMillis, hasher: &hasher)
+    deepHashMessages(value: vibrate, hasher: &hasher)
+  }
+}
+
+/// Generated class from Pigeon that represents data sent in messages.
+struct WarmAlarmRecurrenceWire: Hashable {
+  var weekdays: [Int64]
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> WarmAlarmRecurrenceWire? {
+    let weekdays = pigeonVar_list[0] as! [Int64]
+
+    return WarmAlarmRecurrenceWire(
+      weekdays: weekdays
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      weekdays
+    ]
+  }
+  static func == (lhs: WarmAlarmRecurrenceWire, rhs: WarmAlarmRecurrenceWire) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return deepEqualsMessages(lhs.weekdays, rhs.weekdays)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("WarmAlarmRecurrenceWire")
+    deepHashMessages(value: weekdays, hasher: &hasher)
+  }
+}
+
+/// Generated class from Pigeon that represents data sent in messages.
+struct WarmAlarmSnoozeWire: Hashable {
+  var durationMillis: Int64
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> WarmAlarmSnoozeWire? {
+    let durationMillis = pigeonVar_list[0] as! Int64
+
+    return WarmAlarmSnoozeWire(
+      durationMillis: durationMillis
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      durationMillis
+    ]
+  }
+  static func == (lhs: WarmAlarmSnoozeWire, rhs: WarmAlarmSnoozeWire) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return deepEqualsMessages(lhs.durationMillis, rhs.durationMillis)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("WarmAlarmSnoozeWire")
+    deepHashMessages(value: durationMillis, hasher: &hasher)
+  }
+}
+
+/// Generated class from Pigeon that represents data sent in messages.
+struct WarmAlarmScheduleWire: Hashable {
+  var id: Int64
+  var scheduledAtMillis: Int64
+  var notification: WarmAlarmNotificationWire
+  var audio: WarmAlarmAudioWire
+  var recurrence: WarmAlarmRecurrenceWire? = nil
+  var snooze: WarmAlarmSnoozeWire? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> WarmAlarmScheduleWire? {
+    let id = pigeonVar_list[0] as! Int64
+    let scheduledAtMillis = pigeonVar_list[1] as! Int64
+    let notification = pigeonVar_list[2] as! WarmAlarmNotificationWire
+    let audio = pigeonVar_list[3] as! WarmAlarmAudioWire
+    let recurrence: WarmAlarmRecurrenceWire? = nilOrValue(pigeonVar_list[4])
+    let snooze: WarmAlarmSnoozeWire? = nilOrValue(pigeonVar_list[5])
+
+    return WarmAlarmScheduleWire(
+      id: id,
+      scheduledAtMillis: scheduledAtMillis,
+      notification: notification,
+      audio: audio,
+      recurrence: recurrence,
+      snooze: snooze
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      id,
+      scheduledAtMillis,
+      notification,
+      audio,
+      recurrence,
+      snooze,
+    ]
+  }
+  static func == (lhs: WarmAlarmScheduleWire, rhs: WarmAlarmScheduleWire) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return deepEqualsMessages(lhs.id, rhs.id) && deepEqualsMessages(lhs.scheduledAtMillis, rhs.scheduledAtMillis) && deepEqualsMessages(lhs.notification, rhs.notification) && deepEqualsMessages(lhs.audio, rhs.audio) && deepEqualsMessages(lhs.recurrence, rhs.recurrence) && deepEqualsMessages(lhs.snooze, rhs.snooze)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("WarmAlarmScheduleWire")
+    deepHashMessages(value: id, hasher: &hasher)
+    deepHashMessages(value: scheduledAtMillis, hasher: &hasher)
+    deepHashMessages(value: notification, hasher: &hasher)
+    deepHashMessages(value: audio, hasher: &hasher)
+    deepHashMessages(value: recurrence, hasher: &hasher)
+    deepHashMessages(value: snooze, hasher: &hasher)
+  }
+}
+
+/// Generated class from Pigeon that represents data sent in messages.
+struct WarmAlarmSnapshotWire: Hashable {
+  var id: Int64
+  var scheduledAtMillis: Int64
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> WarmAlarmSnapshotWire? {
+    let id = pigeonVar_list[0] as! Int64
+    let scheduledAtMillis = pigeonVar_list[1] as! Int64
+
+    return WarmAlarmSnapshotWire(
+      id: id,
+      scheduledAtMillis: scheduledAtMillis
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      id,
+      scheduledAtMillis,
+    ]
+  }
+  static func == (lhs: WarmAlarmSnapshotWire, rhs: WarmAlarmSnapshotWire) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return deepEqualsMessages(lhs.id, rhs.id) && deepEqualsMessages(lhs.scheduledAtMillis, rhs.scheduledAtMillis)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("WarmAlarmSnapshotWire")
+    deepHashMessages(value: id, hasher: &hasher)
+    deepHashMessages(value: scheduledAtMillis, hasher: &hasher)
+  }
+}
+
+/// Generated class from Pigeon that represents data sent in messages.
+struct WarmAlarmEventWire: Hashable {
+  var alarmId: Int64
+  var type: WarmAlarmEventTypeWire
+  var occurredAtMillis: Int64
+  var snoozeDurationMillis: Int64? = nil
+  var failure: WarmAlarmFailureWire? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> WarmAlarmEventWire? {
+    let alarmId = pigeonVar_list[0] as! Int64
+    let type = pigeonVar_list[1] as! WarmAlarmEventTypeWire
+    let occurredAtMillis = pigeonVar_list[2] as! Int64
+    let snoozeDurationMillis: Int64? = nilOrValue(pigeonVar_list[3])
+    let failure: WarmAlarmFailureWire? = nilOrValue(pigeonVar_list[4])
+
+    return WarmAlarmEventWire(
+      alarmId: alarmId,
+      type: type,
+      occurredAtMillis: occurredAtMillis,
+      snoozeDurationMillis: snoozeDurationMillis,
+      failure: failure
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      alarmId,
+      type,
+      occurredAtMillis,
+      snoozeDurationMillis,
+      failure,
+    ]
+  }
+  static func == (lhs: WarmAlarmEventWire, rhs: WarmAlarmEventWire) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return deepEqualsMessages(lhs.alarmId, rhs.alarmId) && deepEqualsMessages(lhs.type, rhs.type) && deepEqualsMessages(lhs.occurredAtMillis, rhs.occurredAtMillis) && deepEqualsMessages(lhs.snoozeDurationMillis, rhs.snoozeDurationMillis) && deepEqualsMessages(lhs.failure, rhs.failure)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("WarmAlarmEventWire")
+    deepHashMessages(value: alarmId, hasher: &hasher)
+    deepHashMessages(value: type, hasher: &hasher)
+    deepHashMessages(value: occurredAtMillis, hasher: &hasher)
+    deepHashMessages(value: snoozeDurationMillis, hasher: &hasher)
+    deepHashMessages(value: failure, hasher: &hasher)
+  }
+}
 
 private class MessagesPigeonCodecReader: FlutterStandardReader {
+  override func readValue(ofType type: UInt8) -> Any? {
+    switch type {
+    case 129:
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return WarmAlarmSupportStatusWire(rawValue: enumResultAsInt)
+      }
+      return nil
+    case 130:
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return WarmAlarmReadinessLevelWire(rawValue: enumResultAsInt)
+      }
+      return nil
+    case 131:
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return WarmAlarmReadinessReasonWire(rawValue: enumResultAsInt)
+      }
+      return nil
+    case 132:
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return WarmAlarmFailureCodeWire(rawValue: enumResultAsInt)
+      }
+      return nil
+    case 133:
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return WarmAlarmEventTypeWire(rawValue: enumResultAsInt)
+      }
+      return nil
+    case 134:
+      return WarmAlarmCapabilitiesWire.fromList(self.readValue() as! [Any?])
+    case 135:
+      return WarmAlarmPermissionStateWire.fromList(self.readValue() as! [Any?])
+    case 136:
+      return WarmAlarmReadinessWire.fromList(self.readValue() as! [Any?])
+    case 137:
+      return WarmAlarmWarningWire.fromList(self.readValue() as! [Any?])
+    case 138:
+      return WarmAlarmFailureWire.fromList(self.readValue() as! [Any?])
+    case 139:
+      return WarmAlarmScheduleResultWire.fromList(self.readValue() as! [Any?])
+    case 140:
+      return WarmAlarmNotificationWire.fromList(self.readValue() as! [Any?])
+    case 141:
+      return WarmAlarmAudioWire.fromList(self.readValue() as! [Any?])
+    case 142:
+      return WarmAlarmRecurrenceWire.fromList(self.readValue() as! [Any?])
+    case 143:
+      return WarmAlarmSnoozeWire.fromList(self.readValue() as! [Any?])
+    case 144:
+      return WarmAlarmScheduleWire.fromList(self.readValue() as! [Any?])
+    case 145:
+      return WarmAlarmSnapshotWire.fromList(self.readValue() as! [Any?])
+    case 146:
+      return WarmAlarmEventWire.fromList(self.readValue() as! [Any?])
+    default:
+      return super.readValue(ofType: type)
+    }
+  }
 }
 
 private class MessagesPigeonCodecWriter: FlutterStandardWriter {
+  override func writeValue(_ value: Any) {
+    if let value = value as? WarmAlarmSupportStatusWire {
+      super.writeByte(129)
+      super.writeValue(value.rawValue)
+    } else if let value = value as? WarmAlarmReadinessLevelWire {
+      super.writeByte(130)
+      super.writeValue(value.rawValue)
+    } else if let value = value as? WarmAlarmReadinessReasonWire {
+      super.writeByte(131)
+      super.writeValue(value.rawValue)
+    } else if let value = value as? WarmAlarmFailureCodeWire {
+      super.writeByte(132)
+      super.writeValue(value.rawValue)
+    } else if let value = value as? WarmAlarmEventTypeWire {
+      super.writeByte(133)
+      super.writeValue(value.rawValue)
+    } else if let value = value as? WarmAlarmCapabilitiesWire {
+      super.writeByte(134)
+      super.writeValue(value.toList())
+    } else if let value = value as? WarmAlarmPermissionStateWire {
+      super.writeByte(135)
+      super.writeValue(value.toList())
+    } else if let value = value as? WarmAlarmReadinessWire {
+      super.writeByte(136)
+      super.writeValue(value.toList())
+    } else if let value = value as? WarmAlarmWarningWire {
+      super.writeByte(137)
+      super.writeValue(value.toList())
+    } else if let value = value as? WarmAlarmFailureWire {
+      super.writeByte(138)
+      super.writeValue(value.toList())
+    } else if let value = value as? WarmAlarmScheduleResultWire {
+      super.writeByte(139)
+      super.writeValue(value.toList())
+    } else if let value = value as? WarmAlarmNotificationWire {
+      super.writeByte(140)
+      super.writeValue(value.toList())
+    } else if let value = value as? WarmAlarmAudioWire {
+      super.writeByte(141)
+      super.writeValue(value.toList())
+    } else if let value = value as? WarmAlarmRecurrenceWire {
+      super.writeByte(142)
+      super.writeValue(value.toList())
+    } else if let value = value as? WarmAlarmSnoozeWire {
+      super.writeByte(143)
+      super.writeValue(value.toList())
+    } else if let value = value as? WarmAlarmScheduleWire {
+      super.writeByte(144)
+      super.writeValue(value.toList())
+    } else if let value = value as? WarmAlarmSnapshotWire {
+      super.writeByte(145)
+      super.writeValue(value.toList())
+    } else if let value = value as? WarmAlarmEventWire {
+      super.writeByte(146)
+      super.writeValue(value.toList())
+    } else {
+      super.writeValue(value)
+    }
+  }
 }
 
 private class MessagesPigeonCodecReaderWriter: FlutterStandardReaderWriter {
@@ -89,7 +916,13 @@ class MessagesPigeonCodec: FlutterStandardMessageCodec, @unchecked Sendable {
 
 /// Generated protocol from Pigeon that represents a handler of messages from Flutter.
 protocol WarmAlarmApi {
-  func getPlatformName(completion: @escaping (Result<String?, Error>) -> Void)
+  func getCapabilities(completion: @escaping (Result<WarmAlarmCapabilitiesWire, Error>) -> Void)
+  func getPermissionState(completion: @escaping (Result<WarmAlarmPermissionStateWire, Error>) -> Void)
+  func getReadiness(completion: @escaping (Result<WarmAlarmReadinessWire, Error>) -> Void)
+  func scheduleAlarm(schedule: WarmAlarmScheduleWire, completion: @escaping (Result<WarmAlarmScheduleResultWire, Error>) -> Void)
+  func cancelAlarm(id: Int64, completion: @escaping (Result<Void, Error>) -> Void)
+  func cancelAllAlarms(completion: @escaping (Result<Void, Error>) -> Void)
+  func getScheduledAlarms(completion: @escaping (Result<[WarmAlarmSnapshotWire], Error>) -> Void)
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -98,10 +931,10 @@ class WarmAlarmApiSetup {
   /// Sets up an instance of `WarmAlarmApi` to handle messages through the `binaryMessenger`.
   static func setUp(binaryMessenger: FlutterBinaryMessenger, api: WarmAlarmApi?, messageChannelSuffix: String = "") {
     let channelSuffix = messageChannelSuffix.count > 0 ? ".\(messageChannelSuffix)" : ""
-    let getPlatformNameChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.warm_alarm.WarmAlarmApi.getPlatformName\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    let getCapabilitiesChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.warm_alarm.WarmAlarmApi.getCapabilities\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
-      getPlatformNameChannel.setMessageHandler { _, reply in
-        api.getPlatformName { result in
+      getCapabilitiesChannel.setMessageHandler { _, reply in
+        api.getCapabilities { result in
           switch result {
           case .success(let res):
             reply(wrapResult(res))
@@ -111,7 +944,134 @@ class WarmAlarmApiSetup {
         }
       }
     } else {
-      getPlatformNameChannel.setMessageHandler(nil)
+      getCapabilitiesChannel.setMessageHandler(nil)
+    }
+    let getPermissionStateChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.warm_alarm.WarmAlarmApi.getPermissionState\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      getPermissionStateChannel.setMessageHandler { _, reply in
+        api.getPermissionState { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      getPermissionStateChannel.setMessageHandler(nil)
+    }
+    let getReadinessChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.warm_alarm.WarmAlarmApi.getReadiness\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      getReadinessChannel.setMessageHandler { _, reply in
+        api.getReadiness { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      getReadinessChannel.setMessageHandler(nil)
+    }
+    let scheduleAlarmChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.warm_alarm.WarmAlarmApi.scheduleAlarm\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      scheduleAlarmChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let scheduleArg = args[0] as! WarmAlarmScheduleWire
+        api.scheduleAlarm(schedule: scheduleArg) { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      scheduleAlarmChannel.setMessageHandler(nil)
+    }
+    let cancelAlarmChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.warm_alarm.WarmAlarmApi.cancelAlarm\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      cancelAlarmChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let idArg = args[0] as! Int64
+        api.cancelAlarm(id: idArg) { result in
+          switch result {
+          case .success:
+            reply(wrapResult(nil))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      cancelAlarmChannel.setMessageHandler(nil)
+    }
+    let cancelAllAlarmsChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.warm_alarm.WarmAlarmApi.cancelAllAlarms\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      cancelAllAlarmsChannel.setMessageHandler { _, reply in
+        api.cancelAllAlarms { result in
+          switch result {
+          case .success:
+            reply(wrapResult(nil))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      cancelAllAlarmsChannel.setMessageHandler(nil)
+    }
+    let getScheduledAlarmsChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.warm_alarm.WarmAlarmApi.getScheduledAlarms\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      getScheduledAlarmsChannel.setMessageHandler { _, reply in
+        api.getScheduledAlarms { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      getScheduledAlarmsChannel.setMessageHandler(nil)
+    }
+  }
+}
+/// Generated protocol from Pigeon that represents Flutter messages that can be called from Swift.
+protocol WarmAlarmEventsApiProtocol {
+  func emitEvent(event eventArg: WarmAlarmEventWire, completion: @escaping (Result<Void, PigeonError>) -> Void)
+}
+class WarmAlarmEventsApi: WarmAlarmEventsApiProtocol {
+  private let binaryMessenger: FlutterBinaryMessenger
+  private let messageChannelSuffix: String
+  init(binaryMessenger: FlutterBinaryMessenger, messageChannelSuffix: String = "") {
+    self.binaryMessenger = binaryMessenger
+    self.messageChannelSuffix = messageChannelSuffix.count > 0 ? ".\(messageChannelSuffix)" : ""
+  }
+  var codec: MessagesPigeonCodec {
+    return MessagesPigeonCodec.shared
+  }
+  func emitEvent(event eventArg: WarmAlarmEventWire, completion: @escaping (Result<Void, PigeonError>) -> Void) {
+    let channelName: String = "dev.flutter.pigeon.warm_alarm.WarmAlarmEventsApi.emitEvent\(messageChannelSuffix)"
+    let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+    channel.sendMessage([eventArg] as [Any?]) { response in
+      guard let listResponse = response as? [Any?] else {
+        completion(.failure(createConnectionError(withChannelName: channelName)))
+        return
+      }
+      if listResponse.count > 1 {
+        let code: String = listResponse[0] as! String
+        let message: String? = nilOrValue(listResponse[1])
+        let details: String? = nilOrValue(listResponse[2])
+        completion(.failure(PigeonError(code: code, message: message, details: details)))
+      } else {
+        completion(.success(()))
+      }
     }
   }
 }
