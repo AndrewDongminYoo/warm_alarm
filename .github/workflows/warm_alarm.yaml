@@ -81,7 +81,7 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 29
-          script: fluttium test flows/test_platform_name.yaml -d android
+          script: fluttium test flows/test_readiness.yaml -d android
           working-directory: warm_alarm/example
 
   ios:
@@ -107,7 +107,7 @@ jobs:
           xcrun simctl boot "${UDID:?No Simulator with this name found}"
 
       - name: E2E Tests
-        run: fluttium test flows/test_platform_name.yaml -d iPhone
+        run: fluttium test flows/test_readiness.yaml -d iPhone
 
   macos:
     runs-on: macos-15
@@ -125,4 +125,4 @@ jobs:
         run: flutter pub global activate fluttium_cli
 
       - name: E2E Tests
-        run: fluttium test flows/test_platform_name.yaml -d macos
+        run: fluttium test flows/test_readiness.yaml -d macos

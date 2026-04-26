@@ -3,18 +3,18 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:fluttium/fluttium.dart';
 
-/// {@template check_platform_name}
+/// {@template check_readiness}
 /// An action that checks the example alarm inspection state.
 ///
 /// Usage:
 ///
 /// ```yaml
-/// - checkPlatformName:
+/// - checkReadiness:
 /// ```
 /// {@endtemplate}
-class CheckPlatformName extends Action {
-  /// {@macro check_platform_name}
-  const CheckPlatformName({
+class CheckReadiness extends Action {
+  /// {@macro check_readiness}
+  const CheckReadiness({
     @visibleForTesting bool Function() isAndroid = _platformIsAndroid,
     @visibleForTesting bool Function() isIOS = _platformIsIOS,
     @visibleForTesting bool Function() isLinux = _platformIsLinux,

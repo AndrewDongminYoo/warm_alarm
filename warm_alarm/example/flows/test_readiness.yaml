@@ -1,4 +1,4 @@
 description: Test if plugin exposes the warm alarm inspection state
 ---
 - pressOn: Inspect Alarm API
-- checkPlatformName:
+- checkReadiness:

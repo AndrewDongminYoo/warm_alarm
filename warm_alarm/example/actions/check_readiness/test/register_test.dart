@@ -1,4 +1,4 @@
-import 'package:check_platform_name/check_platform_name.dart';
+import 'package:check_readiness/check_readiness.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluttium/fluttium.dart';
 import 'package:mocktail/mocktail.dart';
@@ -20,8 +20,8 @@ void main() {
 
     verify(
       () => registry.registerAction(
-        any(that: equals('checkPlatformName')),
-        any(that: equals(CheckPlatformName.new)),
+        any(that: equals('checkReadiness')),
+        any(that: equals(CheckReadiness.new)),
         shortHandIs: any(named: 'shortHandIs', that: isNull),
       ),
     ).called(1);

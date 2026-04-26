@@ -31,8 +31,8 @@ trunk check              # spelling, Markdown, YAML, Kotlin linting
 **Integration tests** (requires `fluttium_cli` installed globally)
 
 ```bash
-cd warm_alarm/example && fluttium test flows/test_platform_name.yaml -d macos
-cd warm_alarm/example && fluttium test flows/test_platform_name.yaml -d android
+cd warm_alarm/example && fluttium test flows/test_readiness.yaml -d macos
+cd warm_alarm/example && fluttium test flows/test_readiness.yaml -d android
 ```
 
 ## Architecture

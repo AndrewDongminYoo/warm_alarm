@@ -18,7 +18,7 @@ Within each package, keep public exports in `lib/`, internal helpers in `lib/src
 - `melos run test`: run unit tests across packages
 - `melos run test:ci`: run tests with coverage output for CI-style verification
 - `trunk check`: run repo-wide non-Dart checks such as spelling, Markdown, YAML, and Kotlin linting
-- `cd warm_alarm/example && fluttium test flows/test_platform_name.yaml -d macos`: run the example end-to-end flow; swap `macos` for `android` or `iPhone` as needed
+- `cd warm_alarm/example && fluttium test flows/test_readiness.yaml -d macos`: run the example end-to-end flow; swap `macos` for `android` or `iPhone` as needed
 
 ## Coding Style & Naming Conventions
 

@@ -1,4 +1,4 @@
-import 'package:check_platform_name/check_platform_name.dart';
+import 'package:check_readiness/check_readiness.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluttium/fluttium.dart';
@@ -14,7 +14,7 @@ class _MockSemanticsNode extends Mock implements SemanticsNode {
 }
 
 void main() {
-  group(CheckPlatformName, () {
+  group(CheckReadiness, () {
     late Tester tester;
     late SemanticsNode node;
 
@@ -26,7 +26,7 @@ void main() {
     });
 
     test('executes returns true if node was found', () async {
-      const action = CheckPlatformName();
+      const action = CheckReadiness();
 
       expect(await action.execute(tester), isTrue);
     });
@@ -34,7 +34,7 @@ void main() {
     test('executes returns false if node was not found', () async {
       when(() => tester.find(any())).thenAnswer((_) async => null);
 
-      const action = CheckPlatformName();
+      const action = CheckReadiness();
 
       expect(await action.execute(tester), isFalse);
     });
@@ -46,7 +46,7 @@ void main() {
       final testCases = [
         (
           'Check alarm inspection state: readiness="blocked", exactScheduling="supported"',
-          CheckPlatformName(
+          CheckReadiness(
             isAndroid: isTrue,
             isIOS: isFalse,
             isWeb: isFalse(),
@@ -57,7 +57,7 @@ void main() {
         ),
         (
           'Check alarm inspection state: readiness="limited", exactScheduling="limited"',
-          CheckPlatformName(
+          CheckReadiness(
             isAndroid: isFalse,
             isIOS: isTrue,
             isWeb: isFalse(),
@@ -68,7 +68,7 @@ void main() {
         ),
         (
           'Check alarm inspection state: readiness="unsupported", exactScheduling="unsupported"',
-          CheckPlatformName(
+          CheckReadiness(
             isAndroid: isFalse,
             isIOS: isFalse,
             isWeb: isTrue(),
@@ -79,7 +79,7 @@ void main() {
         ),
         (
           'Check alarm inspection state: readiness="unsupported", exactScheduling="unsupported"',
-          CheckPlatformName(
+          CheckReadiness(
             isAndroid: isFalse,
             isIOS: isFalse,
             isWeb: isFalse(),
@@ -90,7 +90,7 @@ void main() {
         ),
         (
           'Check alarm inspection state: readiness="limited", exactScheduling="unsupported"',
-          CheckPlatformName(
+          CheckReadiness(
             isAndroid: isFalse,
             isIOS: isFalse,
             isWeb: isFalse(),
@@ -101,7 +101,7 @@ void main() {
         ),
         (
           'Check alarm inspection state: readiness="unsupported", exactScheduling="unsupported"',
-          CheckPlatformName(
+          CheckReadiness(
             isAndroid: isFalse,
             isIOS: isFalse,
             isWeb: isFalse(),
@@ -121,7 +121,7 @@ void main() {
     });
 
     test('throws UnsupportedError on unknown platform', () {
-      final action = CheckPlatformName(
+      final action = CheckReadiness(
         isAndroid: () => false,
         isIOS: () => false,
         isWeb: false,

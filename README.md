@@ -24,7 +24,7 @@ To run the integration tests, run the following command from the root of the pro
 
 ```sh
 cd warm_alarm/example
-fluttium test flows/test_platform_name.yaml
+fluttium test flows/test_readiness.yaml
 ```
 
 [coverage_badge]: warm_alarm/coverage_badge.svg
