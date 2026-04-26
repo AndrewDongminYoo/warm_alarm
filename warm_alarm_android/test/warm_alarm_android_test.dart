@@ -9,6 +9,17 @@ class _MockWarmAlarmApi extends Mock implements WarmAlarmApi {}
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  setUpAll(() {
+    registerFallbackValue(
+      WarmAlarmScheduleWire(
+        id: 0,
+        scheduledAtMillis: 0,
+        notification: WarmAlarmNotificationWire(title: '', body: ''),
+        audio: WarmAlarmAudioWire(loop: true, vibrate: true),
+      ),
+    );
+  });
+
   group(WarmAlarmAndroid, () {
     late WarmAlarmAndroid warmAlarm;
     late WarmAlarmApi api;
@@ -47,6 +58,66 @@ void main() {
       );
 
       verify(api.getCapabilities).called(1);
+    });
+
+    test('scheduleAlarm maps schedule result warning and readiness', () async {
+      final schedule = WarmAlarmSchedule(
+        id: 9,
+        scheduledAt: DateTime.now().add(const Duration(minutes: 1)),
+        notification: const WarmAlarmNotification(
+          title: 'Alarm',
+          body: 'Wake up',
+        ),
+        audio: const WarmAlarmAudio(filePath: '/tmp/alarm.m4a'),
+        snooze: const WarmAlarmSnooze(duration: Duration(minutes: 5)),
+      );
+
+      when(() => api.scheduleAlarm(any())).thenAnswer(
+        (_) async => WarmAlarmScheduleResultWire(
+          alarmId: 9,
+          readiness: WarmAlarmReadinessWire(
+            level: WarmAlarmReadinessLevelWire.limited,
+            reasons: <WarmAlarmReadinessReasonWire>[
+              WarmAlarmReadinessReasonWire.exactAlarmPermissionDenied,
+            ],
+          ),
+          warning: WarmAlarmWarningWire(
+            message: 'Exact alarm permission missing.',
+          ),
+        ),
+      );
+
+      final result = await warmAlarm.scheduleAlarm(schedule);
+
+      expect(result.alarmId, 9);
+      expect(result.readiness.level, WarmAlarmReadinessLevel.limited);
+      expect(
+        result.readiness.reasons,
+        <WarmAlarmReadinessReason>[
+          WarmAlarmReadinessReason.exactAlarmPermissionDenied,
+        ],
+      );
+      expect(result.warning?.message, 'Exact alarm permission missing.');
+      verify(() => api.scheduleAlarm(any())).called(1);
+    });
+
+    test('getScheduledAlarms maps snapshots from wire', () async {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      when(api.getScheduledAlarms).thenAnswer(
+        (_) async => <WarmAlarmSnapshotWire>[
+          WarmAlarmSnapshotWire(id: 3, scheduledAtMillis: now),
+        ],
+      );
+
+      final snapshots = await warmAlarm.getScheduledAlarms();
+
+      expect(snapshots, hasLength(1));
+      expect(snapshots.single.id, 3);
+      expect(
+        snapshots.single.scheduledAt,
+        DateTime.fromMillisecondsSinceEpoch(now),
+      );
+      verify(api.getScheduledAlarms).called(1);
     });
   });
 
@@ -171,6 +242,7 @@ void main() {
         final failed = emitted.single as WarmAlarmFailed;
         expect(failed.alarmId, 5);
         expect(failed.failure.code, WarmAlarmFailureCode.schedulingFailed);
+        expect(failed.failure.message, 'Unable to schedule alarm.');
         await sub.cancel();
       },
     );
