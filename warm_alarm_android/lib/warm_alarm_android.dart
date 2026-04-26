@@ -7,7 +7,7 @@ import 'package:warm_alarm_platform_interface/warm_alarm_platform_interface.dart
 /// {@template warm_alarm_android}
 /// The Android implementation of [WarmAlarmPlatform].
 /// {@endtemplate}
-class WarmAlarmAndroid extends WarmAlarmPlatform {
+class WarmAlarmAndroid extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   /// {@macro warm_alarm_android}
   WarmAlarmAndroid({
     @visibleForTesting WarmAlarmApi? api,
@@ -21,7 +21,9 @@ class WarmAlarmAndroid extends WarmAlarmPlatform {
   /// Registers this class as the default instance of
   /// [WarmAlarmPlatform].
   static void registerWith() {
-    WarmAlarmPlatform.instance = WarmAlarmAndroid();
+    final instance = WarmAlarmAndroid();
+    WarmAlarmEventsApi.setUp(instance);
+    WarmAlarmPlatform.instance = instance;
   }
 
   @override
@@ -53,6 +55,11 @@ class WarmAlarmAndroid extends WarmAlarmPlatform {
   ) async => _scheduleResultFromWire(
     await api.scheduleAlarm(_scheduleToWire(schedule)),
   );
+
+  @override
+  Future<void> emitEvent(WarmAlarmEventWire event) async {
+    _events.add(_eventFromWire(event));
+  }
 }
 
 WarmAlarmAudioWire _audioToWire(WarmAlarmAudio audio) {
@@ -113,7 +120,9 @@ WarmAlarmFailureCode _failureCodeFromWire(WarmAlarmFailureCodeWire wire) {
   }
 }
 
-WarmAlarmNotificationWire _notificationToWire(WarmAlarmNotification notification) {
+WarmAlarmNotificationWire _notificationToWire(
+  WarmAlarmNotification notification,
+) {
   return WarmAlarmNotificationWire(
     title: notification.title,
     body: notification.body,
@@ -185,7 +194,9 @@ WarmAlarmRecurrenceWire? _recurrenceToWire(WarmAlarmRecurrence? recurrence) {
   return WarmAlarmRecurrenceWire(weekdays: recurrence.weekdays);
 }
 
-WarmAlarmScheduleResult _scheduleResultFromWire(WarmAlarmScheduleResultWire wire) {
+WarmAlarmScheduleResult _scheduleResultFromWire(
+  WarmAlarmScheduleResultWire wire,
+) {
   return WarmAlarmScheduleResult(
     alarmId: wire.alarmId,
     readiness: _readinessFromWire(wire.readiness),
@@ -230,4 +241,35 @@ WarmAlarmSupportStatus _supportStatusFromWire(WarmAlarmSupportStatusWire wire) {
     case WarmAlarmSupportStatusWire.unknown:
       return WarmAlarmSupportStatus.unknown;
   }
+}
+
+WarmAlarmEvent _eventFromWire(WarmAlarmEventWire wire) {
+  final alarmId = wire.alarmId;
+  final occurredAt = DateTime.fromMillisecondsSinceEpoch(wire.occurredAtMillis);
+  return switch (wire.type) {
+    WarmAlarmEventTypeWire.scheduled => WarmAlarmScheduled(
+      alarmId: alarmId,
+      occurredAt: occurredAt,
+    ),
+    WarmAlarmEventTypeWire.fired => WarmAlarmFired(
+      alarmId: alarmId,
+      occurredAt: occurredAt,
+    ),
+    WarmAlarmEventTypeWire.stopped => WarmAlarmStopped(
+      alarmId: alarmId,
+      occurredAt: occurredAt,
+    ),
+    WarmAlarmEventTypeWire.snoozed => WarmAlarmSnoozed(
+      alarmId: alarmId,
+      occurredAt: occurredAt,
+      duration: Duration(milliseconds: wire.snoozeDurationMillis ?? 0),
+    ),
+    WarmAlarmEventTypeWire.failed => WarmAlarmFailed(
+      alarmId: alarmId,
+      occurredAt: occurredAt,
+      failure: _failureFromWire(
+        wire.failure ?? WarmAlarmFailureWire(code: WarmAlarmFailureCodeWire.unknown),
+      ),
+    ),
+  };
 }
