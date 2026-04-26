@@ -110,7 +110,7 @@ jobs:
         run: fluttium test flows/test_platform_name.yaml -d iPhone
 
   macos:
-    runs-on: macos-13
+    runs-on: macos-15
 
     defaults:
       run:
