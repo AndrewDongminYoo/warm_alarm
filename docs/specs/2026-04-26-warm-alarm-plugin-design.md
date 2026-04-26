@@ -2,7 +2,7 @@
 
 ## Status
 
-Approved design direction, pending final spec review before implementation planning.
+Approved for Phase 1 implementation planning.
 
 ## Context
 
@@ -84,7 +84,6 @@ Representative operations:
 - `cancelAlarm(int id)`
 - `cancelAllAlarms()`
 - `getScheduledAlarms()`
-- `getAlarmState(int id)`
 - `getCapabilities()`
 - `getPermissionState()`
 - `getReadiness()`
@@ -102,7 +101,7 @@ abstract interface class WarmAlarmPlatform {
 
   Future<WarmAlarmReadiness> getReadiness();
 
-  Future<void> scheduleAlarm(WarmAlarmSchedule schedule);
+  Future<WarmAlarmScheduleResult> scheduleAlarm(WarmAlarmSchedule schedule);
 
   Future<void> cancelAlarm(int id);
 
@@ -113,6 +112,8 @@ abstract interface class WarmAlarmPlatform {
   Stream<WarmAlarmEvent> get events;
 }
 ```
+
+`getAlarmState(int id)` is intentionally deferred until Phase 1B or Phase 2, after runtime state semantics are validated on Android.
 
 ## Semantics Of Schedule Success
 
@@ -127,6 +128,8 @@ In particular:
 - macOS scheduling primarily means desktop notification or reminder behavior and optional playback while the app can run.
 
 Apps must use capabilities, permission state, readiness, and lifecycle events to determine the actual level of alarm reliability.
+
+Returning `WarmAlarmScheduleResult` instead of `void` allows limited-success outcomes to be represented without pretending that every accepted schedule has the same runtime guarantees.
 
 ## Internal Architecture
 
@@ -233,6 +236,12 @@ final class WarmAlarmAudio {
 }
 ```
 
+Audio source rules:
+
+- exactly one of `filePath` or `assetPath` should normally be provided
+- if both are provided, `filePath` takes precedence and `assetPath` is treated as fallback
+- if neither is provided, the implementation may use the platform default alarm sound when available, or return `invalidArguments` if no fallback is configured
+
 ```dart
 final class WarmAlarmNotification {
   const WarmAlarmNotification({
@@ -270,6 +279,18 @@ final class WarmAlarmCapabilities {
 ```
 
 ```dart
+final class WarmAlarmReadiness {
+  const WarmAlarmReadiness({
+    required this.level,
+    required this.reasons,
+  });
+
+  final WarmAlarmReadinessLevel level;
+  final List<WarmAlarmReadinessReason> reasons;
+}
+```
+
+```dart
 enum WarmAlarmReadinessLevel {
   ready,
   limited,
@@ -278,7 +299,37 @@ enum WarmAlarmReadinessLevel {
 }
 ```
 
-Additional value types such as `WarmAlarmPermissionState`, `WarmAlarmReadiness`, `WarmAlarmSnapshot`, `WarmAlarmRecurrence`, and `WarmAlarmSnooze` should be hand-written beside these models during planning.
+```dart
+enum WarmAlarmReadinessReason {
+  ready,
+  notificationPermissionDenied,
+  exactAlarmPermissionDenied,
+  fullScreenPermissionDenied,
+  backgroundExecutionLimited,
+  backgroundAudioLimited,
+  platformUnsupported,
+  batteryOptimizationMayDelay,
+  unknown,
+}
+```
+
+```dart
+final class WarmAlarmScheduleResult {
+  const WarmAlarmScheduleResult({
+    required this.alarmId,
+    required this.accepted,
+    required this.readiness,
+    this.warning,
+  });
+
+  final int alarmId;
+  final bool accepted;
+  final WarmAlarmReadiness readiness;
+  final WarmAlarmWarning? warning;
+}
+```
+
+Additional value types such as `WarmAlarmPermissionState`, `WarmAlarmSnapshot`, `WarmAlarmRecurrence`, `WarmAlarmSnooze`, `WarmAlarmWarning`, and `WarmAlarmFailure` should be hand-written beside these models during planning.
 
 ## Event Model Draft
 
@@ -322,6 +373,18 @@ final class WarmAlarmRetriggered extends WarmAlarmEvent {}
 ```
 
 This keeps wake-check experimentation possible internally before its scheduling model is promoted into the stable public request type.
+
+## Event Stream Semantics
+
+The `events` stream is a live lifecycle event stream, not a durable event log.
+
+In Phase 1:
+
+- events are delivered to active listeners in real time
+- events emitted while no Dart listener is active are not guaranteed to be replayed
+- events are not guaranteed to survive app restarts or Dart isolate teardown
+
+Durable alarm history should be implemented by the app layer or introduced later as a separate plugin feature after runtime semantics are validated.
 
 ## Pigeon Boundary Rule
 
@@ -386,7 +449,7 @@ The repo is early enough that we should avoid freezing the wrong abstraction.
 
 - replace `getPlatformName()` with the first real public alarm facade
 - add separate capability, permission-state, and readiness reporting
-- implement Android scheduling end to end
+- implement public API replacement and platform stubs first
 - provide explicit unsupported or reduced behavior on iOS and macOS
 - wire native-to-Dart lifecycle events through `@FlutterApi`
 
@@ -396,6 +459,7 @@ The repo is early enough that we should avoid freezing the wrong abstraction.
 - add hand-written public models and platform interface methods
 - add per-platform stub implementations with accurate `supported`, `limited`, or `unsupported` reporting
 - generate Pigeon schemas and bindings without publicly exporting wire DTOs
+- document livestream event semantics without adding durable event history
 
 Definition of done:
 
@@ -433,6 +497,8 @@ Definition of done:
 ### Phase 2
 
 - add Android wake-check flow
+- validate wake-check follow-up behavior after dismiss
+- validate retrigger behavior when configured and unacknowledged
 - refine Apple-platform notification and playback behavior
 - expand state reporting based on real platform behavior
 
@@ -459,16 +525,19 @@ Readiness must remain a separate product-facing concept. Capability says what th
 
 ## Android-First Validation Requirement
 
-Before expanding the public API surface, validate this full loop on Android:
+Before expanding the public API surface beyond the Phase 1 alarm contract, validate this Phase 1 Android loop:
 
 1. schedule an alarm
 2. fire while app is backgrounded
 3. play the selected recording or fallback audio
 4. deliver a stop or snooze event back to Dart
+
+Phase 2 Android validation then extends the proof with:
+
 5. schedule wake-check follow-up behavior
 6. retrigger when configured and unacknowledged
 
-This loop is the product-critical proof point.
+This sequencing keeps wake-check and retrigger behavior out of the Phase 1A and Phase 1B public API gate while still reserving them for the next validated Android milestone.
 
 ## Alternatives Considered
 
