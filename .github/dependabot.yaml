@@ -1,0 +1,31 @@
+version: 2
+enable-beta-ecosystems: true
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "pub"
+    directory: "/warm_alarm"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "pub"
+    directory: "/warm_alarm/example"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "pub"
+    directory: "/warm_alarm_platform_interface"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "pub"
+    directory: "/warm_alarm_android"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "pub"
+    directory: "/warm_alarm_ios"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "pub"
+    directory: "/warm_alarm_macos"
+    schedule:
+      interval: "daily"

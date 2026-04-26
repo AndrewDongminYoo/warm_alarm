@@ -1,0 +1,36 @@
+name: warm_alarm
+description: A Very Good Project created by Very Good CLI.
+version: 0.1.0+1
+
+
+environment:
+  sdk: ^3.11.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        default_package: warm_alarm_android
+      ios:
+        default_package: warm_alarm_ios
+      macos:
+        default_package: warm_alarm_macos
+
+dependencies:
+  flutter:
+    sdk: flutter
+  warm_alarm_android:
+    path: ../warm_alarm_android
+  warm_alarm_ios:
+    path: ../warm_alarm_ios
+  warm_alarm_macos:
+    path: ../warm_alarm_macos
+  warm_alarm_platform_interface:
+    path: ../warm_alarm_platform_interface
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  mocktail: ^1.0.5
+  plugin_platform_interface: ^2.1.8
+  very_good_analysis: ^10.2.0

@@ -1,0 +1,28 @@
+name: warm_alarm_macos
+description: MacOS implementation of the warm_alarm plugin
+version: 0.1.0+1
+
+
+environment:
+  sdk: ^3.11.0
+
+flutter:
+  plugin:
+    implements: warm_alarm
+    platforms:
+      macos:
+        pluginClass: WarmAlarmPlugin
+        dartPluginClass: WarmAlarmMacOS
+
+dependencies:
+  flutter:
+    sdk: flutter
+  warm_alarm_platform_interface:
+    path: ../warm_alarm_platform_interface
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  mocktail: ^1.0.5
+  pigeon: ^26.3.4
+  very_good_analysis: ^10.2.0
