@@ -1,10 +1,10 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:warm_alarm_platform_interface/src/method_channel_warm_alarm.dart';
+import 'package:warm_alarm_platform_interface/warm_alarm_platform_interface.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  const kPlatformName = 'platformName';
 
   group('$MethodChannelWarmAlarm', () {
     late MethodChannelWarmAlarm methodChannelWarmAlarm;
@@ -17,8 +17,11 @@ void main() {
         (methodCall) async {
           log.add(methodCall);
           switch (methodCall.method) {
-            case 'getPlatformName':
-              return kPlatformName;
+            case 'getReadiness':
+              return <String, Object?>{
+                'level': 'unsupported',
+                'reasons': <String>['platformUnsupported'],
+              };
             default:
               return null;
           }
@@ -28,13 +31,16 @@ void main() {
 
     tearDown(log.clear);
 
-    test('getPlatformName', () async {
-      final platformName = await methodChannelWarmAlarm.getPlatformName();
+    test('getReadiness returns a typed unsupported stub without channel traffic', () async {
+      final readiness = await methodChannelWarmAlarm.getReadiness();
+      expect(log, isEmpty);
+      expect(readiness.level, WarmAlarmReadinessLevel.unsupported);
       expect(
-        log,
-        <Matcher>[isMethodCall('getPlatformName', arguments: null)],
+        readiness.reasons,
+        equals(<WarmAlarmReadinessReason>[
+          WarmAlarmReadinessReason.platformUnsupported,
+        ]),
       );
-      expect(platformName, equals(kPlatformName));
     });
   });
 }

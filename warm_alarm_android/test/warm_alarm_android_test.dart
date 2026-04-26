@@ -10,7 +10,6 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group(WarmAlarmAndroid, () {
-    const kPlatformName = 'Android';
     late WarmAlarmAndroid warmAlarm;
     late WarmAlarmApi api;
 
@@ -27,15 +26,27 @@ void main() {
       );
     });
 
-    test('getPlatformName returns correct name', () async {
-      when(api.getPlatformName).thenAnswer((_) async => kPlatformName);
-
-      await expectLater(
-        warmAlarm.getPlatformName(),
-        completion(equals(kPlatformName)),
+    test('getCapabilities returns typed stub values', () async {
+      when(api.getCapabilities).thenAnswer(
+        (_) async => WarmAlarmCapabilitiesWire(
+          exactScheduling: WarmAlarmSupportStatusWire.supported,
+          notificationScheduling: WarmAlarmSupportStatusWire.supported,
+          backgroundAudioPlayback: WarmAlarmSupportStatusWire.limited,
+          fullScreenPresentation: WarmAlarmSupportStatusWire.supported,
+          wakeCheck: WarmAlarmSupportStatusWire.unsupported,
+          liveActivity: WarmAlarmSupportStatusWire.unsupported,
+        ),
       );
 
-      verify(api.getPlatformName).called(1);
+      final capabilities = await warmAlarm.getCapabilities();
+
+      expect(capabilities.exactScheduling, WarmAlarmSupportStatus.supported);
+      expect(
+        capabilities.backgroundAudioPlayback,
+        WarmAlarmSupportStatus.limited,
+      );
+
+      verify(api.getCapabilities).called(1);
     });
   });
 }

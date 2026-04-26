@@ -10,7 +10,6 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group(WarmAlarmIOS, () {
-    const kPlatformName = 'iOS';
     late WarmAlarmIOS warmAlarm;
     late WarmAlarmApi api;
 
@@ -27,15 +26,24 @@ void main() {
       );
     });
 
-    test('getPlatformName returns correct name', () async {
-      when(api.getPlatformName).thenAnswer((_) async => kPlatformName);
-
-      await expectLater(
-        warmAlarm.getPlatformName(),
-        completion(equals(kPlatformName)),
+    test('getCapabilities returns typed stub values', () async {
+      when(api.getCapabilities).thenAnswer(
+        (_) async => WarmAlarmCapabilitiesWire(
+          exactScheduling: WarmAlarmSupportStatusWire.limited,
+          notificationScheduling: WarmAlarmSupportStatusWire.supported,
+          backgroundAudioPlayback: WarmAlarmSupportStatusWire.limited,
+          fullScreenPresentation: WarmAlarmSupportStatusWire.unsupported,
+          wakeCheck: WarmAlarmSupportStatusWire.unsupported,
+          liveActivity: WarmAlarmSupportStatusWire.supported,
+        ),
       );
 
-      verify(api.getPlatformName).called(1);
+      final capabilities = await warmAlarm.getCapabilities();
+
+      expect(capabilities.notificationScheduling, WarmAlarmSupportStatus.supported);
+      expect(capabilities.liveActivity, WarmAlarmSupportStatus.supported);
+
+      verify(api.getCapabilities).called(1);
     });
   });
 }

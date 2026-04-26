@@ -2,14 +2,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:warm_alarm/warm_alarm.dart';
-import 'package:warm_alarm_platform_interface/warm_alarm_platform_interface.dart';
 
 class MockWarmAlarmPlatform extends Mock with MockPlatformInterfaceMixin implements WarmAlarmPlatform {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group(WarmAlarmPlatform, () {
+  group(WarmAlarm, () {
     late WarmAlarmPlatform warmAlarmPlatform;
 
     setUp(() {
@@ -17,30 +16,30 @@ void main() {
       WarmAlarmPlatform.instance = warmAlarmPlatform;
     });
 
-    group('getPlatformName', () {
-      test(
-        'returns correct name when platform implementation exists',
-        () async {
-          const platformName = '__test_platform__';
-          when(
-            () => warmAlarmPlatform.getPlatformName(),
-          ).thenAnswer((_) async => platformName);
-
-          final actualPlatformName = await getPlatformName();
-          expect(actualPlatformName, equals(platformName));
-        },
+    test('scheduleAlarm forwards to platform and returns typed result', () async {
+      final schedule = WarmAlarmSchedule(
+        id: 1,
+        scheduledAt: DateTime(2026, 4, 27, 7),
+        notification: const WarmAlarmNotification(
+          title: 'Wake up',
+          body: 'Now',
+        ),
+        audio: const WarmAlarmAudio(filePath: '/tmp/voice.m4a'),
       );
 
-      test(
-        'throws exception when platform implementation is missing',
-        () async {
-          when(
-            () => warmAlarmPlatform.getPlatformName(),
-          ).thenAnswer((_) async => null);
-
-          expect(getPlatformName, throwsException);
-        },
+      const result = WarmAlarmScheduleResult(
+        alarmId: 1,
+        readiness: WarmAlarmReadiness(
+          level: WarmAlarmReadinessLevel.ready,
+          reasons: <WarmAlarmReadinessReason>[],
+        ),
       );
+
+      when(
+        () => warmAlarmPlatform.scheduleAlarm(schedule),
+      ).thenAnswer((_) async => result);
+
+      expect(await WarmAlarm.scheduleAlarm(schedule), result);
     });
   });
 }
