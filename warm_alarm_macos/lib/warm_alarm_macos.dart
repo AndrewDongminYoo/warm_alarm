@@ -7,7 +7,7 @@ import 'package:warm_alarm_platform_interface/warm_alarm_platform_interface.dart
 /// {@template warm_alarm_macos}
 /// The MacOS implementation of [WarmAlarmPlatform].
 /// {@endtemplate}
-class WarmAlarmMacOS extends WarmAlarmPlatform {
+class WarmAlarmMacOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   /// {@macro warm_alarm_macos}
   WarmAlarmMacOS({
     @visibleForTesting WarmAlarmApi? api,
@@ -16,11 +16,19 @@ class WarmAlarmMacOS extends WarmAlarmPlatform {
   /// The API used to interact with the native platform.
   final WarmAlarmApi api;
 
+  bool _eventsApiSetUp = false;
+
   final StreamController<WarmAlarmEvent> _events = StreamController<WarmAlarmEvent>.broadcast();
 
   /// Registers this class as the default instance of [WarmAlarmPlatform].
   static void registerWith() {
     WarmAlarmPlatform.instance = WarmAlarmMacOS();
+  }
+
+  void _ensureEventsApiSetUp() {
+    if (_eventsApiSetUp) return;
+    WarmAlarmEventsApi.setUp(this);
+    _eventsApiSetUp = true;
   }
 
   @override
@@ -30,7 +38,10 @@ class WarmAlarmMacOS extends WarmAlarmPlatform {
   Future<void> cancelAllAlarms() => api.cancelAllAlarms();
 
   @override
-  Stream<WarmAlarmEvent> get events => _events.stream;
+  Stream<WarmAlarmEvent> get events {
+    _ensureEventsApiSetUp();
+    return _events.stream;
+  }
 
   @override
   Future<WarmAlarmCapabilities> getCapabilities() async => _capabilitiesFromWire(await api.getCapabilities());
@@ -52,6 +63,11 @@ class WarmAlarmMacOS extends WarmAlarmPlatform {
   ) async => _scheduleResultFromWire(
     await api.scheduleAlarm(_scheduleToWire(schedule)),
   );
+
+  @override
+  Future<void> emitEvent(WarmAlarmEventWire event) async {
+    _events.add(_eventFromWire(event));
+  }
 }
 
 WarmAlarmAudioWire _audioToWire(WarmAlarmAudio audio) {
@@ -112,7 +128,9 @@ WarmAlarmFailureCode _failureCodeFromWire(WarmAlarmFailureCodeWire wire) {
   }
 }
 
-WarmAlarmNotificationWire _notificationToWire(WarmAlarmNotification notification) {
+WarmAlarmNotificationWire _notificationToWire(
+  WarmAlarmNotification notification,
+) {
   return WarmAlarmNotificationWire(
     title: notification.title,
     body: notification.body,
@@ -184,7 +202,9 @@ WarmAlarmRecurrenceWire? _recurrenceToWire(WarmAlarmRecurrence? recurrence) {
   return WarmAlarmRecurrenceWire(weekdays: recurrence.weekdays);
 }
 
-WarmAlarmScheduleResult _scheduleResultFromWire(WarmAlarmScheduleResultWire wire) {
+WarmAlarmScheduleResult _scheduleResultFromWire(
+  WarmAlarmScheduleResultWire wire,
+) {
   return WarmAlarmScheduleResult(
     alarmId: wire.alarmId,
     readiness: _readinessFromWire(wire.readiness),
@@ -229,4 +249,51 @@ WarmAlarmSupportStatus _supportStatusFromWire(WarmAlarmSupportStatusWire wire) {
     case WarmAlarmSupportStatusWire.unknown:
       return WarmAlarmSupportStatus.unknown;
   }
+}
+
+int _requireSnoozeDuration(int? millis) {
+  assert(
+    millis != null,
+    'WarmAlarmEventsApi: snoozed event received without snoozeDurationMillis (Swift contract violation)',
+  );
+  return millis ?? 0;
+}
+
+WarmAlarmFailureWire _requireFailure(WarmAlarmFailureWire? failure) {
+  assert(
+    failure != null,
+    'WarmAlarmEventsApi: failed event received without failure payload (Swift contract violation)',
+  );
+  return failure ?? WarmAlarmFailureWire(code: WarmAlarmFailureCodeWire.unknown);
+}
+
+WarmAlarmEvent _eventFromWire(WarmAlarmEventWire wire) {
+  final alarmId = wire.alarmId;
+  final occurredAt = DateTime.fromMillisecondsSinceEpoch(wire.occurredAtMillis);
+  return switch (wire.type) {
+    WarmAlarmEventTypeWire.scheduled => WarmAlarmScheduled(
+      alarmId: alarmId,
+      occurredAt: occurredAt,
+    ),
+    WarmAlarmEventTypeWire.fired => WarmAlarmFired(
+      alarmId: alarmId,
+      occurredAt: occurredAt,
+    ),
+    WarmAlarmEventTypeWire.stopped => WarmAlarmStopped(
+      alarmId: alarmId,
+      occurredAt: occurredAt,
+    ),
+    WarmAlarmEventTypeWire.snoozed => WarmAlarmSnoozed(
+      alarmId: alarmId,
+      occurredAt: occurredAt,
+      duration: Duration(
+        milliseconds: _requireSnoozeDuration(wire.snoozeDurationMillis),
+      ),
+    ),
+    WarmAlarmEventTypeWire.failed => WarmAlarmFailed(
+      alarmId: alarmId,
+      occurredAt: occurredAt,
+      failure: _failureFromWire(_requireFailure(wire.failure)),
+    ),
+  };
 }
