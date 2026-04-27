@@ -2,13 +2,7 @@ import AVFoundation
 import Foundation
 import UserNotifications
 
-#if os(iOS)
-  import Flutter
-#elseif os(macOS)
-  import FlutterMacOS
-#else
-  #error("Unsupported platform.")
-#endif
+import Flutter
 
 final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
     static let categoryIdentifier = "WARM_ALARM"
