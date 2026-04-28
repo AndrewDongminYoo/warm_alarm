@@ -1,78 +1,112 @@
 import FlutterMacOS
-import Foundation
+import UserNotifications
 
 public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
-   public static func register(with registrar: FlutterPluginRegistrar) {
-    let binaryMessenger = registrar.messenger
-    let instance = WarmAlarmPlugin()
-    WarmAlarmApiSetup.setUp(binaryMessenger: binaryMessenger, api: instance)
-    registrar.publish(instance)
-  }
+    private let delegate: WarmAlarmDelegate
 
-  func getCapabilities(completion: @escaping (Result<WarmAlarmCapabilitiesWire, Error>) -> Void) {
-    completion(.success(macosCapabilities()))
-  }
+    init(delegate: WarmAlarmDelegate) {
+        self.delegate = delegate
+    }
 
-  func getPermissionState(completion: @escaping (Result<WarmAlarmPermissionStateWire, Error>) -> Void) {
-    completion(.success(macosPermissionState()))
-  }
+    public static func register(with registrar: FlutterPluginRegistrar) {
+        let binaryMessenger = registrar.messenger
+        let eventsApi = WarmAlarmEventsApi(binaryMessenger: binaryMessenger)
+        let delegate = WarmAlarmDelegate(eventsApi: eventsApi)
+        let instance = WarmAlarmPlugin(delegate: delegate)
 
-  func getReadiness(completion: @escaping (Result<WarmAlarmReadinessWire, Error>) -> Void) {
-    completion(.success(macosReadiness()))
-  }
+        UNUserNotificationCenter.current().delegate = delegate
+        WarmAlarmDelegate.registerCategories()
+        WarmAlarmApiSetup.setUp(binaryMessenger: binaryMessenger, api: instance)
+        registrar.publish(instance)
+    }
 
-  func scheduleAlarm(
-    schedule: WarmAlarmScheduleWire,
-    completion: @escaping (Result<WarmAlarmScheduleResultWire, Error>) -> Void
-  ) {
-    completion(
-      .success(
-        WarmAlarmScheduleResultWire(
-          alarmId: schedule.id,
-          readiness: macosReadiness(),
-          warning: WarmAlarmWarningWire(
-            message: "Phase 1A macOS stub accepted the request without native alarm runtime behavior."
-          )
-        )
-      )
-    )
-  }
+    func getCapabilities(completion: @escaping (Result<WarmAlarmCapabilitiesWire, Error>) -> Void) {
+        completion(.success(WarmAlarmCapabilitiesWire(
+            exactScheduling: .unsupported,
+            notificationScheduling: .supported,
+            backgroundAudioPlayback: .limited,
+            fullScreenPresentation: .unsupported,
+            wakeCheck: .unsupported,
+            liveActivity: .unsupported
+        )))
+    }
 
-  func cancelAlarm(id: Int64, completion: @escaping (Result<Void, Error>) -> Void) {
-    completion(.success(()))
-  }
+    func getPermissionState(completion: @escaping (Result<WarmAlarmPermissionStateWire, Error>) -> Void) {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            let granted = settings.authorizationStatus == .authorized
+                || settings.authorizationStatus == .provisional
+            completion(.success(WarmAlarmPermissionStateWire(
+                notificationsGranted: granted,
+                exactAlarmGranted: false,
+                fullScreenIntentGranted: false
+            )))
+        }
+    }
 
-  func cancelAllAlarms(completion: @escaping (Result<Void, Error>) -> Void) {
-    completion(.success(()))
-  }
+    func getReadiness(completion: @escaping (Result<WarmAlarmReadinessWire, Error>) -> Void) {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            let granted = settings.authorizationStatus == .authorized
+                || settings.authorizationStatus == .provisional
+            var reasons: [WarmAlarmReadinessReasonWire] = [.backgroundExecutionLimited]
+            if !granted { reasons.insert(.notificationPermissionDenied, at: 0) }
+            let level: WarmAlarmReadinessLevelWire = granted ? .limited : .blocked
+            completion(.success(WarmAlarmReadinessWire(level: level, reasons: reasons)))
+        }
+    }
 
-  func getScheduledAlarms(completion: @escaping (Result<[WarmAlarmSnapshotWire], Error>) -> Void) {
-    completion(.success([]))
-  }
+    func scheduleAlarm(
+        schedule: WarmAlarmScheduleWire,
+        completion: @escaping (Result<WarmAlarmScheduleResultWire, Error>) -> Void
+    ) {
+        WarmAlarmStore.shared.save(.from(wire: schedule))
 
-  private func macosCapabilities() -> WarmAlarmCapabilitiesWire {
-    WarmAlarmCapabilitiesWire(
-      exactScheduling: .unsupported,
-      notificationScheduling: .supported,
-      backgroundAudioPlayback: .limited,
-      fullScreenPresentation: .unsupported,
-      wakeCheck: .unsupported,
-      liveActivity: .unsupported
-    )
-  }
+        let content = delegate.makeContent(from: .from(wire: schedule))
+        let fireDate = Date(timeIntervalSince1970: Double(schedule.scheduledAtMillis) / 1000.0)
+        let components = Calendar.current.dateComponents(
+            [.year, .month, .day, .hour, .minute, .second], from: fireDate)
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        let request = UNNotificationRequest(
+            identifier: String(schedule.id), content: content, trigger: trigger)
 
-  private func macosPermissionState() -> WarmAlarmPermissionStateWire {
-    WarmAlarmPermissionStateWire(
-      notificationsGranted: false,
-      exactAlarmGranted: false,
-      fullScreenIntentGranted: false
-    )
-  }
+        UNUserNotificationCenter.current().add(request) { [weak self] error in
+            guard let self = self else { return }
+            if let error = error {
+                WarmAlarmStore.shared.remove(id: schedule.id)
+                self.delegate.emitFailure(alarmId: schedule.id, message: error.localizedDescription)
+                completion(.success(WarmAlarmScheduleResultWire(
+                    alarmId: schedule.id,
+                    readiness: WarmAlarmReadinessWire(level: .limited, reasons: [.backgroundExecutionLimited]),
+                    warning: WarmAlarmWarningWire(message: "Scheduling failed: \(error.localizedDescription)")
+                )))
+                return
+            }
+            self.delegate.emitScheduled(alarmId: schedule.id)
+            self.getReadiness { result in
+                let readiness = (try? result.get())
+                    ?? WarmAlarmReadinessWire(level: .limited, reasons: [.backgroundExecutionLimited])
+                completion(.success(WarmAlarmScheduleResultWire(
+                    alarmId: schedule.id, readiness: readiness, warning: nil)))
+            }
+        }
+    }
 
-  private func macosReadiness() -> WarmAlarmReadinessWire {
-    WarmAlarmReadinessWire(
-      level: .limited,
-      reasons: [.backgroundExecutionLimited]
-    )
-  }
+    func cancelAlarm(id: Int64, completion: @escaping (Result<Void, Error>) -> Void) {
+        WarmAlarmStore.shared.remove(id: id)
+        UNUserNotificationCenter.current().removePendingNotificationRequests(
+            withIdentifiers: [String(id)])
+        completion(.success(()))
+    }
+
+    func cancelAllAlarms(completion: @escaping (Result<Void, Error>) -> Void) {
+        WarmAlarmStore.shared.clear()
+        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+        completion(.success(()))
+    }
+
+    func getScheduledAlarms(completion: @escaping (Result<[WarmAlarmSnapshotWire], Error>) -> Void) {
+        let snapshots = WarmAlarmStore.shared.loadAll().map { id, data in
+            WarmAlarmSnapshotWire(id: id, scheduledAtMillis: data.scheduledAtMillis)
+        }
+        completion(.success(snapshots))
+    }
 }

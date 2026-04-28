@@ -44,6 +44,9 @@ GeneratedPluginRegistrant.swift
 build/
 .flutter-plugins
 
+# Swift Package Manager build artifacts
+**/.build/
+
 .project
 .classpath
 .settings
