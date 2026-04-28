@@ -25,13 +25,13 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     ) {
         guard let alarmIdString = notification.request.content.userInfo["alarmId"] as? String,
               let alarmId = Int64(alarmIdString) else {
-            completionHandler([.banner, .sound])
+            completionHandler([.alert, .sound])
             return
         }
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
         startAudio(for: schedule)
         emitEvent(WarmAlarmEventWire(alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis()))
-        completionHandler([.banner])
+        completionHandler([.alert])
     }
 
     func userNotificationCenter(
