@@ -114,18 +114,18 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCyc
                 notification: WarmAlarmNotificationWire(
                     title: data.notificationTitle,
                     body: data.notificationBody,
-                    keepNotificationAfterAlarmEnds: data.keepNotificationAfterAlarmEnds ?? false,
                     stopActionTitle: data.stopActionTitle,
-                    snoozeActionTitle: data.snoozeActionTitle
+                    snoozeActionTitle: data.snoozeActionTitle,
+                    keepNotificationAfterAlarmEnds: data.keepNotificationAfterAlarmEnds ?? false
                 ),
                 audio: WarmAlarmAudioWire(
-                    loop: data.loop,
-                    vibrate: data.vibrate,
-                    volumeEnforced: data.volumeEnforced ?? false,
                     filePath: data.filePath,
                     assetPath: data.assetPath,
+                    loop: data.loop,
                     volume: data.volume,
                     fadeInDurationMillis: data.fadeInDurationMillis,
+                    vibrate: data.vibrate,
+                    volumeEnforced: data.volumeEnforced ?? false,
                     fadeSteps: data.fadeSteps?.map {
                         WarmAlarmVolumeFadeStepWire(timeMillis: $0.timeMillis, volume: $0.volume)
                     }
