@@ -3,6 +3,7 @@
 AABB
 allprojects
 APPICON
+ARGB
 assetcatalog
 ASSETCATALOG
 AUTORELEASING
@@ -10,6 +11,7 @@ backgrounded
 BITCODE
 Buildables
 CBUUID
+codesign
 dsym
 fgbg
 FGBG
