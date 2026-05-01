@@ -52,6 +52,10 @@ enum WarmAlarmEventTypeWire {
   stopped,
   snoozed,
   failed,
+  wakeCheckShown,
+  wakeCheckDismissed,
+  wakeCheckExpired,
+  retriggered,
 }
 
 class WarmAlarmCapabilitiesWire {
@@ -172,6 +176,18 @@ class WarmAlarmSnoozeWire {
   final int durationMillis;
 }
 
+class WarmAlarmWakeCheckWire {
+  const WarmAlarmWakeCheckWire({
+    required this.checkDelayMillis,
+    this.retriggerDelayMillis,
+    this.maxRetriggers,
+  });
+
+  final int checkDelayMillis;
+  final int? retriggerDelayMillis;
+  final int? maxRetriggers;
+}
+
 class WarmAlarmScheduleWire {
   const WarmAlarmScheduleWire({
     required this.id,
@@ -180,6 +196,7 @@ class WarmAlarmScheduleWire {
     required this.audio,
     this.recurrence,
     this.snooze,
+    this.wakeCheck,
   });
 
   final int id;
@@ -188,6 +205,7 @@ class WarmAlarmScheduleWire {
   final WarmAlarmAudioWire audio;
   final WarmAlarmRecurrenceWire? recurrence;
   final WarmAlarmSnoozeWire? snooze;
+  final WarmAlarmWakeCheckWire? wakeCheck;
 }
 
 class WarmAlarmSnapshotWire {

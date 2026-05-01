@@ -299,6 +299,10 @@ enum class WarmAlarmEventTypeWire(
     STOPPED(2),
     SNOOZED(3),
     FAILED(4),
+    WAKE_CHECK_SHOWN(5),
+    WAKE_CHECK_DISMISSED(6),
+    WAKE_CHECK_EXPIRED(7),
+    RETRIGGERED(8),
     ;
 
     companion object {
@@ -748,6 +752,50 @@ data class WarmAlarmSnoozeWire(
 }
 
 /** Generated class from Pigeon that represents data sent in messages. */
+data class WarmAlarmWakeCheckWire(
+    val checkDelayMillis: Long,
+    val retriggerDelayMillis: Long? = null,
+    val maxRetriggers: Long? = null,
+) {
+    companion object {
+        fun fromList(pigeonVar_list: List<Any?>): WarmAlarmWakeCheckWire {
+            val checkDelayMillis = pigeonVar_list[0] as Long
+            val retriggerDelayMillis = pigeonVar_list[1] as Long?
+            val maxRetriggers = pigeonVar_list[2] as Long?
+            return WarmAlarmWakeCheckWire(checkDelayMillis, retriggerDelayMillis, maxRetriggers)
+        }
+    }
+
+    fun toList(): List<Any?> =
+        listOf(
+            checkDelayMillis,
+            retriggerDelayMillis,
+            maxRetriggers,
+        )
+
+    override fun equals(other: Any?): Boolean {
+        if (other == null || other.javaClass != javaClass) {
+            return false
+        }
+        if (this === other) {
+            return true
+        }
+        val other = other as WarmAlarmWakeCheckWire
+        return MessagesPigeonUtils.deepEquals(this.checkDelayMillis, other.checkDelayMillis) &&
+            MessagesPigeonUtils.deepEquals(this.retriggerDelayMillis, other.retriggerDelayMillis) &&
+            MessagesPigeonUtils.deepEquals(this.maxRetriggers, other.maxRetriggers)
+    }
+
+    override fun hashCode(): Int {
+        var result = javaClass.hashCode()
+        result = 31 * result + MessagesPigeonUtils.deepHash(this.checkDelayMillis)
+        result = 31 * result + MessagesPigeonUtils.deepHash(this.retriggerDelayMillis)
+        result = 31 * result + MessagesPigeonUtils.deepHash(this.maxRetriggers)
+        return result
+    }
+}
+
+/** Generated class from Pigeon that represents data sent in messages. */
 data class WarmAlarmScheduleWire(
     val id: Long,
     val scheduledAtMillis: Long,
@@ -755,6 +803,7 @@ data class WarmAlarmScheduleWire(
     val audio: WarmAlarmAudioWire,
     val recurrence: WarmAlarmRecurrenceWire? = null,
     val snooze: WarmAlarmSnoozeWire? = null,
+    val wakeCheck: WarmAlarmWakeCheckWire? = null,
 ) {
     companion object {
         fun fromList(pigeonVar_list: List<Any?>): WarmAlarmScheduleWire {
@@ -764,7 +813,8 @@ data class WarmAlarmScheduleWire(
             val audio = pigeonVar_list[3] as WarmAlarmAudioWire
             val recurrence = pigeonVar_list[4] as WarmAlarmRecurrenceWire?
             val snooze = pigeonVar_list[5] as WarmAlarmSnoozeWire?
-            return WarmAlarmScheduleWire(id, scheduledAtMillis, notification, audio, recurrence, snooze)
+            val wakeCheck = pigeonVar_list[6] as WarmAlarmWakeCheckWire?
+            return WarmAlarmScheduleWire(id, scheduledAtMillis, notification, audio, recurrence, snooze, wakeCheck)
         }
     }
 
@@ -776,6 +826,7 @@ data class WarmAlarmScheduleWire(
             audio,
             recurrence,
             snooze,
+            wakeCheck,
         )
 
     override fun equals(other: Any?): Boolean {
@@ -791,7 +842,8 @@ data class WarmAlarmScheduleWire(
             MessagesPigeonUtils.deepEquals(this.notification, other.notification) &&
             MessagesPigeonUtils.deepEquals(this.audio, other.audio) &&
             MessagesPigeonUtils.deepEquals(this.recurrence, other.recurrence) &&
-            MessagesPigeonUtils.deepEquals(this.snooze, other.snooze)
+            MessagesPigeonUtils.deepEquals(this.snooze, other.snooze) &&
+            MessagesPigeonUtils.deepEquals(this.wakeCheck, other.wakeCheck)
     }
 
     override fun hashCode(): Int {
@@ -802,6 +854,7 @@ data class WarmAlarmScheduleWire(
         result = 31 * result + MessagesPigeonUtils.deepHash(this.audio)
         result = 31 * result + MessagesPigeonUtils.deepHash(this.recurrence)
         result = 31 * result + MessagesPigeonUtils.deepHash(this.snooze)
+        result = 31 * result + MessagesPigeonUtils.deepHash(this.wakeCheck)
         return result
     }
 }
@@ -996,17 +1049,23 @@ private open class MessagesPigeonCodec : StandardMessageCodec() {
 
             144.toByte() -> {
                 return (readValue(buffer) as? List<Any?>)?.let {
-                    WarmAlarmScheduleWire.fromList(it)
+                    WarmAlarmWakeCheckWire.fromList(it)
                 }
             }
 
             145.toByte() -> {
                 return (readValue(buffer) as? List<Any?>)?.let {
-                    WarmAlarmSnapshotWire.fromList(it)
+                    WarmAlarmScheduleWire.fromList(it)
                 }
             }
 
             146.toByte() -> {
+                return (readValue(buffer) as? List<Any?>)?.let {
+                    WarmAlarmSnapshotWire.fromList(it)
+                }
+            }
+
+            147.toByte() -> {
                 return (readValue(buffer) as? List<Any?>)?.let {
                     WarmAlarmEventWire.fromList(it)
                 }
@@ -1098,18 +1157,23 @@ private open class MessagesPigeonCodec : StandardMessageCodec() {
                 writeValue(stream, value.toList())
             }
 
-            is WarmAlarmScheduleWire -> {
+            is WarmAlarmWakeCheckWire -> {
                 stream.write(144)
                 writeValue(stream, value.toList())
             }
 
-            is WarmAlarmSnapshotWire -> {
+            is WarmAlarmScheduleWire -> {
                 stream.write(145)
                 writeValue(stream, value.toList())
             }
 
-            is WarmAlarmEventWire -> {
+            is WarmAlarmSnapshotWire -> {
                 stream.write(146)
+                writeValue(stream, value.toList())
+            }
+
+            is WarmAlarmEventWire -> {
+                stream.write(147)
                 writeValue(stream, value.toList())
             }
 

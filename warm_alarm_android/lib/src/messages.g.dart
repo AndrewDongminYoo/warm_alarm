@@ -11,9 +11,9 @@ import 'package:flutter/services.dart';
 import 'package:meta/meta.dart' show immutable, protected, visibleForTesting;
 
 Object? _extractReplyValueOrThrow(
-  List<Object?>? replyList,
-  String channelName, {
-  required bool isNullValid,
+    List<Object?>? replyList,
+    String channelName, {
+    required bool isNullValid,
 }) {
   if (replyList == null) {
     throw PlatformException(
@@ -35,6 +35,7 @@ Object? _extractReplyValueOrThrow(
   return replyList.firstOrNull;
 }
 
+
 List<Object?> wrapResponse({Object? result, PlatformException? error, bool empty = false}) {
   if (empty) {
     return <Object?>[];
@@ -44,7 +45,6 @@ List<Object?> wrapResponse({Object? result, PlatformException? error, bool empty
   }
   return <Object?>[error.code, error.message, error.details];
 }
-
 bool _deepEquals(Object? a, Object? b) {
   if (identical(a, b)) {
     return true;
@@ -56,7 +56,9 @@ bool _deepEquals(Object? a, Object? b) {
     return a == b;
   }
   if (a is List && b is List) {
-    return a.length == b.length && a.indexed.every(((int, dynamic) item) => _deepEquals(item.$2, b[item.$1]));
+    return a.length == b.length &&
+        a.indexed
+            .every(((int, dynamic) item) => _deepEquals(item.$2, b[item.$1]));
   }
   if (a is Map && b is Map) {
     if (a.length != b.length) {
@@ -105,6 +107,7 @@ int _deepHash(Object? value) {
   return value.hashCode;
 }
 
+
 enum WarmAlarmSupportStatusWire {
   supported,
   limited,
@@ -148,6 +151,10 @@ enum WarmAlarmEventTypeWire {
   stopped,
   snoozed,
   failed,
+  wakeCheckShown,
+  wakeCheckDismissed,
+  wakeCheckExpired,
+  retriggered,
 }
 
 class WarmAlarmCapabilitiesWire {
@@ -184,8 +191,7 @@ class WarmAlarmCapabilitiesWire {
   }
 
   Object encode() {
-    return _toList();
-  }
+    return _toList();  }
 
   static WarmAlarmCapabilitiesWire decode(Object result) {
     result as List<Object?>;
@@ -208,12 +214,7 @@ class WarmAlarmCapabilitiesWire {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(exactScheduling, other.exactScheduling) &&
-        _deepEquals(notificationScheduling, other.notificationScheduling) &&
-        _deepEquals(backgroundAudioPlayback, other.backgroundAudioPlayback) &&
-        _deepEquals(fullScreenPresentation, other.fullScreenPresentation) &&
-        _deepEquals(wakeCheck, other.wakeCheck) &&
-        _deepEquals(liveActivity, other.liveActivity);
+    return _deepEquals(exactScheduling, other.exactScheduling) && _deepEquals(notificationScheduling, other.notificationScheduling) && _deepEquals(backgroundAudioPlayback, other.backgroundAudioPlayback) && _deepEquals(fullScreenPresentation, other.fullScreenPresentation) && _deepEquals(wakeCheck, other.wakeCheck) && _deepEquals(liveActivity, other.liveActivity);
   }
 
   @override
@@ -243,8 +244,7 @@ class WarmAlarmPermissionStateWire {
   }
 
   Object encode() {
-    return _toList();
-  }
+    return _toList();  }
 
   static WarmAlarmPermissionStateWire decode(Object result) {
     result as List<Object?>;
@@ -264,9 +264,7 @@ class WarmAlarmPermissionStateWire {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(notificationsGranted, other.notificationsGranted) &&
-        _deepEquals(exactAlarmGranted, other.exactAlarmGranted) &&
-        _deepEquals(fullScreenIntentGranted, other.fullScreenIntentGranted);
+    return _deepEquals(notificationsGranted, other.notificationsGranted) && _deepEquals(exactAlarmGranted, other.exactAlarmGranted) && _deepEquals(fullScreenIntentGranted, other.fullScreenIntentGranted);
   }
 
   @override
@@ -292,8 +290,7 @@ class WarmAlarmReadinessWire {
   }
 
   Object encode() {
-    return _toList();
-  }
+    return _toList();  }
 
   static WarmAlarmReadinessWire decode(Object result) {
     result as List<Object?>;
@@ -334,8 +331,7 @@ class WarmAlarmWarningWire {
   }
 
   Object encode() {
-    return _toList();
-  }
+    return _toList();  }
 
   static WarmAlarmWarningWire decode(Object result) {
     result as List<Object?>;
@@ -379,8 +375,7 @@ class WarmAlarmFailureWire {
   }
 
   Object encode() {
-    return _toList();
-  }
+    return _toList();  }
 
   static WarmAlarmFailureWire decode(Object result) {
     result as List<Object?>;
@@ -429,8 +424,7 @@ class WarmAlarmScheduleResultWire {
   }
 
   Object encode() {
-    return _toList();
-  }
+    return _toList();  }
 
   static WarmAlarmScheduleResultWire decode(Object result) {
     result as List<Object?>;
@@ -450,9 +444,7 @@ class WarmAlarmScheduleResultWire {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(alarmId, other.alarmId) &&
-        _deepEquals(readiness, other.readiness) &&
-        _deepEquals(warning, other.warning);
+    return _deepEquals(alarmId, other.alarmId) && _deepEquals(readiness, other.readiness) && _deepEquals(warning, other.warning);
   }
 
   @override
@@ -486,8 +478,7 @@ class WarmAlarmNotificationWire {
   }
 
   Object encode() {
-    return _toList();
-  }
+    return _toList();  }
 
   static WarmAlarmNotificationWire decode(Object result) {
     result as List<Object?>;
@@ -508,10 +499,7 @@ class WarmAlarmNotificationWire {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(title, other.title) &&
-        _deepEquals(body, other.body) &&
-        _deepEquals(stopActionTitle, other.stopActionTitle) &&
-        _deepEquals(snoozeActionTitle, other.snoozeActionTitle);
+    return _deepEquals(title, other.title) && _deepEquals(body, other.body) && _deepEquals(stopActionTitle, other.stopActionTitle) && _deepEquals(snoozeActionTitle, other.snoozeActionTitle);
   }
 
   @override
@@ -553,8 +541,7 @@ class WarmAlarmAudioWire {
   }
 
   Object encode() {
-    return _toList();
-  }
+    return _toList();  }
 
   static WarmAlarmAudioWire decode(Object result) {
     result as List<Object?>;
@@ -577,12 +564,7 @@ class WarmAlarmAudioWire {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(filePath, other.filePath) &&
-        _deepEquals(assetPath, other.assetPath) &&
-        _deepEquals(loop, other.loop) &&
-        _deepEquals(volume, other.volume) &&
-        _deepEquals(fadeInDurationMillis, other.fadeInDurationMillis) &&
-        _deepEquals(vibrate, other.vibrate);
+    return _deepEquals(filePath, other.filePath) && _deepEquals(assetPath, other.assetPath) && _deepEquals(loop, other.loop) && _deepEquals(volume, other.volume) && _deepEquals(fadeInDurationMillis, other.fadeInDurationMillis) && _deepEquals(vibrate, other.vibrate);
   }
 
   @override
@@ -604,8 +586,7 @@ class WarmAlarmRecurrenceWire {
   }
 
   Object encode() {
-    return _toList();
-  }
+    return _toList();  }
 
   static WarmAlarmRecurrenceWire decode(Object result) {
     result as List<Object?>;
@@ -645,8 +626,7 @@ class WarmAlarmSnoozeWire {
   }
 
   Object encode() {
-    return _toList();
-  }
+    return _toList();  }
 
   static WarmAlarmSnoozeWire decode(Object result) {
     result as List<Object?>;
@@ -672,6 +652,56 @@ class WarmAlarmSnoozeWire {
   int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
 }
 
+class WarmAlarmWakeCheckWire {
+  WarmAlarmWakeCheckWire({
+    required this.checkDelayMillis,
+    this.retriggerDelayMillis,
+    this.maxRetriggers,
+  });
+
+  int checkDelayMillis;
+
+  int? retriggerDelayMillis;
+
+  int? maxRetriggers;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      checkDelayMillis,
+      retriggerDelayMillis,
+      maxRetriggers,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static WarmAlarmWakeCheckWire decode(Object result) {
+    result as List<Object?>;
+    return WarmAlarmWakeCheckWire(
+      checkDelayMillis: result[0]! as int,
+      retriggerDelayMillis: result[1] as int?,
+      maxRetriggers: result[2] as int?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! WarmAlarmWakeCheckWire || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(checkDelayMillis, other.checkDelayMillis) && _deepEquals(retriggerDelayMillis, other.retriggerDelayMillis) && _deepEquals(maxRetriggers, other.maxRetriggers);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
 class WarmAlarmScheduleWire {
   WarmAlarmScheduleWire({
     required this.id,
@@ -680,6 +710,7 @@ class WarmAlarmScheduleWire {
     required this.audio,
     this.recurrence,
     this.snooze,
+    this.wakeCheck,
   });
 
   int id;
@@ -694,6 +725,8 @@ class WarmAlarmScheduleWire {
 
   WarmAlarmSnoozeWire? snooze;
 
+  WarmAlarmWakeCheckWire? wakeCheck;
+
   List<Object?> _toList() {
     return <Object?>[
       id,
@@ -702,12 +735,12 @@ class WarmAlarmScheduleWire {
       audio,
       recurrence,
       snooze,
+      wakeCheck,
     ];
   }
 
   Object encode() {
-    return _toList();
-  }
+    return _toList();  }
 
   static WarmAlarmScheduleWire decode(Object result) {
     result as List<Object?>;
@@ -718,6 +751,7 @@ class WarmAlarmScheduleWire {
       audio: result[3]! as WarmAlarmAudioWire,
       recurrence: result[4] as WarmAlarmRecurrenceWire?,
       snooze: result[5] as WarmAlarmSnoozeWire?,
+      wakeCheck: result[6] as WarmAlarmWakeCheckWire?,
     );
   }
 
@@ -730,12 +764,7 @@ class WarmAlarmScheduleWire {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(id, other.id) &&
-        _deepEquals(scheduledAtMillis, other.scheduledAtMillis) &&
-        _deepEquals(notification, other.notification) &&
-        _deepEquals(audio, other.audio) &&
-        _deepEquals(recurrence, other.recurrence) &&
-        _deepEquals(snooze, other.snooze);
+    return _deepEquals(id, other.id) && _deepEquals(scheduledAtMillis, other.scheduledAtMillis) && _deepEquals(notification, other.notification) && _deepEquals(audio, other.audio) && _deepEquals(recurrence, other.recurrence) && _deepEquals(snooze, other.snooze) && _deepEquals(wakeCheck, other.wakeCheck);
   }
 
   @override
@@ -761,8 +790,7 @@ class WarmAlarmSnapshotWire {
   }
 
   Object encode() {
-    return _toList();
-  }
+    return _toList();  }
 
   static WarmAlarmSnapshotWire decode(Object result) {
     result as List<Object?>;
@@ -819,8 +847,7 @@ class WarmAlarmEventWire {
   }
 
   Object encode() {
-    return _toList();
-  }
+    return _toList();  }
 
   static WarmAlarmEventWire decode(Object result) {
     result as List<Object?>;
@@ -842,17 +869,14 @@ class WarmAlarmEventWire {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(alarmId, other.alarmId) &&
-        _deepEquals(type, other.type) &&
-        _deepEquals(occurredAtMillis, other.occurredAtMillis) &&
-        _deepEquals(snoozeDurationMillis, other.snoozeDurationMillis) &&
-        _deepEquals(failure, other.failure);
+    return _deepEquals(alarmId, other.alarmId) && _deepEquals(type, other.type) && _deepEquals(occurredAtMillis, other.occurredAtMillis) && _deepEquals(snoozeDurationMillis, other.snoozeDurationMillis) && _deepEquals(failure, other.failure);
   }
 
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
   int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
 }
+
 
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
@@ -861,59 +885,62 @@ class _PigeonCodec extends StandardMessageCodec {
     if (value is int) {
       buffer.putUint8(4);
       buffer.putInt64(value);
-    } else if (value is WarmAlarmSupportStatusWire) {
+    }    else if (value is WarmAlarmSupportStatusWire) {
       buffer.putUint8(129);
       writeValue(buffer, value.index);
-    } else if (value is WarmAlarmReadinessLevelWire) {
+    }    else if (value is WarmAlarmReadinessLevelWire) {
       buffer.putUint8(130);
       writeValue(buffer, value.index);
-    } else if (value is WarmAlarmReadinessReasonWire) {
+    }    else if (value is WarmAlarmReadinessReasonWire) {
       buffer.putUint8(131);
       writeValue(buffer, value.index);
-    } else if (value is WarmAlarmFailureCodeWire) {
+    }    else if (value is WarmAlarmFailureCodeWire) {
       buffer.putUint8(132);
       writeValue(buffer, value.index);
-    } else if (value is WarmAlarmEventTypeWire) {
+    }    else if (value is WarmAlarmEventTypeWire) {
       buffer.putUint8(133);
       writeValue(buffer, value.index);
-    } else if (value is WarmAlarmCapabilitiesWire) {
+    }    else if (value is WarmAlarmCapabilitiesWire) {
       buffer.putUint8(134);
       writeValue(buffer, value.encode());
-    } else if (value is WarmAlarmPermissionStateWire) {
+    }    else if (value is WarmAlarmPermissionStateWire) {
       buffer.putUint8(135);
       writeValue(buffer, value.encode());
-    } else if (value is WarmAlarmReadinessWire) {
+    }    else if (value is WarmAlarmReadinessWire) {
       buffer.putUint8(136);
       writeValue(buffer, value.encode());
-    } else if (value is WarmAlarmWarningWire) {
+    }    else if (value is WarmAlarmWarningWire) {
       buffer.putUint8(137);
       writeValue(buffer, value.encode());
-    } else if (value is WarmAlarmFailureWire) {
+    }    else if (value is WarmAlarmFailureWire) {
       buffer.putUint8(138);
       writeValue(buffer, value.encode());
-    } else if (value is WarmAlarmScheduleResultWire) {
+    }    else if (value is WarmAlarmScheduleResultWire) {
       buffer.putUint8(139);
       writeValue(buffer, value.encode());
-    } else if (value is WarmAlarmNotificationWire) {
+    }    else if (value is WarmAlarmNotificationWire) {
       buffer.putUint8(140);
       writeValue(buffer, value.encode());
-    } else if (value is WarmAlarmAudioWire) {
+    }    else if (value is WarmAlarmAudioWire) {
       buffer.putUint8(141);
       writeValue(buffer, value.encode());
-    } else if (value is WarmAlarmRecurrenceWire) {
+    }    else if (value is WarmAlarmRecurrenceWire) {
       buffer.putUint8(142);
       writeValue(buffer, value.encode());
-    } else if (value is WarmAlarmSnoozeWire) {
+    }    else if (value is WarmAlarmSnoozeWire) {
       buffer.putUint8(143);
       writeValue(buffer, value.encode());
-    } else if (value is WarmAlarmScheduleWire) {
+    }    else if (value is WarmAlarmWakeCheckWire) {
       buffer.putUint8(144);
       writeValue(buffer, value.encode());
-    } else if (value is WarmAlarmSnapshotWire) {
+    }    else if (value is WarmAlarmScheduleWire) {
       buffer.putUint8(145);
       writeValue(buffer, value.encode());
-    } else if (value is WarmAlarmEventWire) {
+    }    else if (value is WarmAlarmSnapshotWire) {
       buffer.putUint8(146);
+      writeValue(buffer, value.encode());
+    }    else if (value is WarmAlarmEventWire) {
+      buffer.putUint8(147);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -959,10 +986,12 @@ class _PigeonCodec extends StandardMessageCodec {
       case 143:
         return WarmAlarmSnoozeWire.decode(readValue(buffer)!);
       case 144:
-        return WarmAlarmScheduleWire.decode(readValue(buffer)!);
+        return WarmAlarmWakeCheckWire.decode(readValue(buffer)!);
       case 145:
-        return WarmAlarmSnapshotWire.decode(readValue(buffer)!);
+        return WarmAlarmScheduleWire.decode(readValue(buffer)!);
       case 146:
+        return WarmAlarmSnapshotWire.decode(readValue(buffer)!);
+      case 147:
         return WarmAlarmEventWire.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
@@ -975,8 +1004,8 @@ class WarmAlarmApi {
   /// available for dependency injection.  If it is left null, the default
   /// BinaryMessenger will be used which routes to the host platform.
   WarmAlarmApi({BinaryMessenger? binaryMessenger, String messageChannelSuffix = ''})
-    : pigeonVar_binaryMessenger = binaryMessenger,
-      pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
+      : pigeonVar_binaryMessenger = binaryMessenger,
+        pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
   final BinaryMessenger? pigeonVar_binaryMessenger;
 
   static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
@@ -984,8 +1013,7 @@ class WarmAlarmApi {
   final String pigeonVar_messageChannelSuffix;
 
   Future<WarmAlarmCapabilitiesWire> getCapabilities() async {
-    final pigeonVar_channelName =
-        'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.getCapabilities$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName = 'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.getCapabilities$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -995,16 +1023,16 @@ class WarmAlarmApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-      pigeonVar_replyList,
-      pigeonVar_channelName,
-      isNullValid: false,
-    );
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
     return pigeonVar_replyValue! as WarmAlarmCapabilitiesWire;
   }
 
   Future<WarmAlarmPermissionStateWire> getPermissionState() async {
-    final pigeonVar_channelName =
-        'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.getPermissionState$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName = 'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.getPermissionState$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -1014,16 +1042,16 @@ class WarmAlarmApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-      pigeonVar_replyList,
-      pigeonVar_channelName,
-      isNullValid: false,
-    );
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
     return pigeonVar_replyValue! as WarmAlarmPermissionStateWire;
   }
 
   Future<WarmAlarmReadinessWire> getReadiness() async {
-    final pigeonVar_channelName =
-        'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.getReadiness$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName = 'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.getReadiness$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -1033,16 +1061,16 @@ class WarmAlarmApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-      pigeonVar_replyList,
-      pigeonVar_channelName,
-      isNullValid: false,
-    );
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
     return pigeonVar_replyValue! as WarmAlarmReadinessWire;
   }
 
   Future<WarmAlarmScheduleResultWire> scheduleAlarm(WarmAlarmScheduleWire schedule) async {
-    final pigeonVar_channelName =
-        'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.scheduleAlarm$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName = 'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.scheduleAlarm$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -1052,16 +1080,16 @@ class WarmAlarmApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-      pigeonVar_replyList,
-      pigeonVar_channelName,
-      isNullValid: false,
-    );
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
     return pigeonVar_replyValue! as WarmAlarmScheduleResultWire;
   }
 
   Future<void> cancelAlarm(int id) async {
-    final pigeonVar_channelName =
-        'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.cancelAlarm$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName = 'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.cancelAlarm$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -1071,15 +1099,15 @@ class WarmAlarmApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(
-      pigeonVar_replyList,
-      pigeonVar_channelName,
-      isNullValid: true,
-    );
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
   }
 
   Future<void> cancelAllAlarms() async {
-    final pigeonVar_channelName =
-        'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.cancelAllAlarms$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName = 'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.cancelAllAlarms$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -1089,15 +1117,15 @@ class WarmAlarmApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(
-      pigeonVar_replyList,
-      pigeonVar_channelName,
-      isNullValid: true,
-    );
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
   }
 
   Future<List<WarmAlarmSnapshotWire>> getScheduledAlarms() async {
-    final pigeonVar_channelName =
-        'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.getScheduledAlarms$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName = 'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.getScheduledAlarms$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -1107,10 +1135,11 @@ class WarmAlarmApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-      pigeonVar_replyList,
-      pigeonVar_channelName,
-      isNullValid: false,
-    );
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
     return (pigeonVar_replyValue! as List<Object?>).cast<WarmAlarmSnapshotWire>();
   }
 }
@@ -1120,18 +1149,12 @@ abstract class WarmAlarmEventsApi {
 
   Future<void> emitEvent(WarmAlarmEventWire event);
 
-  static void setUp(
-    WarmAlarmEventsApi? api, {
-    BinaryMessenger? binaryMessenger,
-    String messageChannelSuffix = '',
-  }) {
+  static void setUp(WarmAlarmEventsApi? api, {BinaryMessenger? binaryMessenger, String messageChannelSuffix = '',}) {
     messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
     {
       final pigeonVar_channel = BasicMessageChannel<Object?>(
-        'dev.flutter.pigeon.warm_alarm.WarmAlarmEventsApi.emitEvent$messageChannelSuffix',
-        pigeonChannelCodec,
-        binaryMessenger: binaryMessenger,
-      );
+          'dev.flutter.pigeon.warm_alarm.WarmAlarmEventsApi.emitEvent$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
       if (api == null) {
         pigeonVar_channel.setMessageHandler(null);
       } else {
@@ -1143,10 +1166,8 @@ abstract class WarmAlarmEventsApi {
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);
-          } catch (e) {
-            return wrapResponse(
-              error: PlatformException(code: 'error', message: e.toString()),
-            );
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
           }
         });
       }
