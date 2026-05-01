@@ -125,9 +125,31 @@ class WarmAlarmPlugin :
     override fun getScheduledAlarms(callback: (Result<List<WarmAlarmSnapshotWire>>) -> Unit) {
         val snapshots =
             WarmAlarmStore.loadAll(context).values.map { s ->
-                WarmAlarmSnapshotWire(id = s.id, scheduledAtMillis = s.scheduledAtMillis)
+                WarmAlarmSnapshotWire(
+                    id = s.id,
+                    scheduledAtMillis = s.scheduledAtMillis,
+                    notification = s.notification,
+                    audio = s.audio,
+                    recurrence = s.recurrence,
+                    snooze = s.snooze,
+                    wakeCheck = s.wakeCheck,
+                    payload = s.payload,
+                )
             }
         callback(Result.success(snapshots))
+    }
+
+    override fun isRinging(
+        alarmId: Long?,
+        callback: (Result<Boolean>) -> Unit,
+    ) {
+        val ringing = WarmAlarmForegroundService.isRinging
+        val currentId = WarmAlarmForegroundService.currentAlarmId
+        callback(
+            Result.success(
+                if (alarmId == null) ringing else ringing && currentId == alarmId,
+            ),
+        )
     }
 
     private fun currentPermissionState(): WarmAlarmPermissionStateWire {

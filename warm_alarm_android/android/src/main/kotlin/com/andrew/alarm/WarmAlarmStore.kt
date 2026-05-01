@@ -115,6 +115,7 @@ internal object WarmAlarmStore {
                     },
                 )
             }
+            s.payload?.let { put("payload", it) }
         }
 
     private fun decode(obj: JSONObject): WarmAlarmScheduleWire {
@@ -156,6 +157,7 @@ internal object WarmAlarmStore {
                 } else {
                     null
                 },
+            payload = obj.optString("payload").takeIf { it.isNotEmpty() },
         )
     }
 }

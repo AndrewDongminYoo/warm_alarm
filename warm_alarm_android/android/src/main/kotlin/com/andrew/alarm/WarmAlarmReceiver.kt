@@ -37,6 +37,7 @@ class WarmAlarmReceiver : BroadcastReceiver() {
         val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
         if (alarmId == -1L) return
         val isRetrigger = intent.getBooleanExtra(EXTRA_IS_RETRIGGER, false)
+        val payload = WarmAlarmStore.load(context, alarmId)?.payload
 
         if (isRetrigger) {
             WarmAlarmStore.incrementRetriggerCount(context, alarmId)
@@ -52,6 +53,7 @@ class WarmAlarmReceiver : BroadcastReceiver() {
                     alarmId = alarmId,
                     type = WarmAlarmEventTypeWire.RETRIGGERED,
                     occurredAtMillis = System.currentTimeMillis(),
+                    payload = payload,
                 ),
             )
         } else {
@@ -60,6 +62,7 @@ class WarmAlarmReceiver : BroadcastReceiver() {
                     alarmId = alarmId,
                     type = WarmAlarmEventTypeWire.FIRED,
                     occurredAtMillis = System.currentTimeMillis(),
+                    payload = payload,
                 ),
             )
         }

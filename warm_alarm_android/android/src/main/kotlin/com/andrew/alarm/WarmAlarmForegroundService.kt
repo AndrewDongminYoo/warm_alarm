@@ -25,6 +25,10 @@ class WarmAlarmForegroundService : Service() {
         const val CHANNEL_ID = "warm_alarm_channel"
         private const val NOTIF_ID = 2001
         private const val WAKE_CHECK_PENDING_OFFSET = 30_000
+
+        @Volatile var isRinging = false
+
+        @Volatile var currentAlarmId: Long? = null
     }
 
     private var mediaPlayer: MediaPlayer? = null
@@ -61,20 +65,25 @@ class WarmAlarmForegroundService : Service() {
         }
         val schedule = WarmAlarmStore.load(this, alarmId)
         currentSchedule = schedule
+        isRinging = true
+        currentAlarmId = alarmId
         startForeground(NOTIF_ID, buildNotification(alarmId, schedule))
         startAudio(alarmId, schedule)
     }
 
     private fun handleStop(alarmId: Long) {
+        val schedule = currentSchedule ?: WarmAlarmStore.load(this, alarmId)
+        isRinging = false
+        currentAlarmId = null
         stopAudio()
         WarmAlarmPlugin.emitEventFromBackground(
             WarmAlarmEventWire(
                 alarmId = alarmId,
                 type = WarmAlarmEventTypeWire.STOPPED,
                 occurredAtMillis = System.currentTimeMillis(),
+                payload = schedule?.payload,
             ),
         )
-        val schedule = currentSchedule ?: WarmAlarmStore.load(this, alarmId)
         val wakeCheckDelay = schedule?.wakeCheck?.checkDelayMillis
         val maxRetriggers = (schedule?.wakeCheck?.maxRetriggers ?: 1L).toInt()
         val retriggerCount = WarmAlarmStore.getRetriggerCount(this, alarmId)
@@ -109,8 +118,10 @@ class WarmAlarmForegroundService : Service() {
     }
 
     private fun handleSnooze(alarmId: Long) {
-        stopAudio()
         val schedule = currentSchedule ?: WarmAlarmStore.load(this, alarmId)
+        isRinging = false
+        currentAlarmId = null
+        stopAudio()
         val snoozeDurationMillis = schedule?.snooze?.durationMillis ?: (5L * 60 * 1000)
         val fireAt = System.currentTimeMillis() + snoozeDurationMillis
 
@@ -125,6 +136,7 @@ class WarmAlarmForegroundService : Service() {
                 type = WarmAlarmEventTypeWire.SNOOZED,
                 occurredAtMillis = System.currentTimeMillis(),
                 snoozeDurationMillis = snoozeDurationMillis,
+                payload = schedule?.payload,
             ),
         )
         @Suppress("DEPRECATION")
@@ -293,6 +305,8 @@ class WarmAlarmForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        isRinging = false
+        currentAlarmId = null
         stopAudio()
         super.onDestroy()
     }
