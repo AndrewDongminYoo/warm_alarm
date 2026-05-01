@@ -206,8 +206,14 @@ void main() {
             notification: WarmAlarmNotificationWire(
               title: 'macOS Alarm',
               body: 'Ring',
+              keepNotificationAfterAlarmEnds: false,
             ),
-            audio: WarmAlarmAudioWire(loop: true, vibrate: false, volume: 0.5),
+            audio: WarmAlarmAudioWire(
+              loop: true,
+              vibrate: false,
+              volume: 0.5,
+              volumeEnforced: false,
+            ),
             snooze: WarmAlarmSnoozeWire(durationMillis: 600000),
             payload: 'mac-payload',
           ),

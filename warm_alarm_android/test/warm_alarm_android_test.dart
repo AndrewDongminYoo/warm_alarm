@@ -14,8 +14,16 @@ void main() {
       WarmAlarmScheduleWire(
         id: 0,
         scheduledAtMillis: 0,
-        notification: WarmAlarmNotificationWire(title: '', body: ''),
-        audio: WarmAlarmAudioWire(loop: true, vibrate: true),
+        notification: WarmAlarmNotificationWire(
+          title: '',
+          body: '',
+          keepNotificationAfterAlarmEnds: false,
+        ),
+        audio: WarmAlarmAudioWire(
+          loop: true,
+          vibrate: true,
+          volumeEnforced: false,
+        ),
       ),
     );
   });
@@ -108,8 +116,16 @@ void main() {
           WarmAlarmSnapshotWire(
             id: 3,
             scheduledAtMillis: now,
-            notification: WarmAlarmNotificationWire(title: 'T', body: 'B'),
-            audio: WarmAlarmAudioWire(loop: false, vibrate: false),
+            notification: WarmAlarmNotificationWire(
+              title: 'T',
+              body: 'B',
+              keepNotificationAfterAlarmEnds: false,
+            ),
+            audio: WarmAlarmAudioWire(
+              loop: false,
+              vibrate: false,
+              volumeEnforced: false,
+            ),
           ),
         ],
       );
@@ -522,8 +538,14 @@ void main() {
               title: 'Morning Alarm',
               body: 'Wake up!',
               stopActionTitle: 'Stop',
+              keepNotificationAfterAlarmEnds: false,
             ),
-            audio: WarmAlarmAudioWire(loop: true, vibrate: true, volume: 0.8),
+            audio: WarmAlarmAudioWire(
+              loop: true,
+              vibrate: true,
+              volume: 0.8,
+              volumeEnforced: false,
+            ),
             snooze: WarmAlarmSnoozeWire(durationMillis: 300000),
             wakeCheck: WarmAlarmWakeCheckWire(checkDelayMillis: 60000),
             payload: '{"key":"val"}',

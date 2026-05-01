@@ -132,24 +132,42 @@ class WarmAlarmNotificationWire {
   const WarmAlarmNotificationWire({
     required this.title,
     required this.body,
+    required this.keepNotificationAfterAlarmEnds,
     this.stopActionTitle,
     this.snoozeActionTitle,
+    this.androidIcon,
+    this.androidIconColor,
   });
 
   final String title;
   final String body;
   final String? stopActionTitle;
   final String? snoozeActionTitle;
+  final String? androidIcon;
+  final int? androidIconColor;
+  final bool keepNotificationAfterAlarmEnds;
+}
+
+class WarmAlarmVolumeFadeStepWire {
+  const WarmAlarmVolumeFadeStepWire({
+    required this.timeMillis,
+    required this.volume,
+  });
+
+  final int timeMillis;
+  final double volume;
 }
 
 class WarmAlarmAudioWire {
   const WarmAlarmAudioWire({
     required this.loop,
     required this.vibrate,
+    required this.volumeEnforced,
     this.filePath,
     this.assetPath,
     this.volume,
     this.fadeInDurationMillis,
+    this.fadeSteps,
   });
 
   final String? filePath;
@@ -158,6 +176,8 @@ class WarmAlarmAudioWire {
   final double? volume;
   final int? fadeInDurationMillis;
   final bool vibrate;
+  final bool volumeEnforced;
+  final List<WarmAlarmVolumeFadeStepWire>? fadeSteps;
 }
 
 class WarmAlarmRecurrenceWire {
@@ -275,6 +295,12 @@ abstract class WarmAlarmApi {
 
   @async
   bool isRinging(int? alarmId);
+
+  @async
+  void setKillWarning(String title, String body);
+
+  @async
+  void clearKillWarning();
 }
 
 @FlutterApi()

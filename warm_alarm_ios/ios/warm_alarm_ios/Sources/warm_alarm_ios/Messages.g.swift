@@ -471,6 +471,9 @@ struct WarmAlarmNotificationWire: Hashable {
   var body: String
   var stopActionTitle: String? = nil
   var snoozeActionTitle: String? = nil
+  var androidIcon: String? = nil
+  var androidIconColor: Int64? = nil
+  var keepNotificationAfterAlarmEnds: Bool
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -479,12 +482,18 @@ struct WarmAlarmNotificationWire: Hashable {
     let body = pigeonVar_list[1] as! String
     let stopActionTitle: String? = nilOrValue(pigeonVar_list[2])
     let snoozeActionTitle: String? = nilOrValue(pigeonVar_list[3])
+    let androidIcon: String? = nilOrValue(pigeonVar_list[4])
+    let androidIconColor: Int64? = nilOrValue(pigeonVar_list[5])
+    let keepNotificationAfterAlarmEnds = pigeonVar_list[6] as! Bool
 
     return WarmAlarmNotificationWire(
       title: title,
       body: body,
       stopActionTitle: stopActionTitle,
-      snoozeActionTitle: snoozeActionTitle
+      snoozeActionTitle: snoozeActionTitle,
+      androidIcon: androidIcon,
+      androidIconColor: androidIconColor,
+      keepNotificationAfterAlarmEnds: keepNotificationAfterAlarmEnds
     )
   }
   func toList() -> [Any?] {
@@ -493,13 +502,16 @@ struct WarmAlarmNotificationWire: Hashable {
       body,
       stopActionTitle,
       snoozeActionTitle,
+      androidIcon,
+      androidIconColor,
+      keepNotificationAfterAlarmEnds,
     ]
   }
   static func == (lhs: WarmAlarmNotificationWire, rhs: WarmAlarmNotificationWire) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return deepEqualsMessages(lhs.title, rhs.title) && deepEqualsMessages(lhs.body, rhs.body) && deepEqualsMessages(lhs.stopActionTitle, rhs.stopActionTitle) && deepEqualsMessages(lhs.snoozeActionTitle, rhs.snoozeActionTitle)
+    return deepEqualsMessages(lhs.title, rhs.title) && deepEqualsMessages(lhs.body, rhs.body) && deepEqualsMessages(lhs.stopActionTitle, rhs.stopActionTitle) && deepEqualsMessages(lhs.snoozeActionTitle, rhs.snoozeActionTitle) && deepEqualsMessages(lhs.androidIcon, rhs.androidIcon) && deepEqualsMessages(lhs.androidIconColor, rhs.androidIconColor) && deepEqualsMessages(lhs.keepNotificationAfterAlarmEnds, rhs.keepNotificationAfterAlarmEnds)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -508,6 +520,45 @@ struct WarmAlarmNotificationWire: Hashable {
     deepHashMessages(value: body, hasher: &hasher)
     deepHashMessages(value: stopActionTitle, hasher: &hasher)
     deepHashMessages(value: snoozeActionTitle, hasher: &hasher)
+    deepHashMessages(value: androidIcon, hasher: &hasher)
+    deepHashMessages(value: androidIconColor, hasher: &hasher)
+    deepHashMessages(value: keepNotificationAfterAlarmEnds, hasher: &hasher)
+  }
+}
+
+/// Generated class from Pigeon that represents data sent in messages.
+struct WarmAlarmVolumeFadeStepWire: Hashable {
+  var timeMillis: Int64
+  var volume: Double
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> WarmAlarmVolumeFadeStepWire? {
+    let timeMillis = pigeonVar_list[0] as! Int64
+    let volume = pigeonVar_list[1] as! Double
+
+    return WarmAlarmVolumeFadeStepWire(
+      timeMillis: timeMillis,
+      volume: volume
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      timeMillis,
+      volume,
+    ]
+  }
+  static func == (lhs: WarmAlarmVolumeFadeStepWire, rhs: WarmAlarmVolumeFadeStepWire) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return deepEqualsMessages(lhs.timeMillis, rhs.timeMillis) && deepEqualsMessages(lhs.volume, rhs.volume)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("WarmAlarmVolumeFadeStepWire")
+    deepHashMessages(value: timeMillis, hasher: &hasher)
+    deepHashMessages(value: volume, hasher: &hasher)
   }
 }
 
@@ -519,6 +570,8 @@ struct WarmAlarmAudioWire: Hashable {
   var volume: Double? = nil
   var fadeInDurationMillis: Int64? = nil
   var vibrate: Bool
+  var volumeEnforced: Bool
+  var fadeSteps: [WarmAlarmVolumeFadeStepWire]? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -529,6 +582,8 @@ struct WarmAlarmAudioWire: Hashable {
     let volume: Double? = nilOrValue(pigeonVar_list[3])
     let fadeInDurationMillis: Int64? = nilOrValue(pigeonVar_list[4])
     let vibrate = pigeonVar_list[5] as! Bool
+    let volumeEnforced = pigeonVar_list[6] as! Bool
+    let fadeSteps: [WarmAlarmVolumeFadeStepWire]? = nilOrValue(pigeonVar_list[7])
 
     return WarmAlarmAudioWire(
       filePath: filePath,
@@ -536,7 +591,9 @@ struct WarmAlarmAudioWire: Hashable {
       loop: loop,
       volume: volume,
       fadeInDurationMillis: fadeInDurationMillis,
-      vibrate: vibrate
+      vibrate: vibrate,
+      volumeEnforced: volumeEnforced,
+      fadeSteps: fadeSteps
     )
   }
   func toList() -> [Any?] {
@@ -547,13 +604,15 @@ struct WarmAlarmAudioWire: Hashable {
       volume,
       fadeInDurationMillis,
       vibrate,
+      volumeEnforced,
+      fadeSteps,
     ]
   }
   static func == (lhs: WarmAlarmAudioWire, rhs: WarmAlarmAudioWire) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return deepEqualsMessages(lhs.filePath, rhs.filePath) && deepEqualsMessages(lhs.assetPath, rhs.assetPath) && deepEqualsMessages(lhs.loop, rhs.loop) && deepEqualsMessages(lhs.volume, rhs.volume) && deepEqualsMessages(lhs.fadeInDurationMillis, rhs.fadeInDurationMillis) && deepEqualsMessages(lhs.vibrate, rhs.vibrate)
+    return deepEqualsMessages(lhs.filePath, rhs.filePath) && deepEqualsMessages(lhs.assetPath, rhs.assetPath) && deepEqualsMessages(lhs.loop, rhs.loop) && deepEqualsMessages(lhs.volume, rhs.volume) && deepEqualsMessages(lhs.fadeInDurationMillis, rhs.fadeInDurationMillis) && deepEqualsMessages(lhs.vibrate, rhs.vibrate) && deepEqualsMessages(lhs.volumeEnforced, rhs.volumeEnforced) && deepEqualsMessages(lhs.fadeSteps, rhs.fadeSteps)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -564,6 +623,8 @@ struct WarmAlarmAudioWire: Hashable {
     deepHashMessages(value: volume, hasher: &hasher)
     deepHashMessages(value: fadeInDurationMillis, hasher: &hasher)
     deepHashMessages(value: vibrate, hasher: &hasher)
+    deepHashMessages(value: volumeEnforced, hasher: &hasher)
+    deepHashMessages(value: fadeSteps, hasher: &hasher)
   }
 }
 
@@ -855,16 +916,18 @@ private class MessagesPigeonCodecReader: FlutterStandardReader {
     case 140:
       return WarmAlarmNotificationWire.fromList(self.readValue() as! [Any?])
     case 141:
-      return WarmAlarmAudioWire.fromList(self.readValue() as! [Any?])
+      return WarmAlarmVolumeFadeStepWire.fromList(self.readValue() as! [Any?])
     case 142:
-      return WarmAlarmRecurrenceWire.fromList(self.readValue() as! [Any?])
+      return WarmAlarmAudioWire.fromList(self.readValue() as! [Any?])
     case 143:
-      return WarmAlarmSnoozeWire.fromList(self.readValue() as! [Any?])
+      return WarmAlarmRecurrenceWire.fromList(self.readValue() as! [Any?])
     case 144:
-      return WarmAlarmScheduleWire.fromList(self.readValue() as! [Any?])
+      return WarmAlarmSnoozeWire.fromList(self.readValue() as! [Any?])
     case 145:
-      return WarmAlarmSnapshotWire.fromList(self.readValue() as! [Any?])
+      return WarmAlarmScheduleWire.fromList(self.readValue() as! [Any?])
     case 146:
+      return WarmAlarmSnapshotWire.fromList(self.readValue() as! [Any?])
+    case 147:
       return WarmAlarmEventWire.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
@@ -910,23 +973,26 @@ private class MessagesPigeonCodecWriter: FlutterStandardWriter {
     } else if let value = value as? WarmAlarmNotificationWire {
       super.writeByte(140)
       super.writeValue(value.toList())
-    } else if let value = value as? WarmAlarmAudioWire {
+    } else if let value = value as? WarmAlarmVolumeFadeStepWire {
       super.writeByte(141)
       super.writeValue(value.toList())
-    } else if let value = value as? WarmAlarmRecurrenceWire {
+    } else if let value = value as? WarmAlarmAudioWire {
       super.writeByte(142)
       super.writeValue(value.toList())
-    } else if let value = value as? WarmAlarmSnoozeWire {
+    } else if let value = value as? WarmAlarmRecurrenceWire {
       super.writeByte(143)
       super.writeValue(value.toList())
-    } else if let value = value as? WarmAlarmScheduleWire {
+    } else if let value = value as? WarmAlarmSnoozeWire {
       super.writeByte(144)
       super.writeValue(value.toList())
-    } else if let value = value as? WarmAlarmSnapshotWire {
+    } else if let value = value as? WarmAlarmScheduleWire {
       super.writeByte(145)
       super.writeValue(value.toList())
-    } else if let value = value as? WarmAlarmEventWire {
+    } else if let value = value as? WarmAlarmSnapshotWire {
       super.writeByte(146)
+      super.writeValue(value.toList())
+    } else if let value = value as? WarmAlarmEventWire {
+      super.writeByte(147)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -959,6 +1025,8 @@ protocol WarmAlarmApi {
   func cancelAllAlarms(completion: @escaping (Result<Void, Error>) -> Void)
   func getScheduledAlarms(completion: @escaping (Result<[WarmAlarmSnapshotWire], Error>) -> Void)
   func isRinging(alarmId: Int64?, completion: @escaping (Result<Bool, Error>) -> Void)
+  func setKillWarning(title: String, body: String, completion: @escaping (Result<Void, Error>) -> Void)
+  func clearKillWarning(completion: @escaping (Result<Void, Error>) -> Void)
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -1092,6 +1160,39 @@ class WarmAlarmApiSetup {
       }
     } else {
       isRingingChannel.setMessageHandler(nil)
+    }
+    let setKillWarningChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.warm_alarm.WarmAlarmApi.setKillWarning\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      setKillWarningChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let titleArg = args[0] as! String
+        let bodyArg = args[1] as! String
+        api.setKillWarning(title: titleArg, body: bodyArg) { result in
+          switch result {
+          case .success:
+            reply(wrapResult(nil))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      setKillWarningChannel.setMessageHandler(nil)
+    }
+    let clearKillWarningChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.warm_alarm.WarmAlarmApi.clearKillWarning\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      clearKillWarningChannel.setMessageHandler { _, reply in
+        api.clearKillWarning { result in
+          switch result {
+          case .success:
+            reply(wrapResult(nil))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      clearKillWarningChannel.setMessageHandler(nil)
     }
   }
 }

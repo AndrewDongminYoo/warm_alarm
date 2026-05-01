@@ -62,6 +62,12 @@ class WarmAlarmIOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   Future<bool> isRinging({int? id}) => api.isRinging(id);
 
   @override
+  Future<void> setKillWarning({required String title, required String body}) => api.setKillWarning(title, body);
+
+  @override
+  Future<void> clearKillWarning() => api.clearKillWarning();
+
+  @override
   Future<WarmAlarmScheduleResult> scheduleAlarm(
     WarmAlarmSchedule schedule,
   ) async => _scheduleResultFromWire(
@@ -82,6 +88,8 @@ WarmAlarmAudioWire _audioToWire(WarmAlarmAudio audio) {
     volume: audio.volume,
     fadeInDurationMillis: audio.fadeInDuration?.inMilliseconds,
     vibrate: audio.vibrate,
+    volumeEnforced: audio.volumeEnforced,
+    fadeSteps: audio.fadeSteps?.map(_fadeStepToWire).toList(growable: false),
   );
 }
 
@@ -93,6 +101,22 @@ WarmAlarmAudio _audioFromWire(WarmAlarmAudioWire wire) {
     volume: wire.volume,
     fadeInDuration: wire.fadeInDurationMillis == null ? null : Duration(milliseconds: wire.fadeInDurationMillis!),
     vibrate: wire.vibrate,
+    volumeEnforced: wire.volumeEnforced,
+    fadeSteps: wire.fadeSteps?.map(_fadeStepFromWire).toList(growable: false),
+  );
+}
+
+WarmAlarmVolumeFadeStepWire _fadeStepToWire(WarmAlarmVolumeFadeStep step) {
+  return WarmAlarmVolumeFadeStepWire(
+    timeMillis: step.time.inMilliseconds,
+    volume: step.volume,
+  );
+}
+
+WarmAlarmVolumeFadeStep _fadeStepFromWire(WarmAlarmVolumeFadeStepWire wire) {
+  return WarmAlarmVolumeFadeStep(
+    time: Duration(milliseconds: wire.timeMillis),
+    volume: wire.volume,
   );
 }
 
@@ -151,6 +175,9 @@ WarmAlarmNotificationWire _notificationToWire(
     body: notification.body,
     stopActionTitle: notification.stopActionTitle,
     snoozeActionTitle: notification.snoozeActionTitle,
+    androidIcon: notification.androidIcon,
+    androidIconColor: notification.androidIconColor,
+    keepNotificationAfterAlarmEnds: notification.keepNotificationAfterAlarmEnds,
   );
 }
 
@@ -160,6 +187,9 @@ WarmAlarmNotification _notificationFromWire(WarmAlarmNotificationWire wire) {
     body: wire.body,
     stopActionTitle: wire.stopActionTitle,
     snoozeActionTitle: wire.snoozeActionTitle,
+    androidIcon: wire.androidIcon,
+    androidIconColor: wire.androidIconColor,
+    keepNotificationAfterAlarmEnds: wire.keepNotificationAfterAlarmEnds,
   );
 }
 

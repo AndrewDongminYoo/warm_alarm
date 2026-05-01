@@ -470,6 +470,9 @@ class WarmAlarmNotificationWire {
     required this.body,
     this.stopActionTitle,
     this.snoozeActionTitle,
+    this.androidIcon,
+    this.androidIconColor,
+    required this.keepNotificationAfterAlarmEnds,
   });
 
   String title;
@@ -480,12 +483,21 @@ class WarmAlarmNotificationWire {
 
   String? snoozeActionTitle;
 
+  String? androidIcon;
+
+  int? androidIconColor;
+
+  bool keepNotificationAfterAlarmEnds;
+
   List<Object?> _toList() {
     return <Object?>[
       title,
       body,
       stopActionTitle,
       snoozeActionTitle,
+      androidIcon,
+      androidIconColor,
+      keepNotificationAfterAlarmEnds,
     ];
   }
 
@@ -500,6 +512,9 @@ class WarmAlarmNotificationWire {
       body: result[1]! as String,
       stopActionTitle: result[2] as String?,
       snoozeActionTitle: result[3] as String?,
+      androidIcon: result[4] as String?,
+      androidIconColor: result[5] as int?,
+      keepNotificationAfterAlarmEnds: result[6]! as bool,
     );
   }
 
@@ -515,7 +530,56 @@ class WarmAlarmNotificationWire {
     return _deepEquals(title, other.title) &&
         _deepEquals(body, other.body) &&
         _deepEquals(stopActionTitle, other.stopActionTitle) &&
-        _deepEquals(snoozeActionTitle, other.snoozeActionTitle);
+        _deepEquals(snoozeActionTitle, other.snoozeActionTitle) &&
+        _deepEquals(androidIcon, other.androidIcon) &&
+        _deepEquals(androidIconColor, other.androidIconColor) &&
+        _deepEquals(keepNotificationAfterAlarmEnds, other.keepNotificationAfterAlarmEnds);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
+class WarmAlarmVolumeFadeStepWire {
+  WarmAlarmVolumeFadeStepWire({
+    required this.timeMillis,
+    required this.volume,
+  });
+
+  int timeMillis;
+
+  double volume;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      timeMillis,
+      volume,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static WarmAlarmVolumeFadeStepWire decode(Object result) {
+    result as List<Object?>;
+    return WarmAlarmVolumeFadeStepWire(
+      timeMillis: result[0]! as int,
+      volume: result[1]! as double,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! WarmAlarmVolumeFadeStepWire || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(timeMillis, other.timeMillis) && _deepEquals(volume, other.volume);
   }
 
   @override
@@ -531,6 +595,8 @@ class WarmAlarmAudioWire {
     this.volume,
     this.fadeInDurationMillis,
     required this.vibrate,
+    required this.volumeEnforced,
+    this.fadeSteps,
   });
 
   String? filePath;
@@ -545,6 +611,10 @@ class WarmAlarmAudioWire {
 
   bool vibrate;
 
+  bool volumeEnforced;
+
+  List<WarmAlarmVolumeFadeStepWire>? fadeSteps;
+
   List<Object?> _toList() {
     return <Object?>[
       filePath,
@@ -553,6 +623,8 @@ class WarmAlarmAudioWire {
       volume,
       fadeInDurationMillis,
       vibrate,
+      volumeEnforced,
+      fadeSteps,
     ];
   }
 
@@ -569,6 +641,8 @@ class WarmAlarmAudioWire {
       volume: result[3] as double?,
       fadeInDurationMillis: result[4] as int?,
       vibrate: result[5]! as bool,
+      volumeEnforced: result[6]! as bool,
+      fadeSteps: (result[7] as List<Object?>?)?.cast<WarmAlarmVolumeFadeStepWire>(),
     );
   }
 
@@ -586,7 +660,9 @@ class WarmAlarmAudioWire {
         _deepEquals(loop, other.loop) &&
         _deepEquals(volume, other.volume) &&
         _deepEquals(fadeInDurationMillis, other.fadeInDurationMillis) &&
-        _deepEquals(vibrate, other.vibrate);
+        _deepEquals(vibrate, other.vibrate) &&
+        _deepEquals(volumeEnforced, other.volumeEnforced) &&
+        _deepEquals(fadeSteps, other.fadeSteps);
   }
 
   @override
@@ -1009,26 +1085,29 @@ class _PigeonCodec extends StandardMessageCodec {
     } else if (value is WarmAlarmNotificationWire) {
       buffer.putUint8(140);
       writeValue(buffer, value.encode());
-    } else if (value is WarmAlarmAudioWire) {
+    } else if (value is WarmAlarmVolumeFadeStepWire) {
       buffer.putUint8(141);
       writeValue(buffer, value.encode());
-    } else if (value is WarmAlarmRecurrenceWire) {
+    } else if (value is WarmAlarmAudioWire) {
       buffer.putUint8(142);
       writeValue(buffer, value.encode());
-    } else if (value is WarmAlarmSnoozeWire) {
+    } else if (value is WarmAlarmRecurrenceWire) {
       buffer.putUint8(143);
       writeValue(buffer, value.encode());
-    } else if (value is WarmAlarmWakeCheckWire) {
+    } else if (value is WarmAlarmSnoozeWire) {
       buffer.putUint8(144);
       writeValue(buffer, value.encode());
-    } else if (value is WarmAlarmScheduleWire) {
+    } else if (value is WarmAlarmWakeCheckWire) {
       buffer.putUint8(145);
       writeValue(buffer, value.encode());
-    } else if (value is WarmAlarmSnapshotWire) {
+    } else if (value is WarmAlarmScheduleWire) {
       buffer.putUint8(146);
       writeValue(buffer, value.encode());
-    } else if (value is WarmAlarmEventWire) {
+    } else if (value is WarmAlarmSnapshotWire) {
       buffer.putUint8(147);
+      writeValue(buffer, value.encode());
+    } else if (value is WarmAlarmEventWire) {
+      buffer.putUint8(148);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -1068,18 +1147,20 @@ class _PigeonCodec extends StandardMessageCodec {
       case 140:
         return WarmAlarmNotificationWire.decode(readValue(buffer)!);
       case 141:
-        return WarmAlarmAudioWire.decode(readValue(buffer)!);
+        return WarmAlarmVolumeFadeStepWire.decode(readValue(buffer)!);
       case 142:
-        return WarmAlarmRecurrenceWire.decode(readValue(buffer)!);
+        return WarmAlarmAudioWire.decode(readValue(buffer)!);
       case 143:
-        return WarmAlarmSnoozeWire.decode(readValue(buffer)!);
+        return WarmAlarmRecurrenceWire.decode(readValue(buffer)!);
       case 144:
-        return WarmAlarmWakeCheckWire.decode(readValue(buffer)!);
+        return WarmAlarmSnoozeWire.decode(readValue(buffer)!);
       case 145:
-        return WarmAlarmScheduleWire.decode(readValue(buffer)!);
+        return WarmAlarmWakeCheckWire.decode(readValue(buffer)!);
       case 146:
-        return WarmAlarmSnapshotWire.decode(readValue(buffer)!);
+        return WarmAlarmScheduleWire.decode(readValue(buffer)!);
       case 147:
+        return WarmAlarmSnapshotWire.decode(readValue(buffer)!);
+      case 148:
         return WarmAlarmEventWire.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
@@ -1247,6 +1328,42 @@ class WarmAlarmApi {
       isNullValid: false,
     );
     return pigeonVar_replyValue! as bool;
+  }
+
+  Future<void> setKillWarning(String title, String body) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.setKillWarning$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[title, body]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+  }
+
+  Future<void> clearKillWarning() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.clearKillWarning$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
   }
 }
 

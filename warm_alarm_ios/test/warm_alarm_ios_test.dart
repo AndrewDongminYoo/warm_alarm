@@ -153,8 +153,16 @@ void main() {
         WarmAlarmScheduleWire(
           id: 0,
           scheduledAtMillis: 0,
-          notification: WarmAlarmNotificationWire(title: '', body: ''),
-          audio: WarmAlarmAudioWire(loop: true, vibrate: false),
+          notification: WarmAlarmNotificationWire(
+            title: '',
+            body: '',
+            keepNotificationAfterAlarmEnds: false,
+          ),
+          audio: WarmAlarmAudioWire(
+            loop: true,
+            vibrate: false,
+            volumeEnforced: false,
+          ),
         ),
       );
     });
@@ -245,8 +253,13 @@ void main() {
             notification: WarmAlarmNotificationWire(
               title: 'iOS Alarm',
               body: 'Ring',
+              keepNotificationAfterAlarmEnds: false,
             ),
-            audio: WarmAlarmAudioWire(loop: false, vibrate: true),
+            audio: WarmAlarmAudioWire(
+              loop: false,
+              vibrate: true,
+              volumeEnforced: false,
+            ),
             payload: 'snap-payload',
           ),
         ],

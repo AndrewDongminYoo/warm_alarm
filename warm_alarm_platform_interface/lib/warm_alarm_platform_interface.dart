@@ -53,4 +53,8 @@ abstract class WarmAlarmPlatform extends PlatformInterface {
   Stream<WarmAlarmEvent> get events;
 
   Future<bool> isRinging({int? id});
+
+  Future<void> setKillWarning({required String title, required String body});
+
+  Future<void> clearKillWarning();
 }
