@@ -152,6 +152,30 @@ class WarmAlarmPlugin :
         )
     }
 
+    override fun setKillWarning(
+        title: String,
+        body: String,
+        callback: (Result<Unit>) -> Unit,
+    ) {
+        context
+            .getSharedPreferences(KILL_WARNING_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString("title", title)
+            .putString("body", body)
+            .apply()
+        callback(Result.success(Unit))
+    }
+
+    override fun clearKillWarning(callback: (Result<Unit>) -> Unit) {
+        context
+            .getSharedPreferences(KILL_WARNING_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .remove("title")
+            .remove("body")
+            .apply()
+        callback(Result.success(Unit))
+    }
+
     private fun currentPermissionState(): WarmAlarmPermissionStateWire {
         val notificationsGranted =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -211,6 +235,7 @@ class WarmAlarmPlugin :
     }
 
     companion object {
+        const val KILL_WARNING_PREFS = "warm_alarm_kill_warning"
         private var pluginInstance: WarmAlarmPlugin? = null
 
         fun emitEventFromBackground(event: WarmAlarmEventWire) {
