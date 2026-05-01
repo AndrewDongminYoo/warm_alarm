@@ -1,8 +1,10 @@
 import Flutter
+import UIKit
 import UserNotifications
 
-public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
+public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDelegate, WarmAlarmApi {
     private let delegate: WarmAlarmDelegate
+    private static let killWarningNotifId = "warm_alarm_kill_warning_notif"
 
     init(delegate: WarmAlarmDelegate) {
         self.delegate = delegate
@@ -17,6 +19,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         UNUserNotificationCenter.current().delegate = delegate
         WarmAlarmDelegate.registerCategories()
         WarmAlarmApiSetup.setUp(binaryMessenger: binaryMessenger, api: instance)
+        registrar.addApplicationDelegate(instance)
         registrar.publish(instance)
     }
 
@@ -154,5 +157,26 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         } else {
             completion(.success(playingId != nil))
         }
+    }
+
+    public func applicationWillResignActive(_ application: UIApplication) {
+        guard delegate.currentlyPlayingAlarmId != nil,
+              let dict = UserDefaults.standard.dictionary(forKey: "warm_alarm_kill_warning"),
+              let title = dict["title"] as? String,
+              let body = dict["body"] as? String
+        else { return }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1.0, repeats: false)
+        let request = UNNotificationRequest(
+            identifier: WarmAlarmPlugin.killWarningNotifId, content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
+    }
+
+    public func applicationDidBecomeActive(_ application: UIApplication) {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(
+            withIdentifiers: [WarmAlarmPlugin.killWarningNotifId])
     }
 }

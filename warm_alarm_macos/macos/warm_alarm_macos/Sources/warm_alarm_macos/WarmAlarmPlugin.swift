@@ -1,8 +1,10 @@
+import AppKit
 import FlutterMacOS
 import UserNotifications
 
 public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     private let delegate: WarmAlarmDelegate
+    private static let killWarningNotifId = "warm_alarm_kill_warning_notif"
 
     init(delegate: WarmAlarmDelegate) {
         self.delegate = delegate
@@ -17,7 +19,42 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         UNUserNotificationCenter.current().delegate = delegate
         WarmAlarmDelegate.registerCategories()
         WarmAlarmApiSetup.setUp(binaryMessenger: binaryMessenger, api: instance)
+        instance.setupLifecycleObservers()
         registrar.publish(instance)
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    private func setupLifecycleObservers() {
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(appWillResignActive),
+            name: NSApplication.willResignActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(appDidBecomeActive),
+            name: NSApplication.didBecomeActiveNotification, object: nil)
+    }
+
+    @objc private func appWillResignActive() {
+        guard delegate.currentlyPlayingAlarmId != nil,
+              let dict = UserDefaults.standard.dictionary(forKey: "warm_alarm_kill_warning"),
+              let title = dict["title"] as? String,
+              let body = dict["body"] as? String
+        else { return }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1.0, repeats: false)
+        let request = UNNotificationRequest(
+            identifier: WarmAlarmPlugin.killWarningNotifId, content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
+    }
+
+    @objc private func appDidBecomeActive() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(
+            withIdentifiers: [WarmAlarmPlugin.killWarningNotifId])
     }
 
     func getCapabilities(completion: @escaping (Result<WarmAlarmCapabilitiesWire, Error>) -> Void) {
