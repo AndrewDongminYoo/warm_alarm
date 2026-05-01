@@ -41,7 +41,11 @@ final class WarmAlarmStoreTests: XCTestCase {
             notificationTitle: "T", notificationBody: "B",
             stopActionTitle: "Stop", snoozeActionTitle: "Snooze",
             filePath: "/tmp/alarm.mp3", assetPath: nil,
-            loop: false, snoozeDurationMillis: 300_000
+            loop: false, volume: 0.75, vibrate: true,
+            fadeInDurationMillis: 3_000,
+            recurrenceWeekdays: [1, 3, 5],
+            snoozeDurationMillis: 300_000,
+            payload: "{\"key\":\"value\"}"
         )
         WarmAlarmStore.shared.save(data)
         let loaded = WarmAlarmStore.shared.load(id: 99)!
@@ -50,7 +54,24 @@ final class WarmAlarmStoreTests: XCTestCase {
         XCTAssertEqual(loaded.filePath, "/tmp/alarm.mp3")
         XCTAssertNil(loaded.assetPath)
         XCTAssertFalse(loaded.loop)
+        XCTAssertEqual(loaded.volume, 0.75)
+        XCTAssertTrue(loaded.vibrate)
+        XCTAssertEqual(loaded.fadeInDurationMillis, 3_000)
+        XCTAssertEqual(loaded.recurrenceWeekdays, [1, 3, 5])
         XCTAssertEqual(loaded.snoozeDurationMillis, 300_000)
+        XCTAssertEqual(loaded.payload, "{\"key\":\"value\"}")
+    }
+
+    func testRoundtripNilOptionals() {
+        let data = makeData(id: 50)
+        WarmAlarmStore.shared.save(data)
+        let loaded = WarmAlarmStore.shared.load(id: 50)!
+        XCTAssertNil(loaded.volume)
+        XCTAssertFalse(loaded.vibrate)
+        XCTAssertNil(loaded.fadeInDurationMillis)
+        XCTAssertNil(loaded.recurrenceWeekdays)
+        XCTAssertNil(loaded.snoozeDurationMillis)
+        XCTAssertNil(loaded.payload)
     }
 
     private func makeData(id: Int64, title: String = "Alarm", scheduledAt: Int64 = 0) -> WarmAlarmScheduleData {
@@ -59,7 +80,9 @@ final class WarmAlarmStoreTests: XCTestCase {
             notificationTitle: title, notificationBody: "",
             stopActionTitle: nil, snoozeActionTitle: nil,
             filePath: nil, assetPath: nil,
-            loop: true, snoozeDurationMillis: nil
+            loop: true, volume: nil, vibrate: false,
+            fadeInDurationMillis: nil, recurrenceWeekdays: nil,
+            snoozeDurationMillis: nil, payload: nil
         )
     }
 }

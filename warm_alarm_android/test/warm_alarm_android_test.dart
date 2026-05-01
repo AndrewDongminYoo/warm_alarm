@@ -386,5 +386,161 @@ void main() {
       );
       expect(captured.single.wakeCheck, isNull);
     });
+
+    test('scheduleAlarm passes payload to wire', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      final captured = <WarmAlarmScheduleWire>[];
+      when(() => api.scheduleAlarm(any())).thenAnswer((invocation) async {
+        captured.add(
+          invocation.positionalArguments[0] as WarmAlarmScheduleWire,
+        );
+        return WarmAlarmScheduleResultWire(
+          alarmId: 3,
+          readiness: WarmAlarmReadinessWire(
+            level: WarmAlarmReadinessLevelWire.ready,
+            reasons: <WarmAlarmReadinessReasonWire>[],
+          ),
+        );
+      });
+      await platform.scheduleAlarm(
+        WarmAlarmSchedule(
+          id: 3,
+          scheduledAt: DateTime(2026, 5, 1, 7),
+          notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+          audio: const WarmAlarmAudio(),
+          payload: '{"userId":"42"}',
+        ),
+      );
+      expect(captured.single.payload, '{"userId":"42"}');
+    });
+  });
+
+  group('WarmAlarmAndroid P1+P2+P3 features', () {
+    test('isRinging delegates to api', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      when(() => api.isRinging(any())).thenAnswer((_) async => true);
+
+      final result = await platform.isRinging(id: 5);
+
+      expect(result, isTrue);
+      verify(() => api.isRinging(5)).called(1);
+    });
+
+    test('isRinging with null id delegates null to api', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      when(() => api.isRinging(any())).thenAnswer((_) async => false);
+
+      final result = await platform.isRinging();
+
+      expect(result, isFalse);
+      verify(() => api.isRinging(null)).called(1);
+    });
+
+    test('emitEvent maps fired event with payload', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      final emitted = <WarmAlarmEvent>[];
+      final sub = platform.events.listen(emitted.add);
+
+      await platform.emitEvent(
+        WarmAlarmEventWire(
+          alarmId: 7,
+          type: WarmAlarmEventTypeWire.fired,
+          occurredAtMillis: now,
+          payload: 'alarm-data',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect((emitted.single as WarmAlarmFired).payload, 'alarm-data');
+      await sub.cancel();
+    });
+
+    test('emitEvent maps stopped event with payload', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      final emitted = <WarmAlarmEvent>[];
+      final sub = platform.events.listen(emitted.add);
+
+      await platform.emitEvent(
+        WarmAlarmEventWire(
+          alarmId: 8,
+          type: WarmAlarmEventTypeWire.stopped,
+          occurredAtMillis: now,
+          payload: 'stop-data',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect((emitted.single as WarmAlarmStopped).payload, 'stop-data');
+      await sub.cancel();
+    });
+
+    test('emitEvent maps snoozed event with payload', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      final emitted = <WarmAlarmEvent>[];
+      final sub = platform.events.listen(emitted.add);
+
+      await platform.emitEvent(
+        WarmAlarmEventWire(
+          alarmId: 9,
+          type: WarmAlarmEventTypeWire.snoozed,
+          occurredAtMillis: now,
+          snoozeDurationMillis: 300000,
+          payload: 'snooze-data',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final snoozed = emitted.single as WarmAlarmSnoozed;
+      expect(snoozed.payload, 'snooze-data');
+      expect(snoozed.duration, const Duration(minutes: 5));
+      await sub.cancel();
+    });
+
+    test('getScheduledAlarms maps enriched snapshot fields', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      when(api.getScheduledAlarms).thenAnswer(
+        (_) async => <WarmAlarmSnapshotWire>[
+          WarmAlarmSnapshotWire(
+            id: 99,
+            scheduledAtMillis: now,
+            notification: WarmAlarmNotificationWire(
+              title: 'Morning Alarm',
+              body: 'Wake up!',
+              stopActionTitle: 'Stop',
+            ),
+            audio: WarmAlarmAudioWire(loop: true, vibrate: true, volume: 0.8),
+            snooze: WarmAlarmSnoozeWire(durationMillis: 300000),
+            wakeCheck: WarmAlarmWakeCheckWire(checkDelayMillis: 60000),
+            payload: '{"key":"val"}',
+          ),
+        ],
+      );
+
+      final snapshots = await platform.getScheduledAlarms();
+
+      expect(snapshots.single.id, 99);
+      expect(snapshots.single.notification.title, 'Morning Alarm');
+      expect(snapshots.single.audio.loop, isTrue);
+      expect(snapshots.single.audio.vibrate, isTrue);
+      expect(snapshots.single.audio.volume, 0.8);
+      expect(snapshots.single.snooze!.duration.inMinutes, 5);
+      expect(snapshots.single.wakeCheck!.checkDelay.inSeconds, 60);
+      expect(snapshots.single.payload, '{"key":"val"}');
+    });
   });
 }
