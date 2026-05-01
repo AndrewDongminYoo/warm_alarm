@@ -202,12 +202,14 @@ class WarmAlarmPlugin :
             context: Context,
             alarmId: Long,
             fireAtMillis: Long,
+            isRetrigger: Boolean = false,
         ) {
             val plugin = pluginInstance ?: return
             val intent =
                 Intent(context, WarmAlarmReceiver::class.java).apply {
                     action = WarmAlarmReceiver.ACTION_FIRE
                     putExtra(WarmAlarmReceiver.EXTRA_ALARM_ID, alarmId)
+                    putExtra(WarmAlarmReceiver.EXTRA_IS_RETRIGGER, isRetrigger)
                 }
             val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             val pending = PendingIntent.getBroadcast(context, alarmId.toInt(), intent, flags)

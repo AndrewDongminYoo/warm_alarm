@@ -18,6 +18,12 @@
             <intent-filter>
                 <action android:name="com.andrew.alarm.ACTION_FIRE" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="com.andrew.alarm.ACTION_WAKE_CHECK_FIRE" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.andrew.alarm.ACTION_WAKE_CHECK_DISMISS" />
+            </intent-filter>
         </receiver>
 
         <service

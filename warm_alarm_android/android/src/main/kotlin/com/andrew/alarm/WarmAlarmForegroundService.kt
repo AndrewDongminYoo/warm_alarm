@@ -21,8 +21,9 @@ class WarmAlarmForegroundService : Service() {
         const val ACTION_STOP = "com.andrew.alarm.ACTION_STOP"
         const val ACTION_SNOOZE = "com.andrew.alarm.ACTION_SNOOZE"
         const val EXTRA_ALARM_ID = WarmAlarmReceiver.EXTRA_ALARM_ID
-        private const val CHANNEL_ID = "warm_alarm_channel"
+        const val CHANNEL_ID = "warm_alarm_channel"
         private const val NOTIF_ID = 2001
+        private const val WAKE_CHECK_PENDING_OFFSET = 30_000
     }
 
     private var mediaPlayer: MediaPlayer? = null
@@ -58,7 +59,6 @@ class WarmAlarmForegroundService : Service() {
         }
         val schedule = WarmAlarmStore.load(this, alarmId)
         currentSchedule = schedule
-        WarmAlarmStore.remove(this, alarmId)
         startForeground(NOTIF_ID, buildNotification(alarmId, schedule))
         startAudio(alarmId, schedule)
     }
@@ -72,9 +72,38 @@ class WarmAlarmForegroundService : Service() {
                 occurredAtMillis = System.currentTimeMillis(),
             ),
         )
+        val schedule = currentSchedule ?: WarmAlarmStore.load(this, alarmId)
+        val wakeCheckDelay = schedule?.wakeCheck?.checkDelayMillis
+        val maxRetriggers = (schedule?.wakeCheck?.maxRetriggers ?: 1L).toInt()
+        val retriggerCount = WarmAlarmStore.getRetriggerCount(this, alarmId)
+        if (wakeCheckDelay != null && retriggerCount < maxRetriggers) {
+            scheduleWakeCheck(alarmId, System.currentTimeMillis() + wakeCheckDelay)
+        } else {
+            WarmAlarmStore.remove(this, alarmId)
+        }
         @Suppress("DEPRECATION")
         stopForeground(true)
         stopSelf()
+    }
+
+    private fun scheduleWakeCheck(
+        alarmId: Long,
+        checkAtMillis: Long,
+    ) {
+        val intent =
+            Intent(this, WarmAlarmReceiver::class.java).apply {
+                action = WarmAlarmReceiver.ACTION_WAKE_CHECK_FIRE
+                putExtra(WarmAlarmReceiver.EXTRA_ALARM_ID, alarmId)
+            }
+        val pending =
+            PendingIntent.getBroadcast(
+                this,
+                (alarmId + WAKE_CHECK_PENDING_OFFSET).toInt(),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        val am = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+        am.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, checkAtMillis, pending)
     }
 
     private fun handleSnooze(alarmId: Long) {
