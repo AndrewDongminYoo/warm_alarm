@@ -11,6 +11,8 @@ BITCODE
 Buildables
 CBUUID
 dsym
+fgbg
+FGBG
 fluttium
 FMWK
 gitmoji
@@ -37,9 +39,12 @@ Podfile
 PODFILE
 podspec
 reactivecircus
+reconstructable
 renancaraujo
+Riverpod
 RSSI
 RUNPATH
+rxdart
 SDKROOT
 simctl
 SRCROOT
