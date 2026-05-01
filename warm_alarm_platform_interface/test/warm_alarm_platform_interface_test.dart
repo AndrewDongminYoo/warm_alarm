@@ -16,23 +16,21 @@ class WarmAlarmMock extends WarmAlarmPlatform {
   Stream<WarmAlarmEvent> get events => _events.stream;
 
   @override
-  Future<WarmAlarmCapabilities> getCapabilities() async =>
-      const WarmAlarmCapabilities(
-        exactScheduling: WarmAlarmSupportStatus.supported,
-        notificationScheduling: WarmAlarmSupportStatus.supported,
-        backgroundAudioPlayback: WarmAlarmSupportStatus.limited,
-        fullScreenPresentation: WarmAlarmSupportStatus.unsupported,
-        wakeCheck: WarmAlarmSupportStatus.unsupported,
-        liveActivity: WarmAlarmSupportStatus.unsupported,
-      );
+  Future<WarmAlarmCapabilities> getCapabilities() async => const WarmAlarmCapabilities(
+    exactScheduling: WarmAlarmSupportStatus.supported,
+    notificationScheduling: WarmAlarmSupportStatus.supported,
+    backgroundAudioPlayback: WarmAlarmSupportStatus.limited,
+    fullScreenPresentation: WarmAlarmSupportStatus.unsupported,
+    wakeCheck: WarmAlarmSupportStatus.unsupported,
+    liveActivity: WarmAlarmSupportStatus.unsupported,
+  );
 
   @override
-  Future<WarmAlarmPermissionState> getPermissionState() async =>
-      const WarmAlarmPermissionState(
-        notificationsGranted: true,
-        exactAlarmGranted: false,
-        fullScreenIntentGranted: false,
-      );
+  Future<WarmAlarmPermissionState> getPermissionState() async => const WarmAlarmPermissionState(
+    notificationsGranted: true,
+    exactAlarmGranted: false,
+    fullScreenIntentGranted: false,
+  );
 
   @override
   Future<WarmAlarmReadiness> getReadiness() async => const WarmAlarmReadiness(
@@ -43,8 +41,7 @@ class WarmAlarmMock extends WarmAlarmPlatform {
   );
 
   @override
-  Future<List<WarmAlarmSnapshot>> getScheduledAlarms() async =>
-      const <WarmAlarmSnapshot>[];
+  Future<List<WarmAlarmSnapshot>> getScheduledAlarms() async => const <WarmAlarmSnapshot>[];
 
   @override
   Future<WarmAlarmScheduleResult> scheduleAlarm(

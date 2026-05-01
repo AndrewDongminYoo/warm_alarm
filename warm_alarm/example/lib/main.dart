@@ -113,12 +113,18 @@ class _HomePageState extends State<HomePage> {
                     scheduledAt: DateTime.now().add(const Duration(minutes: 1)),
                     notification: const WarmAlarmNotification(
                       title: 'Warm Alarm',
-                      body: 'Phase 1B proof',
+                      body: 'Phase 2 wake-check proof',
                       stopActionTitle: 'Stop',
                       snoozeActionTitle: 'Snooze',
                     ),
                     audio: const WarmAlarmAudio(),
-                    snooze: const WarmAlarmSnooze(duration: Duration(minutes: 5)),
+                    snooze: const WarmAlarmSnooze(
+                      duration: Duration(minutes: 5),
+                    ),
+                    wakeCheck: const WarmAlarmWakeCheck(
+                      checkDelay: Duration(minutes: 2),
+                      retriggerDelay: Duration(minutes: 1),
+                    ),
                   );
                   final result = await WarmAlarm.scheduleAlarm(schedule);
                   setState(() {

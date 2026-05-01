@@ -16,8 +16,7 @@ class WarmAlarmAndroid extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   /// The API used to interact with the native platform.
   final WarmAlarmApi api;
 
-  final StreamController<WarmAlarmEvent> _events =
-      StreamController<WarmAlarmEvent>.broadcast();
+  final StreamController<WarmAlarmEvent> _events = StreamController<WarmAlarmEvent>.broadcast();
 
   bool _eventsApiSetUp = false;
 
@@ -45,22 +44,18 @@ class WarmAlarmAndroid extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   }
 
   @override
-  Future<WarmAlarmCapabilities> getCapabilities() async =>
-      _capabilitiesFromWire(await api.getCapabilities());
+  Future<WarmAlarmCapabilities> getCapabilities() async => _capabilitiesFromWire(await api.getCapabilities());
 
   @override
   Future<WarmAlarmPermissionState> getPermissionState() async =>
       _permissionStateFromWire(await api.getPermissionState());
 
   @override
-  Future<WarmAlarmReadiness> getReadiness() async =>
-      _readinessFromWire(await api.getReadiness());
+  Future<WarmAlarmReadiness> getReadiness() async => _readinessFromWire(await api.getReadiness());
 
   @override
   Future<List<WarmAlarmSnapshot>> getScheduledAlarms() async =>
-      (await api.getScheduledAlarms())
-          .map(_snapshotFromWire)
-          .toList(growable: false);
+      (await api.getScheduledAlarms()).map(_snapshotFromWire).toList(growable: false);
 
   @override
   Future<WarmAlarmScheduleResult> scheduleAlarm(
@@ -213,9 +208,7 @@ WarmAlarmScheduleResult _scheduleResultFromWire(
   return WarmAlarmScheduleResult(
     alarmId: wire.alarmId,
     readiness: _readinessFromWire(wire.readiness),
-    warning: wire.warning == null
-        ? null
-        : WarmAlarmWarning(message: wire.warning!.message),
+    warning: wire.warning == null ? null : WarmAlarmWarning(message: wire.warning!.message),
   );
 }
 
@@ -281,8 +274,7 @@ WarmAlarmFailureWire _requireFailure(WarmAlarmFailureWire? failure) {
     failure != null,
     'WarmAlarmEventsApi: failed event received without failure payload (Kotlin contract violation)',
   );
-  return failure ??
-      WarmAlarmFailureWire(code: WarmAlarmFailureCodeWire.unknown);
+  return failure ?? WarmAlarmFailureWire(code: WarmAlarmFailureCodeWire.unknown);
 }
 
 WarmAlarmEvent _eventFromWire(WarmAlarmEventWire wire) {
