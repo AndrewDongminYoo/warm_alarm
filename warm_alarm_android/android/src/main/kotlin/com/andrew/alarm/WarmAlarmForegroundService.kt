@@ -146,16 +146,18 @@ class WarmAlarmForegroundService : Service() {
         try {
             if (hasFilePath) {
                 // Voice message: always plays once (no loop).
-                mediaPlayer = createPlayer(volume = volume, loop = false) {
-                    setDataSource(this@WarmAlarmForegroundService, Uri.fromFile(File(audio!!.filePath!!)))
-                }
+                mediaPlayer =
+                    createPlayer(volume = volume, loop = false) {
+                        setDataSource(this@WarmAlarmForegroundService, Uri.fromFile(File(audio!!.filePath!!)))
+                    }
             }
             if (hasAssetPath) {
-                val assetPlayer = createPlayer(volume = volume, loop = audio?.loop ?: true) {
-                    val fd = assets.openFd("flutter_assets/${audio!!.assetPath}")
-                    setDataSource(fd.fileDescriptor, fd.startOffset, fd.length)
-                    fd.close()
-                }
+                val assetPlayer =
+                    createPlayer(volume = volume, loop = audio?.loop ?: true) {
+                        val fd = assets.openFd("flutter_assets/${audio!!.assetPath}")
+                        setDataSource(fd.fileDescriptor, fd.startOffset, fd.length)
+                        fd.close()
+                    }
                 // When both are present, assetPath is the background layer.
                 if (hasFilePath) backgroundPlayer = assetPlayer else mediaPlayer = assetPlayer
             }
@@ -163,9 +165,10 @@ class WarmAlarmForegroundService : Service() {
                 val uri =
                     RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
                         ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-                mediaPlayer = createPlayer(volume = volume, loop = true) {
-                    setDataSource(this@WarmAlarmForegroundService, uri)
-                }
+                mediaPlayer =
+                    createPlayer(volume = volume, loop = true) {
+                        setDataSource(this@WarmAlarmForegroundService, uri)
+                    }
             }
         } catch (e: Exception) {
             stopAudio()
@@ -216,7 +219,12 @@ class WarmAlarmForegroundService : Service() {
     }
 
     private fun stopAudio() {
-        listOf(mediaPlayer, backgroundPlayer).forEach { it?.runCatching { stop(); release() } }
+        listOf(mediaPlayer, backgroundPlayer).forEach {
+            it?.runCatching {
+                stop()
+                release()
+            }
+        }
         mediaPlayer = null
         backgroundPlayer = null
     }
