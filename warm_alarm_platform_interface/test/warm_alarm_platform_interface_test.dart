@@ -44,6 +44,9 @@ class WarmAlarmMock extends WarmAlarmPlatform {
   Future<List<WarmAlarmSnapshot>> getScheduledAlarms() async => const <WarmAlarmSnapshot>[];
 
   @override
+  Future<bool> isRinging({int? id}) async => false;
+
+  @override
   Future<WarmAlarmScheduleResult> scheduleAlarm(
     WarmAlarmSchedule schedule,
   ) async => const WarmAlarmScheduleResult(

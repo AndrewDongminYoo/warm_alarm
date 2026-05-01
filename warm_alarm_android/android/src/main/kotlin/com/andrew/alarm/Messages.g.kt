@@ -804,6 +804,7 @@ data class WarmAlarmScheduleWire(
     val recurrence: WarmAlarmRecurrenceWire? = null,
     val snooze: WarmAlarmSnoozeWire? = null,
     val wakeCheck: WarmAlarmWakeCheckWire? = null,
+    val payload: String? = null,
 ) {
     companion object {
         fun fromList(pigeonVar_list: List<Any?>): WarmAlarmScheduleWire {
@@ -814,7 +815,8 @@ data class WarmAlarmScheduleWire(
             val recurrence = pigeonVar_list[4] as WarmAlarmRecurrenceWire?
             val snooze = pigeonVar_list[5] as WarmAlarmSnoozeWire?
             val wakeCheck = pigeonVar_list[6] as WarmAlarmWakeCheckWire?
-            return WarmAlarmScheduleWire(id, scheduledAtMillis, notification, audio, recurrence, snooze, wakeCheck)
+            val payload = pigeonVar_list[7] as String?
+            return WarmAlarmScheduleWire(id, scheduledAtMillis, notification, audio, recurrence, snooze, wakeCheck, payload)
         }
     }
 
@@ -827,6 +829,7 @@ data class WarmAlarmScheduleWire(
             recurrence,
             snooze,
             wakeCheck,
+            payload,
         )
 
     override fun equals(other: Any?): Boolean {
@@ -843,7 +846,8 @@ data class WarmAlarmScheduleWire(
             MessagesPigeonUtils.deepEquals(this.audio, other.audio) &&
             MessagesPigeonUtils.deepEquals(this.recurrence, other.recurrence) &&
             MessagesPigeonUtils.deepEquals(this.snooze, other.snooze) &&
-            MessagesPigeonUtils.deepEquals(this.wakeCheck, other.wakeCheck)
+            MessagesPigeonUtils.deepEquals(this.wakeCheck, other.wakeCheck) &&
+            MessagesPigeonUtils.deepEquals(this.payload, other.payload)
     }
 
     override fun hashCode(): Int {
@@ -855,6 +859,7 @@ data class WarmAlarmScheduleWire(
         result = 31 * result + MessagesPigeonUtils.deepHash(this.recurrence)
         result = 31 * result + MessagesPigeonUtils.deepHash(this.snooze)
         result = 31 * result + MessagesPigeonUtils.deepHash(this.wakeCheck)
+        result = 31 * result + MessagesPigeonUtils.deepHash(this.payload)
         return result
     }
 }
@@ -863,12 +868,24 @@ data class WarmAlarmScheduleWire(
 data class WarmAlarmSnapshotWire(
     val id: Long,
     val scheduledAtMillis: Long,
+    val notification: WarmAlarmNotificationWire,
+    val audio: WarmAlarmAudioWire,
+    val recurrence: WarmAlarmRecurrenceWire? = null,
+    val snooze: WarmAlarmSnoozeWire? = null,
+    val wakeCheck: WarmAlarmWakeCheckWire? = null,
+    val payload: String? = null,
 ) {
     companion object {
         fun fromList(pigeonVar_list: List<Any?>): WarmAlarmSnapshotWire {
             val id = pigeonVar_list[0] as Long
             val scheduledAtMillis = pigeonVar_list[1] as Long
-            return WarmAlarmSnapshotWire(id, scheduledAtMillis)
+            val notification = pigeonVar_list[2] as WarmAlarmNotificationWire
+            val audio = pigeonVar_list[3] as WarmAlarmAudioWire
+            val recurrence = pigeonVar_list[4] as WarmAlarmRecurrenceWire?
+            val snooze = pigeonVar_list[5] as WarmAlarmSnoozeWire?
+            val wakeCheck = pigeonVar_list[6] as WarmAlarmWakeCheckWire?
+            val payload = pigeonVar_list[7] as String?
+            return WarmAlarmSnapshotWire(id, scheduledAtMillis, notification, audio, recurrence, snooze, wakeCheck, payload)
         }
     }
 
@@ -876,6 +893,12 @@ data class WarmAlarmSnapshotWire(
         listOf(
             id,
             scheduledAtMillis,
+            notification,
+            audio,
+            recurrence,
+            snooze,
+            wakeCheck,
+            payload,
         )
 
     override fun equals(other: Any?): Boolean {
@@ -887,13 +910,25 @@ data class WarmAlarmSnapshotWire(
         }
         val other = other as WarmAlarmSnapshotWire
         return MessagesPigeonUtils.deepEquals(this.id, other.id) &&
-            MessagesPigeonUtils.deepEquals(this.scheduledAtMillis, other.scheduledAtMillis)
+            MessagesPigeonUtils.deepEquals(this.scheduledAtMillis, other.scheduledAtMillis) &&
+            MessagesPigeonUtils.deepEquals(this.notification, other.notification) &&
+            MessagesPigeonUtils.deepEquals(this.audio, other.audio) &&
+            MessagesPigeonUtils.deepEquals(this.recurrence, other.recurrence) &&
+            MessagesPigeonUtils.deepEquals(this.snooze, other.snooze) &&
+            MessagesPigeonUtils.deepEquals(this.wakeCheck, other.wakeCheck) &&
+            MessagesPigeonUtils.deepEquals(this.payload, other.payload)
     }
 
     override fun hashCode(): Int {
         var result = javaClass.hashCode()
         result = 31 * result + MessagesPigeonUtils.deepHash(this.id)
         result = 31 * result + MessagesPigeonUtils.deepHash(this.scheduledAtMillis)
+        result = 31 * result + MessagesPigeonUtils.deepHash(this.notification)
+        result = 31 * result + MessagesPigeonUtils.deepHash(this.audio)
+        result = 31 * result + MessagesPigeonUtils.deepHash(this.recurrence)
+        result = 31 * result + MessagesPigeonUtils.deepHash(this.snooze)
+        result = 31 * result + MessagesPigeonUtils.deepHash(this.wakeCheck)
+        result = 31 * result + MessagesPigeonUtils.deepHash(this.payload)
         return result
     }
 }
@@ -905,6 +940,7 @@ data class WarmAlarmEventWire(
     val occurredAtMillis: Long,
     val snoozeDurationMillis: Long? = null,
     val failure: WarmAlarmFailureWire? = null,
+    val payload: String? = null,
 ) {
     companion object {
         fun fromList(pigeonVar_list: List<Any?>): WarmAlarmEventWire {
@@ -913,7 +949,8 @@ data class WarmAlarmEventWire(
             val occurredAtMillis = pigeonVar_list[2] as Long
             val snoozeDurationMillis = pigeonVar_list[3] as Long?
             val failure = pigeonVar_list[4] as WarmAlarmFailureWire?
-            return WarmAlarmEventWire(alarmId, type, occurredAtMillis, snoozeDurationMillis, failure)
+            val payload = pigeonVar_list[5] as String?
+            return WarmAlarmEventWire(alarmId, type, occurredAtMillis, snoozeDurationMillis, failure, payload)
         }
     }
 
@@ -924,6 +961,7 @@ data class WarmAlarmEventWire(
             occurredAtMillis,
             snoozeDurationMillis,
             failure,
+            payload,
         )
 
     override fun equals(other: Any?): Boolean {
@@ -937,7 +975,8 @@ data class WarmAlarmEventWire(
         return MessagesPigeonUtils.deepEquals(this.alarmId, other.alarmId) && MessagesPigeonUtils.deepEquals(this.type, other.type) &&
             MessagesPigeonUtils.deepEquals(this.occurredAtMillis, other.occurredAtMillis) &&
             MessagesPigeonUtils.deepEquals(this.snoozeDurationMillis, other.snoozeDurationMillis) &&
-            MessagesPigeonUtils.deepEquals(this.failure, other.failure)
+            MessagesPigeonUtils.deepEquals(this.failure, other.failure) &&
+            MessagesPigeonUtils.deepEquals(this.payload, other.payload)
     }
 
     override fun hashCode(): Int {
@@ -947,6 +986,7 @@ data class WarmAlarmEventWire(
         result = 31 * result + MessagesPigeonUtils.deepHash(this.occurredAtMillis)
         result = 31 * result + MessagesPigeonUtils.deepHash(this.snoozeDurationMillis)
         result = 31 * result + MessagesPigeonUtils.deepHash(this.failure)
+        result = 31 * result + MessagesPigeonUtils.deepHash(this.payload)
         return result
     }
 }
@@ -1206,6 +1246,11 @@ interface WarmAlarmApi {
 
     fun getScheduledAlarms(callback: (Result<List<WarmAlarmSnapshotWire>>) -> Unit)
 
+    fun isRinging(
+        alarmId: Long?,
+        callback: (Result<Boolean>) -> Unit,
+    )
+
     companion object {
         /** The codec used by WarmAlarmApi. */
         val codec: MessageCodec<Any?> by lazy {
@@ -1370,6 +1415,31 @@ interface WarmAlarmApi {
                 if (api != null) {
                     channel.setMessageHandler { _, reply ->
                         api.getScheduledAlarms { result: Result<List<WarmAlarmSnapshotWire>> ->
+                            val error = result.exceptionOrNull()
+                            if (error != null) {
+                                reply.reply(MessagesPigeonUtils.wrapError(error))
+                            } else {
+                                val data = result.getOrNull()
+                                reply.reply(MessagesPigeonUtils.wrapResult(data))
+                            }
+                        }
+                    }
+                } else {
+                    channel.setMessageHandler(null)
+                }
+            }
+            run {
+                val channel =
+                    BasicMessageChannel<Any?>(
+                        binaryMessenger,
+                        "dev.flutter.pigeon.warm_alarm.WarmAlarmApi.isRinging$separatedMessageChannelSuffix",
+                        codec,
+                    )
+                if (api != null) {
+                    channel.setMessageHandler { message, reply ->
+                        val args = message as List<Any?>
+                        val alarmIdArg = args[0] as Long?
+                        api.isRinging(alarmIdArg) { result: Result<Boolean> ->
                             val error = result.exceptionOrNull()
                             if (error != null) {
                                 reply.reply(MessagesPigeonUtils.wrapError(error))

@@ -637,6 +637,7 @@ struct WarmAlarmScheduleWire: Hashable {
   var audio: WarmAlarmAudioWire
   var recurrence: WarmAlarmRecurrenceWire? = nil
   var snooze: WarmAlarmSnoozeWire? = nil
+  var payload: String? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -647,6 +648,7 @@ struct WarmAlarmScheduleWire: Hashable {
     let audio = pigeonVar_list[3] as! WarmAlarmAudioWire
     let recurrence: WarmAlarmRecurrenceWire? = nilOrValue(pigeonVar_list[4])
     let snooze: WarmAlarmSnoozeWire? = nilOrValue(pigeonVar_list[5])
+    let payload: String? = nilOrValue(pigeonVar_list[6])
 
     return WarmAlarmScheduleWire(
       id: id,
@@ -654,7 +656,8 @@ struct WarmAlarmScheduleWire: Hashable {
       notification: notification,
       audio: audio,
       recurrence: recurrence,
-      snooze: snooze
+      snooze: snooze,
+      payload: payload
     )
   }
   func toList() -> [Any?] {
@@ -665,13 +668,14 @@ struct WarmAlarmScheduleWire: Hashable {
       audio,
       recurrence,
       snooze,
+      payload,
     ]
   }
   static func == (lhs: WarmAlarmScheduleWire, rhs: WarmAlarmScheduleWire) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return deepEqualsMessages(lhs.id, rhs.id) && deepEqualsMessages(lhs.scheduledAtMillis, rhs.scheduledAtMillis) && deepEqualsMessages(lhs.notification, rhs.notification) && deepEqualsMessages(lhs.audio, rhs.audio) && deepEqualsMessages(lhs.recurrence, rhs.recurrence) && deepEqualsMessages(lhs.snooze, rhs.snooze)
+    return deepEqualsMessages(lhs.id, rhs.id) && deepEqualsMessages(lhs.scheduledAtMillis, rhs.scheduledAtMillis) && deepEqualsMessages(lhs.notification, rhs.notification) && deepEqualsMessages(lhs.audio, rhs.audio) && deepEqualsMessages(lhs.recurrence, rhs.recurrence) && deepEqualsMessages(lhs.snooze, rhs.snooze) && deepEqualsMessages(lhs.payload, rhs.payload)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -682,6 +686,7 @@ struct WarmAlarmScheduleWire: Hashable {
     deepHashMessages(value: audio, hasher: &hasher)
     deepHashMessages(value: recurrence, hasher: &hasher)
     deepHashMessages(value: snooze, hasher: &hasher)
+    deepHashMessages(value: payload, hasher: &hasher)
   }
 }
 
@@ -689,35 +694,60 @@ struct WarmAlarmScheduleWire: Hashable {
 struct WarmAlarmSnapshotWire: Hashable {
   var id: Int64
   var scheduledAtMillis: Int64
+  var notification: WarmAlarmNotificationWire
+  var audio: WarmAlarmAudioWire
+  var recurrence: WarmAlarmRecurrenceWire? = nil
+  var snooze: WarmAlarmSnoozeWire? = nil
+  var payload: String? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
   static func fromList(_ pigeonVar_list: [Any?]) -> WarmAlarmSnapshotWire? {
     let id = pigeonVar_list[0] as! Int64
     let scheduledAtMillis = pigeonVar_list[1] as! Int64
+    let notification = pigeonVar_list[2] as! WarmAlarmNotificationWire
+    let audio = pigeonVar_list[3] as! WarmAlarmAudioWire
+    let recurrence: WarmAlarmRecurrenceWire? = nilOrValue(pigeonVar_list[4])
+    let snooze: WarmAlarmSnoozeWire? = nilOrValue(pigeonVar_list[5])
+    let payload: String? = nilOrValue(pigeonVar_list[6])
 
     return WarmAlarmSnapshotWire(
       id: id,
-      scheduledAtMillis: scheduledAtMillis
+      scheduledAtMillis: scheduledAtMillis,
+      notification: notification,
+      audio: audio,
+      recurrence: recurrence,
+      snooze: snooze,
+      payload: payload
     )
   }
   func toList() -> [Any?] {
     return [
       id,
       scheduledAtMillis,
+      notification,
+      audio,
+      recurrence,
+      snooze,
+      payload,
     ]
   }
   static func == (lhs: WarmAlarmSnapshotWire, rhs: WarmAlarmSnapshotWire) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return deepEqualsMessages(lhs.id, rhs.id) && deepEqualsMessages(lhs.scheduledAtMillis, rhs.scheduledAtMillis)
+    return deepEqualsMessages(lhs.id, rhs.id) && deepEqualsMessages(lhs.scheduledAtMillis, rhs.scheduledAtMillis) && deepEqualsMessages(lhs.notification, rhs.notification) && deepEqualsMessages(lhs.audio, rhs.audio) && deepEqualsMessages(lhs.recurrence, rhs.recurrence) && deepEqualsMessages(lhs.snooze, rhs.snooze) && deepEqualsMessages(lhs.payload, rhs.payload)
   }
 
   func hash(into hasher: inout Hasher) {
     hasher.combine("WarmAlarmSnapshotWire")
     deepHashMessages(value: id, hasher: &hasher)
     deepHashMessages(value: scheduledAtMillis, hasher: &hasher)
+    deepHashMessages(value: notification, hasher: &hasher)
+    deepHashMessages(value: audio, hasher: &hasher)
+    deepHashMessages(value: recurrence, hasher: &hasher)
+    deepHashMessages(value: snooze, hasher: &hasher)
+    deepHashMessages(value: payload, hasher: &hasher)
   }
 }
 
@@ -728,6 +758,7 @@ struct WarmAlarmEventWire: Hashable {
   var occurredAtMillis: Int64
   var snoozeDurationMillis: Int64? = nil
   var failure: WarmAlarmFailureWire? = nil
+  var payload: String? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -737,13 +768,15 @@ struct WarmAlarmEventWire: Hashable {
     let occurredAtMillis = pigeonVar_list[2] as! Int64
     let snoozeDurationMillis: Int64? = nilOrValue(pigeonVar_list[3])
     let failure: WarmAlarmFailureWire? = nilOrValue(pigeonVar_list[4])
+    let payload: String? = nilOrValue(pigeonVar_list[5])
 
     return WarmAlarmEventWire(
       alarmId: alarmId,
       type: type,
       occurredAtMillis: occurredAtMillis,
       snoozeDurationMillis: snoozeDurationMillis,
-      failure: failure
+      failure: failure,
+      payload: payload
     )
   }
   func toList() -> [Any?] {
@@ -753,13 +786,14 @@ struct WarmAlarmEventWire: Hashable {
       occurredAtMillis,
       snoozeDurationMillis,
       failure,
+      payload,
     ]
   }
   static func == (lhs: WarmAlarmEventWire, rhs: WarmAlarmEventWire) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return deepEqualsMessages(lhs.alarmId, rhs.alarmId) && deepEqualsMessages(lhs.type, rhs.type) && deepEqualsMessages(lhs.occurredAtMillis, rhs.occurredAtMillis) && deepEqualsMessages(lhs.snoozeDurationMillis, rhs.snoozeDurationMillis) && deepEqualsMessages(lhs.failure, rhs.failure)
+    return deepEqualsMessages(lhs.alarmId, rhs.alarmId) && deepEqualsMessages(lhs.type, rhs.type) && deepEqualsMessages(lhs.occurredAtMillis, rhs.occurredAtMillis) && deepEqualsMessages(lhs.snoozeDurationMillis, rhs.snoozeDurationMillis) && deepEqualsMessages(lhs.failure, rhs.failure) && deepEqualsMessages(lhs.payload, rhs.payload)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -769,6 +803,7 @@ struct WarmAlarmEventWire: Hashable {
     deepHashMessages(value: occurredAtMillis, hasher: &hasher)
     deepHashMessages(value: snoozeDurationMillis, hasher: &hasher)
     deepHashMessages(value: failure, hasher: &hasher)
+    deepHashMessages(value: payload, hasher: &hasher)
   }
 }
 
@@ -923,6 +958,7 @@ protocol WarmAlarmApi {
   func cancelAlarm(id: Int64, completion: @escaping (Result<Void, Error>) -> Void)
   func cancelAllAlarms(completion: @escaping (Result<Void, Error>) -> Void)
   func getScheduledAlarms(completion: @escaping (Result<[WarmAlarmSnapshotWire], Error>) -> Void)
+  func isRinging(alarmId: Int64?, completion: @escaping (Result<Bool, Error>) -> Void)
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -1039,6 +1075,23 @@ class WarmAlarmApiSetup {
       }
     } else {
       getScheduledAlarmsChannel.setMessageHandler(nil)
+    }
+    let isRingingChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.warm_alarm.WarmAlarmApi.isRinging\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      isRingingChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let alarmIdArg: Int64? = nilOrValue(args[0])
+        api.isRinging(alarmId: alarmIdArg) { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      isRingingChannel.setMessageHandler(nil)
     }
   }
 }

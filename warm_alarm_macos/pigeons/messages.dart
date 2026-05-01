@@ -180,6 +180,7 @@ class WarmAlarmScheduleWire {
     required this.audio,
     this.recurrence,
     this.snooze,
+    this.payload,
   });
 
   final int id;
@@ -188,16 +189,27 @@ class WarmAlarmScheduleWire {
   final WarmAlarmAudioWire audio;
   final WarmAlarmRecurrenceWire? recurrence;
   final WarmAlarmSnoozeWire? snooze;
+  final String? payload;
 }
 
 class WarmAlarmSnapshotWire {
   const WarmAlarmSnapshotWire({
     required this.id,
     required this.scheduledAtMillis,
+    required this.notification,
+    required this.audio,
+    this.recurrence,
+    this.snooze,
+    this.payload,
   });
 
   final int id;
   final int scheduledAtMillis;
+  final WarmAlarmNotificationWire notification;
+  final WarmAlarmAudioWire audio;
+  final WarmAlarmRecurrenceWire? recurrence;
+  final WarmAlarmSnoozeWire? snooze;
+  final String? payload;
 }
 
 class WarmAlarmEventWire {
@@ -207,6 +219,7 @@ class WarmAlarmEventWire {
     required this.occurredAtMillis,
     this.snoozeDurationMillis,
     this.failure,
+    this.payload,
   });
 
   final int alarmId;
@@ -214,6 +227,7 @@ class WarmAlarmEventWire {
   final int occurredAtMillis;
   final int? snoozeDurationMillis;
   final WarmAlarmFailureWire? failure;
+  final String? payload;
 }
 
 @HostApi()
@@ -238,6 +252,9 @@ abstract class WarmAlarmApi {
 
   @async
   List<WarmAlarmSnapshotWire> getScheduledAlarms();
+
+  @async
+  bool isRinging(int? alarmId);
 }
 
 @FlutterApi()

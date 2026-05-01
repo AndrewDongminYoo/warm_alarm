@@ -21,14 +21,20 @@ final class WarmAlarmFired extends WarmAlarmEvent {
   const WarmAlarmFired({
     required super.alarmId,
     required super.occurredAt,
+    this.payload,
   });
+
+  final String? payload;
 }
 
 final class WarmAlarmStopped extends WarmAlarmEvent {
   const WarmAlarmStopped({
     required super.alarmId,
     required super.occurredAt,
+    this.payload,
   });
+
+  final String? payload;
 }
 
 final class WarmAlarmSnoozed extends WarmAlarmEvent {
@@ -36,9 +42,11 @@ final class WarmAlarmSnoozed extends WarmAlarmEvent {
     required super.alarmId,
     required super.occurredAt,
     required this.duration,
+    this.payload,
   });
 
   final Duration duration;
+  final String? payload;
 }
 
 final class WarmAlarmFailed extends WarmAlarmEvent {
@@ -76,5 +84,8 @@ final class WarmAlarmRetriggered extends WarmAlarmEvent {
   const WarmAlarmRetriggered({
     required super.alarmId,
     required super.occurredAt,
+    this.payload,
   });
+
+  final String? payload;
 }

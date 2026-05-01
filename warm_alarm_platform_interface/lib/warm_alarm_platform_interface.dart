@@ -51,4 +51,6 @@ abstract class WarmAlarmPlatform extends PlatformInterface {
   Future<List<WarmAlarmSnapshot>> getScheduledAlarms();
 
   Stream<WarmAlarmEvent> get events;
+
+  Future<bool> isRinging({int? id});
 }

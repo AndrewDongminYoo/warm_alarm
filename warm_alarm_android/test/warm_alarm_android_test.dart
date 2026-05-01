@@ -105,7 +105,12 @@ void main() {
       final now = DateTime.now().millisecondsSinceEpoch;
       when(api.getScheduledAlarms).thenAnswer(
         (_) async => <WarmAlarmSnapshotWire>[
-          WarmAlarmSnapshotWire(id: 3, scheduledAtMillis: now),
+          WarmAlarmSnapshotWire(
+            id: 3,
+            scheduledAtMillis: now,
+            notification: WarmAlarmNotificationWire(title: 'T', body: 'B'),
+            audio: WarmAlarmAudioWire(loop: false, vibrate: false),
+          ),
         ],
       );
 

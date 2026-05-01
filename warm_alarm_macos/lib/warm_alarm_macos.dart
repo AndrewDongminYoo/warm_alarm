@@ -58,6 +58,9 @@ class WarmAlarmMacOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
       (await api.getScheduledAlarms()).map(_snapshotFromWire).toList(growable: false);
 
   @override
+  Future<bool> isRinging({int? id}) => api.isRinging(id);
+
+  @override
   Future<WarmAlarmScheduleResult> scheduleAlarm(
     WarmAlarmSchedule schedule,
   ) async => _scheduleResultFromWire(
@@ -78,6 +81,17 @@ WarmAlarmAudioWire _audioToWire(WarmAlarmAudio audio) {
     volume: audio.volume,
     fadeInDurationMillis: audio.fadeInDuration?.inMilliseconds,
     vibrate: audio.vibrate,
+  );
+}
+
+WarmAlarmAudio _audioFromWire(WarmAlarmAudioWire wire) {
+  return WarmAlarmAudio(
+    filePath: wire.filePath,
+    assetPath: wire.assetPath,
+    loop: wire.loop,
+    volume: wire.volume,
+    fadeInDuration: wire.fadeInDurationMillis == null ? null : Duration(milliseconds: wire.fadeInDurationMillis!),
+    vibrate: wire.vibrate,
   );
 }
 
@@ -136,6 +150,15 @@ WarmAlarmNotificationWire _notificationToWire(
     body: notification.body,
     stopActionTitle: notification.stopActionTitle,
     snoozeActionTitle: notification.snoozeActionTitle,
+  );
+}
+
+WarmAlarmNotification _notificationFromWire(WarmAlarmNotificationWire wire) {
+  return WarmAlarmNotification(
+    title: wire.title,
+    body: wire.body,
+    stopActionTitle: wire.stopActionTitle,
+    snoozeActionTitle: wire.snoozeActionTitle,
   );
 }
 
@@ -220,6 +243,7 @@ WarmAlarmScheduleWire _scheduleToWire(WarmAlarmSchedule schedule) {
     audio: _audioToWire(schedule.audio),
     recurrence: _recurrenceToWire(schedule.recurrence),
     snooze: _snoozeToWire(schedule.snooze),
+    payload: schedule.payload,
   );
 }
 
@@ -227,6 +251,15 @@ WarmAlarmSnapshot _snapshotFromWire(WarmAlarmSnapshotWire wire) {
   return WarmAlarmSnapshot(
     id: wire.id,
     scheduledAt: DateTime.fromMillisecondsSinceEpoch(wire.scheduledAtMillis),
+    notification: _notificationFromWire(wire.notification),
+    audio: _audioFromWire(wire.audio),
+    recurrence: wire.recurrence == null ? null : WarmAlarmRecurrence(weekdays: wire.recurrence!.weekdays),
+    snooze: wire.snooze == null
+        ? null
+        : WarmAlarmSnooze(
+            duration: Duration(milliseconds: wire.snooze!.durationMillis),
+          ),
+    payload: wire.payload,
   );
 }
 
@@ -278,10 +311,12 @@ WarmAlarmEvent _eventFromWire(WarmAlarmEventWire wire) {
     WarmAlarmEventTypeWire.fired => WarmAlarmFired(
       alarmId: alarmId,
       occurredAt: occurredAt,
+      payload: wire.payload,
     ),
     WarmAlarmEventTypeWire.stopped => WarmAlarmStopped(
       alarmId: alarmId,
       occurredAt: occurredAt,
+      payload: wire.payload,
     ),
     WarmAlarmEventTypeWire.snoozed => WarmAlarmSnoozed(
       alarmId: alarmId,
@@ -289,6 +324,7 @@ WarmAlarmEvent _eventFromWire(WarmAlarmEventWire wire) {
       duration: Duration(
         milliseconds: _requireSnoozeDuration(wire.snoozeDurationMillis),
       ),
+      payload: wire.payload,
     ),
     WarmAlarmEventTypeWire.failed => WarmAlarmFailed(
       alarmId: alarmId,

@@ -58,6 +58,9 @@ class WarmAlarmAndroid extends WarmAlarmPlatform implements WarmAlarmEventsApi {
       (await api.getScheduledAlarms()).map(_snapshotFromWire).toList(growable: false);
 
   @override
+  Future<bool> isRinging({int? id}) => api.isRinging(id);
+
+  @override
   Future<WarmAlarmScheduleResult> scheduleAlarm(
     WarmAlarmSchedule schedule,
   ) async => _scheduleResultFromWire(
@@ -81,18 +84,25 @@ WarmAlarmAudioWire _audioToWire(WarmAlarmAudio audio) {
   );
 }
 
+WarmAlarmAudio _audioFromWire(WarmAlarmAudioWire wire) {
+  return WarmAlarmAudio(
+    filePath: wire.filePath,
+    assetPath: wire.assetPath,
+    loop: wire.loop,
+    volume: wire.volume,
+    fadeInDuration: wire.fadeInDurationMillis == null ? null : Duration(milliseconds: wire.fadeInDurationMillis!),
+    vibrate: wire.vibrate,
+  );
+}
+
 WarmAlarmCapabilities _capabilitiesFromWire(WarmAlarmCapabilitiesWire wire) {
   return WarmAlarmCapabilities(
     exactScheduling: _supportStatusFromWire(wire.exactScheduling),
-    notificationScheduling: _supportStatusFromWire(
-      wire.notificationScheduling,
-    ),
+    notificationScheduling: _supportStatusFromWire(wire.notificationScheduling),
     backgroundAudioPlayback: _supportStatusFromWire(
       wire.backgroundAudioPlayback,
     ),
-    fullScreenPresentation: _supportStatusFromWire(
-      wire.fullScreenPresentation,
-    ),
+    fullScreenPresentation: _supportStatusFromWire(wire.fullScreenPresentation),
     wakeCheck: _supportStatusFromWire(wire.wakeCheck),
     liveActivity: _supportStatusFromWire(wire.liveActivity),
   );
@@ -136,6 +146,15 @@ WarmAlarmNotificationWire _notificationToWire(
     body: notification.body,
     stopActionTitle: notification.stopActionTitle,
     snoozeActionTitle: notification.snoozeActionTitle,
+  );
+}
+
+WarmAlarmNotification _notificationFromWire(WarmAlarmNotificationWire wire) {
+  return WarmAlarmNotification(
+    title: wire.title,
+    body: wire.body,
+    stopActionTitle: wire.stopActionTitle,
+    snoozeActionTitle: wire.snoozeActionTitle,
   );
 }
 
@@ -195,10 +214,7 @@ WarmAlarmReadinessReason _readinessReasonFromWire(
 }
 
 WarmAlarmRecurrenceWire? _recurrenceToWire(WarmAlarmRecurrence? recurrence) {
-  if (recurrence == null) {
-    return null;
-  }
-
+  if (recurrence == null) return null;
   return WarmAlarmRecurrenceWire(weekdays: recurrence.weekdays);
 }
 
@@ -221,6 +237,7 @@ WarmAlarmScheduleWire _scheduleToWire(WarmAlarmSchedule schedule) {
     recurrence: _recurrenceToWire(schedule.recurrence),
     snooze: _snoozeToWire(schedule.snooze),
     wakeCheck: _wakeCheckToWire(schedule.wakeCheck),
+    payload: schedule.payload,
   );
 }
 
@@ -228,24 +245,32 @@ WarmAlarmSnapshot _snapshotFromWire(WarmAlarmSnapshotWire wire) {
   return WarmAlarmSnapshot(
     id: wire.id,
     scheduledAt: DateTime.fromMillisecondsSinceEpoch(wire.scheduledAtMillis),
+    notification: _notificationFromWire(wire.notification),
+    audio: _audioFromWire(wire.audio),
+    recurrence: wire.recurrence == null ? null : WarmAlarmRecurrence(weekdays: wire.recurrence!.weekdays),
+    snooze: wire.snooze == null
+        ? null
+        : WarmAlarmSnooze(
+            duration: Duration(milliseconds: wire.snooze!.durationMillis),
+          ),
+    wakeCheck: wire.wakeCheck == null
+        ? null
+        : WarmAlarmWakeCheck(
+            checkDelay: Duration(
+              milliseconds: wire.wakeCheck!.checkDelayMillis,
+            ),
+            retriggerDelay: wire.wakeCheck!.retriggerDelayMillis == null
+                ? null
+                : Duration(milliseconds: wire.wakeCheck!.retriggerDelayMillis!),
+            maxRetriggers: wire.wakeCheck!.maxRetriggers,
+          ),
+    payload: wire.payload,
   );
 }
 
 WarmAlarmSnoozeWire? _snoozeToWire(WarmAlarmSnooze? snooze) {
-  if (snooze == null) {
-    return null;
-  }
-
+  if (snooze == null) return null;
   return WarmAlarmSnoozeWire(durationMillis: snooze.duration.inMilliseconds);
-}
-
-WarmAlarmWakeCheckWire? _wakeCheckToWire(WarmAlarmWakeCheck? check) {
-  if (check == null) return null;
-  return WarmAlarmWakeCheckWire(
-    checkDelayMillis: check.checkDelay.inMilliseconds,
-    retriggerDelayMillis: check.retriggerDelay?.inMilliseconds,
-    maxRetriggers: check.maxRetriggers,
-  );
 }
 
 WarmAlarmSupportStatus _supportStatusFromWire(WarmAlarmSupportStatusWire wire) {
@@ -259,6 +284,15 @@ WarmAlarmSupportStatus _supportStatusFromWire(WarmAlarmSupportStatusWire wire) {
     case WarmAlarmSupportStatusWire.unknown:
       return WarmAlarmSupportStatus.unknown;
   }
+}
+
+WarmAlarmWakeCheckWire? _wakeCheckToWire(WarmAlarmWakeCheck? check) {
+  if (check == null) return null;
+  return WarmAlarmWakeCheckWire(
+    checkDelayMillis: check.checkDelay.inMilliseconds,
+    retriggerDelayMillis: check.retriggerDelay?.inMilliseconds,
+    maxRetriggers: check.maxRetriggers,
+  );
 }
 
 int _requireSnoozeDuration(int? millis) {
@@ -288,10 +322,12 @@ WarmAlarmEvent _eventFromWire(WarmAlarmEventWire wire) {
     WarmAlarmEventTypeWire.fired => WarmAlarmFired(
       alarmId: alarmId,
       occurredAt: occurredAt,
+      payload: wire.payload,
     ),
     WarmAlarmEventTypeWire.stopped => WarmAlarmStopped(
       alarmId: alarmId,
       occurredAt: occurredAt,
+      payload: wire.payload,
     ),
     WarmAlarmEventTypeWire.snoozed => WarmAlarmSnoozed(
       alarmId: alarmId,
@@ -299,6 +335,7 @@ WarmAlarmEvent _eventFromWire(WarmAlarmEventWire wire) {
       duration: Duration(
         milliseconds: _requireSnoozeDuration(wire.snoozeDurationMillis),
       ),
+      payload: wire.payload,
     ),
     WarmAlarmEventTypeWire.failed => WarmAlarmFailed(
       alarmId: alarmId,
@@ -320,6 +357,7 @@ WarmAlarmEvent _eventFromWire(WarmAlarmEventWire wire) {
     WarmAlarmEventTypeWire.retriggered => WarmAlarmRetriggered(
       alarmId: alarmId,
       occurredAt: occurredAt,
+      payload: wire.payload,
     ),
   };
 }

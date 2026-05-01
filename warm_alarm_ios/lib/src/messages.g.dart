@@ -680,6 +680,7 @@ class WarmAlarmScheduleWire {
     required this.audio,
     this.recurrence,
     this.snooze,
+    this.payload,
   });
 
   int id;
@@ -694,6 +695,8 @@ class WarmAlarmScheduleWire {
 
   WarmAlarmSnoozeWire? snooze;
 
+  String? payload;
+
   List<Object?> _toList() {
     return <Object?>[
       id,
@@ -702,6 +705,7 @@ class WarmAlarmScheduleWire {
       audio,
       recurrence,
       snooze,
+      payload,
     ];
   }
 
@@ -718,6 +722,7 @@ class WarmAlarmScheduleWire {
       audio: result[3]! as WarmAlarmAudioWire,
       recurrence: result[4] as WarmAlarmRecurrenceWire?,
       snooze: result[5] as WarmAlarmSnoozeWire?,
+      payload: result[6] as String?,
     );
   }
 
@@ -735,7 +740,8 @@ class WarmAlarmScheduleWire {
         _deepEquals(notification, other.notification) &&
         _deepEquals(audio, other.audio) &&
         _deepEquals(recurrence, other.recurrence) &&
-        _deepEquals(snooze, other.snooze);
+        _deepEquals(snooze, other.snooze) &&
+        _deepEquals(payload, other.payload);
   }
 
   @override
@@ -747,16 +753,36 @@ class WarmAlarmSnapshotWire {
   WarmAlarmSnapshotWire({
     required this.id,
     required this.scheduledAtMillis,
+    required this.notification,
+    required this.audio,
+    this.recurrence,
+    this.snooze,
+    this.payload,
   });
 
   int id;
 
   int scheduledAtMillis;
 
+  WarmAlarmNotificationWire notification;
+
+  WarmAlarmAudioWire audio;
+
+  WarmAlarmRecurrenceWire? recurrence;
+
+  WarmAlarmSnoozeWire? snooze;
+
+  String? payload;
+
   List<Object?> _toList() {
     return <Object?>[
       id,
       scheduledAtMillis,
+      notification,
+      audio,
+      recurrence,
+      snooze,
+      payload,
     ];
   }
 
@@ -769,6 +795,11 @@ class WarmAlarmSnapshotWire {
     return WarmAlarmSnapshotWire(
       id: result[0]! as int,
       scheduledAtMillis: result[1]! as int,
+      notification: result[2]! as WarmAlarmNotificationWire,
+      audio: result[3]! as WarmAlarmAudioWire,
+      recurrence: result[4] as WarmAlarmRecurrenceWire?,
+      snooze: result[5] as WarmAlarmSnoozeWire?,
+      payload: result[6] as String?,
     );
   }
 
@@ -781,7 +812,13 @@ class WarmAlarmSnapshotWire {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(id, other.id) && _deepEquals(scheduledAtMillis, other.scheduledAtMillis);
+    return _deepEquals(id, other.id) &&
+        _deepEquals(scheduledAtMillis, other.scheduledAtMillis) &&
+        _deepEquals(notification, other.notification) &&
+        _deepEquals(audio, other.audio) &&
+        _deepEquals(recurrence, other.recurrence) &&
+        _deepEquals(snooze, other.snooze) &&
+        _deepEquals(payload, other.payload);
   }
 
   @override
@@ -796,6 +833,7 @@ class WarmAlarmEventWire {
     required this.occurredAtMillis,
     this.snoozeDurationMillis,
     this.failure,
+    this.payload,
   });
 
   int alarmId;
@@ -808,6 +846,8 @@ class WarmAlarmEventWire {
 
   WarmAlarmFailureWire? failure;
 
+  String? payload;
+
   List<Object?> _toList() {
     return <Object?>[
       alarmId,
@@ -815,6 +855,7 @@ class WarmAlarmEventWire {
       occurredAtMillis,
       snoozeDurationMillis,
       failure,
+      payload,
     ];
   }
 
@@ -830,6 +871,7 @@ class WarmAlarmEventWire {
       occurredAtMillis: result[2]! as int,
       snoozeDurationMillis: result[3] as int?,
       failure: result[4] as WarmAlarmFailureWire?,
+      payload: result[5] as String?,
     );
   }
 
@@ -846,7 +888,8 @@ class WarmAlarmEventWire {
         _deepEquals(type, other.type) &&
         _deepEquals(occurredAtMillis, other.occurredAtMillis) &&
         _deepEquals(snoozeDurationMillis, other.snoozeDurationMillis) &&
-        _deepEquals(failure, other.failure);
+        _deepEquals(failure, other.failure) &&
+        _deepEquals(payload, other.payload);
   }
 
   @override
@@ -1112,6 +1155,24 @@ class WarmAlarmApi {
       isNullValid: false,
     );
     return (pigeonVar_replyValue! as List<Object?>).cast<WarmAlarmSnapshotWire>();
+  }
+
+  Future<bool> isRinging(int? alarmId) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.isRinging$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[alarmId]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as bool;
   }
 }
 

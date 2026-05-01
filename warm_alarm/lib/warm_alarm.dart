@@ -22,4 +22,6 @@ class WarmAlarm {
   static Future<List<WarmAlarmSnapshot>> getScheduledAlarms() => _platform.getScheduledAlarms();
 
   static Stream<WarmAlarmEvent> get events => _platform.events;
+
+  static Future<bool> isRinging({int? id}) => _platform.isRinging(id: id);
 }
