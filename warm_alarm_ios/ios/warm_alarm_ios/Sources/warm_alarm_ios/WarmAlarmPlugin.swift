@@ -111,16 +111,21 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 notification: WarmAlarmNotificationWire(
                     title: data.notificationTitle,
                     body: data.notificationBody,
+                    keepNotificationAfterAlarmEnds: data.keepNotificationAfterAlarmEnds ?? false,
                     stopActionTitle: data.stopActionTitle,
                     snoozeActionTitle: data.snoozeActionTitle
                 ),
                 audio: WarmAlarmAudioWire(
                     loop: data.loop,
                     vibrate: data.vibrate,
+                    volumeEnforced: data.volumeEnforced ?? false,
                     filePath: data.filePath,
                     assetPath: data.assetPath,
                     volume: data.volume,
-                    fadeInDurationMillis: data.fadeInDurationMillis
+                    fadeInDurationMillis: data.fadeInDurationMillis,
+                    fadeSteps: data.fadeSteps?.map {
+                        WarmAlarmVolumeFadeStepWire(timeMillis: $0.timeMillis, volume: $0.volume)
+                    }
                 ),
                 recurrence: data.recurrenceWeekdays.map { WarmAlarmRecurrenceWire(weekdays: $0) },
                 snooze: data.snoozeDurationMillis.map { WarmAlarmSnoozeWire(durationMillis: $0) },
@@ -128,6 +133,18 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             )
         }
         completion(.success(snapshots))
+    }
+
+    func setKillWarning(
+        title: String, body: String, completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        UserDefaults.standard.setValue(["title": title, "body": body], forKey: "warm_alarm_kill_warning")
+        completion(.success(()))
+    }
+
+    func clearKillWarning(completion: @escaping (Result<Void, Error>) -> Void) {
+        UserDefaults.standard.removeObject(forKey: "warm_alarm_kill_warning")
+        completion(.success(()))
     }
 
     func isRinging(alarmId: Int64?, completion: @escaping (Result<Bool, Error>) -> Void) {

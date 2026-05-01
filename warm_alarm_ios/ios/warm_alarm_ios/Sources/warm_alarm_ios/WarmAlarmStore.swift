@@ -1,5 +1,10 @@
 import Foundation
 
+struct FadeStep: Codable {
+    let timeMillis: Int64
+    let volume: Double
+}
+
 struct WarmAlarmScheduleData: Codable {
     let id: Int64
     let scheduledAtMillis: Int64
@@ -16,6 +21,9 @@ struct WarmAlarmScheduleData: Codable {
     let recurrenceWeekdays: [Int64]?
     let snoozeDurationMillis: Int64?
     let payload: String?
+    let volumeEnforced: Bool?
+    let fadeSteps: [FadeStep]?
+    let keepNotificationAfterAlarmEnds: Bool?
 }
 
 extension WarmAlarmScheduleData {
@@ -35,7 +43,10 @@ extension WarmAlarmScheduleData {
             fadeInDurationMillis: wire.audio.fadeInDurationMillis,
             recurrenceWeekdays: wire.recurrence?.weekdays,
             snoozeDurationMillis: wire.snooze?.durationMillis,
-            payload: wire.payload
+            payload: wire.payload,
+            volumeEnforced: wire.audio.volumeEnforced,
+            fadeSteps: wire.audio.fadeSteps?.map { FadeStep(timeMillis: $0.timeMillis, volume: $0.volume) },
+            keepNotificationAfterAlarmEnds: wire.notification.keepNotificationAfterAlarmEnds
         )
     }
 }
