@@ -11,6 +11,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
     private let eventsApi: WarmAlarmEventsApi
     private var audioPlayer: AVAudioPlayer?
+    private(set) var currentlyPlayingAlarmId: Int64?
 
     init(eventsApi: WarmAlarmEventsApi) {
         self.eventsApi = eventsApi
@@ -29,8 +30,9 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             return
         }
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
-        startAudio(for: schedule)
-        emitEvent(WarmAlarmEventWire(alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis()))
+        startAudio(alarmId: alarmId, for: schedule)
+        emitEvent(WarmAlarmEventWire(
+            alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis(), payload: schedule?.payload))
         completionHandler([.alert])
     }
 
@@ -50,8 +52,9 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             handleSnooze(alarmId: alarmId)
         case UNNotificationDefaultActionIdentifier:
             let schedule = WarmAlarmStore.shared.load(id: alarmId)
-            startAudio(for: schedule)
-            emitEvent(WarmAlarmEventWire(alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis()))
+            startAudio(alarmId: alarmId, for: schedule)
+            emitEvent(WarmAlarmEventWire(
+                alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis(), payload: schedule?.payload))
         default:
             break
         }
@@ -60,9 +63,11 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     // MARK: - Actions
 
     func handleStop(alarmId: Int64) {
+        let schedule = WarmAlarmStore.shared.load(id: alarmId)
         stopAudio()
         WarmAlarmStore.shared.remove(id: alarmId)
-        emitEvent(WarmAlarmEventWire(alarmId: alarmId, type: .stopped, occurredAtMillis: nowMillis()))
+        emitEvent(WarmAlarmEventWire(
+            alarmId: alarmId, type: .stopped, occurredAtMillis: nowMillis(), payload: schedule?.payload))
     }
 
     func handleSnooze(alarmId: Int64) {
@@ -75,7 +80,8 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             alarmId: alarmId,
             type: .snoozed,
             occurredAtMillis: nowMillis(),
-            snoozeDurationMillis: snoozeDurationMillis
+            snoozeDurationMillis: snoozeDurationMillis,
+            payload: schedule?.payload
         ))
     }
 
@@ -122,7 +128,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
     // MARK: - Audio
 
-    private func startAudio(for schedule: WarmAlarmScheduleData?) {
+    private func startAudio(alarmId: Int64, for schedule: WarmAlarmScheduleData?) {
         configureAudioSession()
         let player: AVAudioPlayer?
         if let path = schedule?.filePath, !path.isEmpty {
@@ -137,12 +143,14 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             p.numberOfLoops = (schedule?.loop ?? true) ? -1 : 0
             p.play()
             audioPlayer = p
+            currentlyPlayingAlarmId = alarmId
         }
     }
 
     private func stopAudio() {
         audioPlayer?.stop()
         audioPlayer = nil
+        currentlyPlayingAlarmId = nil
         deactivateAudioSession()
     }
 
@@ -168,7 +176,11 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             notificationTitle: existing.notificationTitle, notificationBody: existing.notificationBody,
             stopActionTitle: existing.stopActionTitle, snoozeActionTitle: existing.snoozeActionTitle,
             filePath: existing.filePath, assetPath: existing.assetPath,
-            loop: existing.loop, snoozeDurationMillis: existing.snoozeDurationMillis
+            loop: existing.loop, volume: existing.volume, vibrate: existing.vibrate,
+            fadeInDurationMillis: existing.fadeInDurationMillis,
+            recurrenceWeekdays: existing.recurrenceWeekdays,
+            snoozeDurationMillis: existing.snoozeDurationMillis,
+            payload: existing.payload
         )
         WarmAlarmStore.shared.save(updated)
         let content = makeContent(from: updated)

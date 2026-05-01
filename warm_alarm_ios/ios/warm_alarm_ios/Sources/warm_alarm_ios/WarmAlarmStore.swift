@@ -10,7 +10,12 @@ struct WarmAlarmScheduleData: Codable {
     let filePath: String?
     let assetPath: String?
     let loop: Bool
+    let volume: Double?
+    let vibrate: Bool
+    let fadeInDurationMillis: Int64?
+    let recurrenceWeekdays: [Int64]?
     let snoozeDurationMillis: Int64?
+    let payload: String?
 }
 
 extension WarmAlarmScheduleData {
@@ -25,7 +30,12 @@ extension WarmAlarmScheduleData {
             filePath: wire.audio.filePath,
             assetPath: wire.audio.assetPath,
             loop: wire.audio.loop,
-            snoozeDurationMillis: wire.snooze?.durationMillis
+            volume: wire.audio.volume,
+            vibrate: wire.audio.vibrate,
+            fadeInDurationMillis: wire.audio.fadeInDurationMillis,
+            recurrenceWeekdays: wire.recurrence?.weekdays,
+            snoozeDurationMillis: wire.snooze?.durationMillis,
+            payload: wire.payload
         )
     }
 }

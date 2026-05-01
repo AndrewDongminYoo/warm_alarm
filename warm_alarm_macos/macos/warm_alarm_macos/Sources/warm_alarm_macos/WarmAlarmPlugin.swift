@@ -104,9 +104,38 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     }
 
     func getScheduledAlarms(completion: @escaping (Result<[WarmAlarmSnapshotWire], Error>) -> Void) {
-        let snapshots = WarmAlarmStore.shared.loadAll().map { id, data in
-            WarmAlarmSnapshotWire(id: id, scheduledAtMillis: data.scheduledAtMillis)
+        let snapshots = WarmAlarmStore.shared.loadAll().map { _, data in
+            WarmAlarmSnapshotWire(
+                id: data.id,
+                scheduledAtMillis: data.scheduledAtMillis,
+                notification: WarmAlarmNotificationWire(
+                    title: data.notificationTitle,
+                    body: data.notificationBody,
+                    stopActionTitle: data.stopActionTitle,
+                    snoozeActionTitle: data.snoozeActionTitle
+                ),
+                audio: WarmAlarmAudioWire(
+                    loop: data.loop,
+                    vibrate: data.vibrate,
+                    filePath: data.filePath,
+                    assetPath: data.assetPath,
+                    volume: data.volume,
+                    fadeInDurationMillis: data.fadeInDurationMillis
+                ),
+                recurrence: data.recurrenceWeekdays.map { WarmAlarmRecurrenceWire(weekdays: $0) },
+                snooze: data.snoozeDurationMillis.map { WarmAlarmSnoozeWire(durationMillis: $0) },
+                payload: data.payload
+            )
         }
         completion(.success(snapshots))
+    }
+
+    func isRinging(alarmId: Int64?, completion: @escaping (Result<Bool, Error>) -> Void) {
+        let playingId = delegate.currentlyPlayingAlarmId
+        if let id = alarmId {
+            completion(.success(playingId == id))
+        } else {
+            completion(.success(playingId != nil))
+        }
     }
 }
