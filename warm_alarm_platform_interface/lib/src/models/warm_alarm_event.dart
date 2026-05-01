@@ -50,3 +50,31 @@ final class WarmAlarmFailed extends WarmAlarmEvent {
 
   final WarmAlarmFailure failure;
 }
+
+final class WarmAlarmWakeCheckShown extends WarmAlarmEvent {
+  const WarmAlarmWakeCheckShown({
+    required super.alarmId,
+    required super.occurredAt,
+  });
+}
+
+final class WarmAlarmWakeCheckDismissed extends WarmAlarmEvent {
+  const WarmAlarmWakeCheckDismissed({
+    required super.alarmId,
+    required super.occurredAt,
+  });
+}
+
+final class WarmAlarmWakeCheckExpired extends WarmAlarmEvent {
+  const WarmAlarmWakeCheckExpired({
+    required super.alarmId,
+    required super.occurredAt,
+  });
+}
+
+final class WarmAlarmRetriggered extends WarmAlarmEvent {
+  const WarmAlarmRetriggered({
+    required super.alarmId,
+    required super.occurredAt,
+  });
+}

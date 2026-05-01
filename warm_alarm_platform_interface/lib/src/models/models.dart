@@ -8,3 +8,4 @@ export 'warm_alarm_schedule.dart';
 export 'warm_alarm_schedule_result.dart';
 export 'warm_alarm_snapshot.dart';
 export 'warm_alarm_support.dart';
+export 'warm_alarm_wake_check.dart';

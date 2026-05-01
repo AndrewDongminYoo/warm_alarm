@@ -16,21 +16,23 @@ class WarmAlarmMock extends WarmAlarmPlatform {
   Stream<WarmAlarmEvent> get events => _events.stream;
 
   @override
-  Future<WarmAlarmCapabilities> getCapabilities() async => const WarmAlarmCapabilities(
-    exactScheduling: WarmAlarmSupportStatus.supported,
-    notificationScheduling: WarmAlarmSupportStatus.supported,
-    backgroundAudioPlayback: WarmAlarmSupportStatus.limited,
-    fullScreenPresentation: WarmAlarmSupportStatus.unsupported,
-    wakeCheck: WarmAlarmSupportStatus.unsupported,
-    liveActivity: WarmAlarmSupportStatus.unsupported,
-  );
+  Future<WarmAlarmCapabilities> getCapabilities() async =>
+      const WarmAlarmCapabilities(
+        exactScheduling: WarmAlarmSupportStatus.supported,
+        notificationScheduling: WarmAlarmSupportStatus.supported,
+        backgroundAudioPlayback: WarmAlarmSupportStatus.limited,
+        fullScreenPresentation: WarmAlarmSupportStatus.unsupported,
+        wakeCheck: WarmAlarmSupportStatus.unsupported,
+        liveActivity: WarmAlarmSupportStatus.unsupported,
+      );
 
   @override
-  Future<WarmAlarmPermissionState> getPermissionState() async => const WarmAlarmPermissionState(
-    notificationsGranted: true,
-    exactAlarmGranted: false,
-    fullScreenIntentGranted: false,
-  );
+  Future<WarmAlarmPermissionState> getPermissionState() async =>
+      const WarmAlarmPermissionState(
+        notificationsGranted: true,
+        exactAlarmGranted: false,
+        fullScreenIntentGranted: false,
+      );
 
   @override
   Future<WarmAlarmReadiness> getReadiness() async => const WarmAlarmReadiness(
@@ -41,7 +43,8 @@ class WarmAlarmMock extends WarmAlarmPlatform {
   );
 
   @override
-  Future<List<WarmAlarmSnapshot>> getScheduledAlarms() async => const <WarmAlarmSnapshot>[];
+  Future<List<WarmAlarmSnapshot>> getScheduledAlarms() async =>
+      const <WarmAlarmSnapshot>[];
 
   @override
   Future<WarmAlarmScheduleResult> scheduleAlarm(
@@ -59,6 +62,79 @@ class WarmAlarmMock extends WarmAlarmPlatform {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  group('WarmAlarmWakeCheck', () {
+    test('constructs with required checkDelay and defaults', () {
+      const check = WarmAlarmWakeCheck(checkDelay: Duration(minutes: 5));
+      expect(check.checkDelay, const Duration(minutes: 5));
+      expect(check.retriggerDelay, isNull);
+      expect(check.maxRetriggers, 1);
+    });
+
+    test('accepts optional retrigger config', () {
+      const check = WarmAlarmWakeCheck(
+        checkDelay: Duration(minutes: 5),
+        retriggerDelay: Duration(minutes: 2),
+        maxRetriggers: 3,
+      );
+      expect(check.retriggerDelay, const Duration(minutes: 2));
+      expect(check.maxRetriggers, 3);
+    });
+  });
+
+  group('WarmAlarmSchedule wakeCheck field', () {
+    test('schedule accepts optional wakeCheck', () {
+      final schedule = WarmAlarmSchedule(
+        id: 1,
+        scheduledAt: DateTime(2026, 5, 1, 7),
+        notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+        audio: const WarmAlarmAudio(),
+        wakeCheck: const WarmAlarmWakeCheck(checkDelay: Duration(minutes: 5)),
+      );
+      expect(schedule.wakeCheck!.checkDelay.inMinutes, 5);
+    });
+
+    test('schedule wakeCheck defaults to null', () {
+      final schedule = WarmAlarmSchedule(
+        id: 2,
+        scheduledAt: DateTime(2026, 5, 1, 7),
+        notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+        audio: const WarmAlarmAudio(),
+      );
+      expect(schedule.wakeCheck, isNull);
+    });
+  });
+
+  group('Wake-check event types', () {
+    final at = DateTime(2026, 5, 1, 7, 5);
+
+    test('WarmAlarmWakeCheckShown extends WarmAlarmEvent', () {
+      final event = WarmAlarmWakeCheckShown(alarmId: 1, occurredAt: at);
+      expect(event.alarmId, 1);
+      expect(event.occurredAt, at);
+    });
+
+    test('WarmAlarmWakeCheckDismissed extends WarmAlarmEvent', () {
+      expect(
+        WarmAlarmWakeCheckDismissed(alarmId: 2, occurredAt: at),
+        isA<WarmAlarmEvent>(),
+      );
+    });
+
+    test('WarmAlarmWakeCheckExpired extends WarmAlarmEvent', () {
+      expect(
+        WarmAlarmWakeCheckExpired(alarmId: 3, occurredAt: at),
+        isA<WarmAlarmEvent>(),
+      );
+    });
+
+    test('WarmAlarmRetriggered extends WarmAlarmEvent', () {
+      expect(
+        WarmAlarmRetriggered(alarmId: 4, occurredAt: at),
+        isA<WarmAlarmEvent>(),
+      );
+    });
+  });
 
   test('WarmAlarmPlatform exposes typed scheduling APIs', () async {
     final platform = WarmAlarmMock();
