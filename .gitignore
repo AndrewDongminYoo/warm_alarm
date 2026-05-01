@@ -50,3 +50,6 @@ build/
 .project
 .classpath
 .settings
+
+# Git worktrees
+.worktrees/
