@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.net.Uri
@@ -27,6 +28,7 @@ class WarmAlarmForegroundService : Service() {
     }
 
     private var mediaPlayer: MediaPlayer? = null
+    private var backgroundPlayer: MediaPlayer? = null
     private var currentSchedule: WarmAlarmScheduleWire? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -135,39 +137,38 @@ class WarmAlarmForegroundService : Service() {
         schedule: WarmAlarmScheduleWire?,
     ) {
         val audio = schedule?.audio
-        val player = MediaPlayer()
+        val volume = audio?.volume?.toFloat()?.coerceIn(0f, 1f) ?: 1f
+        val hasFilePath = !audio?.filePath.isNullOrBlank()
+        val hasAssetPath = !audio?.assetPath.isNullOrBlank()
+
+        boostAlarmVolume()
+
         try {
-            when {
-                !audio?.filePath.isNullOrBlank() -> {
-                    player.setDataSource(this, Uri.fromFile(File(audio!!.filePath!!)))
-                }
-
-                !audio?.assetPath.isNullOrBlank() -> {
-                    val fd = assets.openFd("flutter_assets/${audio!!.assetPath}")
-                    player.setDataSource(fd.fileDescriptor, fd.startOffset, fd.length)
-                    fd.close()
-                }
-
-                else -> {
-                    val uri =
-                        RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-                    player.setDataSource(this, uri)
+            if (hasFilePath) {
+                // Voice message: always plays once (no loop).
+                mediaPlayer = createPlayer(volume = volume, loop = false) {
+                    setDataSource(this@WarmAlarmForegroundService, Uri.fromFile(File(audio!!.filePath!!)))
                 }
             }
-            player.setAudioAttributes(
-                AudioAttributes
-                    .Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .build(),
-            )
-            player.isLooping = audio?.loop ?: true
-            player.prepare()
-            player.start()
-            mediaPlayer = player
+            if (hasAssetPath) {
+                val assetPlayer = createPlayer(volume = volume, loop = audio?.loop ?: true) {
+                    val fd = assets.openFd("flutter_assets/${audio!!.assetPath}")
+                    setDataSource(fd.fileDescriptor, fd.startOffset, fd.length)
+                    fd.close()
+                }
+                // When both are present, assetPath is the background layer.
+                if (hasFilePath) backgroundPlayer = assetPlayer else mediaPlayer = assetPlayer
+            }
+            if (!hasFilePath && !hasAssetPath) {
+                val uri =
+                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                        ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                mediaPlayer = createPlayer(volume = volume, loop = true) {
+                    setDataSource(this@WarmAlarmForegroundService, uri)
+                }
+            }
         } catch (e: Exception) {
-            player.release()
+            stopAudio()
             if (alarmId != -1L) {
                 WarmAlarmPlugin.emitEventFromBackground(
                     WarmAlarmEventWire(
@@ -188,12 +189,36 @@ class WarmAlarmForegroundService : Service() {
         }
     }
 
+    private fun createPlayer(
+        volume: Float,
+        loop: Boolean,
+        configure: MediaPlayer.() -> Unit,
+    ): MediaPlayer {
+        val player = MediaPlayer()
+        player.configure()
+        player.setAudioAttributes(
+            AudioAttributes
+                .Builder()
+                .setUsage(AudioAttributes.USAGE_ALARM)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build(),
+        )
+        player.isLooping = loop
+        player.setVolume(volume, volume)
+        player.prepare()
+        player.start()
+        return player
+    }
+
+    private fun boostAlarmVolume() {
+        val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        am.setStreamVolume(AudioManager.STREAM_ALARM, am.getStreamMaxVolume(AudioManager.STREAM_ALARM), 0)
+    }
+
     private fun stopAudio() {
-        mediaPlayer?.runCatching {
-            stop()
-            release()
-        }
+        listOf(mediaPlayer, backgroundPlayer).forEach { it?.runCatching { stop(); release() } }
         mediaPlayer = null
+        backgroundPlayer = null
     }
 
     private fun buildNotification(
