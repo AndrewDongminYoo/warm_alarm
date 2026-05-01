@@ -565,4 +565,106 @@ void main() {
       expect(snapshots.single.payload, '{"key":"val"}');
     });
   });
+
+  group('WarmAlarmAndroid A1+N1+W1 features', () {
+    test(
+      'scheduleAlarm passes androidIcon, androidIconColor, keepNotificationAfterAlarmEnds to wire',
+      () async {
+        final api = _MockWarmAlarmApi();
+        final platform = WarmAlarmAndroid(api: api);
+        final captured = <WarmAlarmScheduleWire>[];
+        when(() => api.scheduleAlarm(any())).thenAnswer((inv) async {
+          captured.add(inv.positionalArguments[0] as WarmAlarmScheduleWire);
+          return WarmAlarmScheduleResultWire(
+            alarmId: 1,
+            readiness: WarmAlarmReadinessWire(
+              level: WarmAlarmReadinessLevelWire.ready,
+              reasons: <WarmAlarmReadinessReasonWire>[],
+            ),
+          );
+        });
+        await platform.scheduleAlarm(
+          WarmAlarmSchedule(
+            id: 1,
+            scheduledAt: DateTime(2026, 5, 1, 7),
+            notification: const WarmAlarmNotification(
+              title: 'T',
+              body: 'B',
+              androidIcon: 'ic_alarm_custom',
+              androidIconColor: 0xFF0000FF,
+              keepNotificationAfterAlarmEnds: true,
+            ),
+            audio: const WarmAlarmAudio(),
+          ),
+        );
+        expect(captured.single.notification.androidIcon, 'ic_alarm_custom');
+        expect(captured.single.notification.androidIconColor, 0xFF0000FF);
+        expect(
+          captured.single.notification.keepNotificationAfterAlarmEnds,
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'scheduleAlarm passes volumeEnforced and fadeSteps to audio wire',
+      () async {
+        final api = _MockWarmAlarmApi();
+        final platform = WarmAlarmAndroid(api: api);
+        final captured = <WarmAlarmScheduleWire>[];
+        when(() => api.scheduleAlarm(any())).thenAnswer((inv) async {
+          captured.add(inv.positionalArguments[0] as WarmAlarmScheduleWire);
+          return WarmAlarmScheduleResultWire(
+            alarmId: 2,
+            readiness: WarmAlarmReadinessWire(
+              level: WarmAlarmReadinessLevelWire.ready,
+              reasons: <WarmAlarmReadinessReasonWire>[],
+            ),
+          );
+        });
+        await platform.scheduleAlarm(
+          WarmAlarmSchedule(
+            id: 2,
+            scheduledAt: DateTime(2026, 5, 1, 7),
+            notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+            audio: const WarmAlarmAudio(
+              volumeEnforced: true,
+              fadeSteps: <WarmAlarmVolumeFadeStep>[
+                WarmAlarmVolumeFadeStep(time: Duration.zero, volume: 0.0),
+                WarmAlarmVolumeFadeStep(
+                  time: Duration(seconds: 10),
+                  volume: 1.0,
+                ),
+              ],
+            ),
+          ),
+        );
+        expect(captured.single.audio.volumeEnforced, isTrue);
+        expect(captured.single.audio.fadeSteps, hasLength(2));
+        expect(captured.single.audio.fadeSteps!.first.timeMillis, 0);
+        expect(captured.single.audio.fadeSteps!.last.volume, 1.0);
+      },
+    );
+
+    test('setKillWarning delegates to api', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      when(() => api.setKillWarning(any(), any())).thenAnswer((_) async {});
+      await platform.setKillWarning(
+        title: 'App killed',
+        body: 'Alarm was interrupted',
+      );
+      verify(
+        () => api.setKillWarning('App killed', 'Alarm was interrupted'),
+      ).called(1);
+    });
+
+    test('clearKillWarning delegates to api', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      when(api.clearKillWarning).thenAnswer((_) async {});
+      await platform.clearKillWarning();
+      verify(api.clearKillWarning).called(1);
+    });
+  });
 }

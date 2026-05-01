@@ -274,4 +274,86 @@ void main() {
       expect(snapshots.single.wakeCheck, isNull);
     });
   });
+
+  group('WarmAlarmIOS A1+N1+W1 features', () {
+    setUpAll(() {
+      registerFallbackValue(
+        WarmAlarmScheduleWire(
+          id: 0,
+          scheduledAtMillis: 0,
+          notification: WarmAlarmNotificationWire(
+            title: '',
+            body: '',
+            keepNotificationAfterAlarmEnds: false,
+          ),
+          audio: WarmAlarmAudioWire(
+            loop: true,
+            vibrate: false,
+            volumeEnforced: false,
+          ),
+        ),
+      );
+    });
+
+    test(
+      'scheduleAlarm passes keepNotificationAfterAlarmEnds, androidIcon, volumeEnforced to wire',
+      () async {
+        final api = _MockWarmAlarmApi();
+        final platform = WarmAlarmIOS(api: api);
+        final captured = <WarmAlarmScheduleWire>[];
+        when(() => api.scheduleAlarm(any())).thenAnswer((inv) async {
+          captured.add(inv.positionalArguments[0] as WarmAlarmScheduleWire);
+          return WarmAlarmScheduleResultWire(
+            alarmId: 30,
+            readiness: WarmAlarmReadinessWire(
+              level: WarmAlarmReadinessLevelWire.limited,
+              reasons: <WarmAlarmReadinessReasonWire>[
+                WarmAlarmReadinessReasonWire.backgroundExecutionLimited,
+              ],
+            ),
+          );
+        });
+        await platform.scheduleAlarm(
+          WarmAlarmSchedule(
+            id: 30,
+            scheduledAt: DateTime(2026, 5, 1, 8),
+            notification: const WarmAlarmNotification(
+              title: 'T',
+              body: 'B',
+              androidIcon: 'ic_alarm_custom',
+              keepNotificationAfterAlarmEnds: true,
+            ),
+            audio: const WarmAlarmAudio(volumeEnforced: true),
+          ),
+        );
+        expect(
+          captured.single.notification.keepNotificationAfterAlarmEnds,
+          isTrue,
+        );
+        expect(captured.single.notification.androidIcon, 'ic_alarm_custom');
+        expect(captured.single.audio.volumeEnforced, isTrue);
+      },
+    );
+
+    test('setKillWarning delegates to api', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmIOS(api: api);
+      when(() => api.setKillWarning(any(), any())).thenAnswer((_) async {});
+      await platform.setKillWarning(
+        title: 'App killed',
+        body: 'Alarm interrupted',
+      );
+      verify(
+        () => api.setKillWarning('App killed', 'Alarm interrupted'),
+      ).called(1);
+    });
+
+    test('clearKillWarning delegates to api', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmIOS(api: api);
+      when(api.clearKillWarning).thenAnswer((_) async {});
+      await platform.clearKillWarning();
+      verify(api.clearKillWarning).called(1);
+    });
+  });
 }
