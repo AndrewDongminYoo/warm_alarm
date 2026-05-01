@@ -248,4 +248,138 @@ void main() {
       },
     );
   });
+
+  group('WarmAlarmAndroid wake-check event mapping', () {
+    test('emitEvent maps wakeCheckShown', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      final emitted = <WarmAlarmEvent>[];
+      final sub = platform.events.listen(emitted.add);
+      await platform.emitEvent(
+        WarmAlarmEventWire(
+          alarmId: 10,
+          type: WarmAlarmEventTypeWire.wakeCheckShown,
+          occurredAtMillis: DateTime.now().millisecondsSinceEpoch,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(emitted.single, isA<WarmAlarmWakeCheckShown>());
+      expect((emitted.single as WarmAlarmWakeCheckShown).alarmId, 10);
+      await sub.cancel();
+    });
+
+    test('emitEvent maps wakeCheckDismissed', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      final emitted = <WarmAlarmEvent>[];
+      final sub = platform.events.listen(emitted.add);
+      await platform.emitEvent(
+        WarmAlarmEventWire(
+          alarmId: 11,
+          type: WarmAlarmEventTypeWire.wakeCheckDismissed,
+          occurredAtMillis: DateTime.now().millisecondsSinceEpoch,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(emitted.single, isA<WarmAlarmWakeCheckDismissed>());
+      await sub.cancel();
+    });
+
+    test('emitEvent maps wakeCheckExpired', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      final emitted = <WarmAlarmEvent>[];
+      final sub = platform.events.listen(emitted.add);
+      await platform.emitEvent(
+        WarmAlarmEventWire(
+          alarmId: 12,
+          type: WarmAlarmEventTypeWire.wakeCheckExpired,
+          occurredAtMillis: DateTime.now().millisecondsSinceEpoch,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(emitted.single, isA<WarmAlarmWakeCheckExpired>());
+      await sub.cancel();
+    });
+
+    test('emitEvent maps retriggered', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      final emitted = <WarmAlarmEvent>[];
+      final sub = platform.events.listen(emitted.add);
+      await platform.emitEvent(
+        WarmAlarmEventWire(
+          alarmId: 13,
+          type: WarmAlarmEventTypeWire.retriggered,
+          occurredAtMillis: DateTime.now().millisecondsSinceEpoch,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(emitted.single, isA<WarmAlarmRetriggered>());
+      await sub.cancel();
+    });
+  });
+
+  group('WarmAlarmAndroid scheduleAlarm wakeCheck wire mapping', () {
+    test('scheduleAlarm passes wakeCheck fields to api', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      final captured = <WarmAlarmScheduleWire>[];
+      when(() => api.scheduleAlarm(any())).thenAnswer((invocation) async {
+        captured.add(
+          invocation.positionalArguments[0] as WarmAlarmScheduleWire,
+        );
+        return WarmAlarmScheduleResultWire(
+          alarmId: 1,
+          readiness: WarmAlarmReadinessWire(
+            level: WarmAlarmReadinessLevelWire.ready,
+            reasons: <WarmAlarmReadinessReasonWire>[],
+          ),
+        );
+      });
+      await platform.scheduleAlarm(
+        WarmAlarmSchedule(
+          id: 1,
+          scheduledAt: DateTime(2026, 5, 1, 7),
+          notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+          audio: const WarmAlarmAudio(),
+          wakeCheck: const WarmAlarmWakeCheck(
+            checkDelay: Duration(minutes: 5),
+            retriggerDelay: Duration(minutes: 2),
+          ),
+        ),
+      );
+      final wire = captured.single.wakeCheck!;
+      expect(wire.checkDelayMillis, 5 * 60 * 1000);
+      expect(wire.retriggerDelayMillis, 2 * 60 * 1000);
+      expect(wire.maxRetriggers, 1);
+    });
+
+    test('scheduleAlarm passes null wakeCheck when not configured', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      final captured = <WarmAlarmScheduleWire>[];
+      when(() => api.scheduleAlarm(any())).thenAnswer((invocation) async {
+        captured.add(
+          invocation.positionalArguments[0] as WarmAlarmScheduleWire,
+        );
+        return WarmAlarmScheduleResultWire(
+          alarmId: 2,
+          readiness: WarmAlarmReadinessWire(
+            level: WarmAlarmReadinessLevelWire.ready,
+            reasons: <WarmAlarmReadinessReasonWire>[],
+          ),
+        );
+      });
+      await platform.scheduleAlarm(
+        WarmAlarmSchedule(
+          id: 2,
+          scheduledAt: DateTime(2026, 5, 1, 7),
+          notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+          audio: const WarmAlarmAudio(),
+        ),
+      );
+      expect(captured.single.wakeCheck, isNull);
+    });
+  });
 }
