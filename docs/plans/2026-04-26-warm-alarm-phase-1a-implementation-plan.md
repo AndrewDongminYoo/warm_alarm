@@ -1,6 +1,6 @@
 # Warm Alarm Phase 1A Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Replace the template `getPlatformName()` API with the first real `warm_alarm` Phase 1A surface: hand-written public alarm models, platform inspection APIs, schedule/cancel stubs, and live event-stream scaffolding across Android, iOS, and macOS.
 
@@ -80,7 +80,7 @@
 - Modify: `warm_alarm_platform_interface/lib/warm_alarm_platform_interface.dart`
 - Test: `warm_alarm_platform_interface/test/warm_alarm_platform_interface_test.dart`
 
-- [ ] **Step 1: Write the failing platform-interface tests**
+- [x] **Step 1: Write the failing platform-interface tests**
 
 ```dart
 import 'dart:async';
@@ -158,13 +158,13 @@ void main() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `flutter test warm_alarm_platform_interface/test/warm_alarm_platform_interface_test.dart`
 
 Expected: FAIL with missing `WarmAlarmCapabilities`, `WarmAlarmPermissionState`, `WarmAlarmReadiness`, `WarmAlarmScheduleResult`, `WarmAlarmSnapshot`, and new `WarmAlarmPlatform` methods.
 
-- [ ] **Step 3: Add the public model files and interface**
+- [x] **Step 3: Add the public model files and interface**
 
 ```dart
 // warm_alarm_platform_interface/lib/src/models/warm_alarm_support.dart
@@ -252,13 +252,13 @@ abstract class WarmAlarmPlatform extends PlatformInterface {
 }
 ```
 
-- [ ] **Step 4: Run platform-interface tests**
+- [x] **Step 4: Run platform-interface tests**
 
 Run: `flutter test warm_alarm_platform_interface/test/warm_alarm_platform_interface_test.dart`
 
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add warm_alarm_platform_interface/lib warm_alarm_platform_interface/test/warm_alarm_platform_interface_test.dart
@@ -273,7 +273,7 @@ git commit -m "feat: add typed warm alarm platform models"
 - Modify: `warm_alarm/test/warm_alarm_test.dart`
 - Modify: `warm_alarm/example/lib/main.dart`
 
-- [ ] **Step 1: Write the failing package and example-facing tests**
+- [x] **Step 1: Write the failing package and example-facing tests**
 
 ```dart
 import 'package:flutter_test/flutter_test.dart';
@@ -317,13 +317,13 @@ void main() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `flutter test warm_alarm/test/warm_alarm_test.dart`
 
 Expected: FAIL with missing `WarmAlarm.scheduleAlarm`, `WarmAlarmNotification`, `WarmAlarmAudio`, and `WarmAlarmScheduleResult` APIs.
 
-- [ ] **Step 3: Replace `getPlatformName()` with a static facade and update the example**
+- [x] **Step 3: Replace `getPlatformName()` with a static facade and update the example**
 
 ```dart
 // warm_alarm/lib/warm_alarm.dart
@@ -363,13 +363,13 @@ setState(() {
 });
 ```
 
-- [ ] **Step 4: Run package tests and a focused widget smoke test**
+- [x] **Step 4: Run package tests and a focused widget smoke test**
 
 Run: `flutter test warm_alarm/test/warm_alarm_test.dart`
 
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add warm_alarm/lib/warm_alarm.dart warm_alarm/test/warm_alarm_test.dart warm_alarm/example/lib/main.dart
@@ -383,7 +383,7 @@ git commit -m "feat: replace template warm alarm facade"
 - Modify: `warm_alarm_platform_interface/lib/src/method_channel_warm_alarm.dart`
 - Modify: `warm_alarm_platform_interface/test/src/method_channel_warm_alarm_test.dart`
 
-- [ ] **Step 1: Write the failing fallback tests**
+- [x] **Step 1: Write the failing fallback tests**
 
 ```dart
 import 'package:flutter/services.dart';
@@ -423,13 +423,13 @@ void main() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `flutter test warm_alarm_platform_interface/test/src/method_channel_warm_alarm_test.dart`
 
 Expected: FAIL with missing `getReadiness` and model decoding logic.
 
-- [ ] **Step 3: Implement a temporary typed fallback**
+- [x] **Step 3: Implement a temporary typed fallback**
 
 ```dart
 class MethodChannelWarmAlarm extends WarmAlarmPlatform {
@@ -469,13 +469,13 @@ class MethodChannelWarmAlarm extends WarmAlarmPlatform {
 }
 ```
 
-- [ ] **Step 4: Run fallback tests**
+- [x] **Step 4: Run fallback tests**
 
 Run: `flutter test warm_alarm_platform_interface/test/src/method_channel_warm_alarm_test.dart`
 
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add warm_alarm_platform_interface/lib/src/method_channel_warm_alarm.dart warm_alarm_platform_interface/test/src/method_channel_warm_alarm_test.dart
@@ -496,7 +496,7 @@ git commit -m "test: cover typed fallback warm alarm interface"
 - Modify: `warm_alarm_ios/test/warm_alarm_ios_test.dart`
 - Modify: `warm_alarm_macos/test/warm_alarm_macos_test.dart`
 
-- [ ] **Step 1: Write the failing Android, iOS, and macOS wrapper tests**
+- [x] **Step 1: Write the failing Android, iOS, and macOS wrapper tests**
 
 ```dart
 test('getCapabilities returns typed stub values', () async {
@@ -517,7 +517,7 @@ test('getCapabilities returns typed stub values', () async {
 });
 ```
 
-- [ ] **Step 2: Run the wrapper tests to verify they fail**
+- [x] **Step 2: Run the wrapper tests to verify they fail**
 
 Run: `flutter test warm_alarm_android/test/warm_alarm_android_test.dart`
 
@@ -527,7 +527,7 @@ Run: `flutter test warm_alarm_macos/test/warm_alarm_macos_test.dart`
 
 Expected: FAIL with missing wire types and missing wrapper methods.
 
-- [ ] **Step 3: Expand each Pigeon schema and wrapper to typed Phase 1A stubs**
+- [x] **Step 3: Expand each Pigeon schema and wrapper to typed Phase 1A stubs**
 
 ```dart
 // warm_alarm_android/pigeons/messages.dart (same shape mirrored in ios/macos)
@@ -578,7 +578,7 @@ Future<WarmAlarmScheduleResult> scheduleAlarm(WarmAlarmSchedule schedule) async 
 Stream<WarmAlarmEvent> get events => _events.stream;
 ```
 
-- [ ] **Step 4: Regenerate Pigeon bindings and run package tests**
+- [x] **Step 4: Regenerate Pigeon bindings and run package tests**
 
 Run: `melos run generate`
 
@@ -592,7 +592,7 @@ Run: `flutter test warm_alarm_macos/test/warm_alarm_macos_test.dart`
 
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add warm_alarm_android warm_alarm_ios warm_alarm_macos
@@ -606,7 +606,7 @@ git commit -m "feat: add phase 1a warm alarm platform stubs"
 - Modify: `docs/specs/2026-04-26-warm-alarm-plugin-design.md` only if implementation forces a spec correction
 - Test: entire repo verification commands
 
-- [ ] **Step 1: Run targeted package tests**
+- [x] **Step 1: Run targeted package tests**
 
 Run: `flutter test warm_alarm/test/warm_alarm_test.dart`
 
@@ -622,7 +622,7 @@ Run: `flutter test warm_alarm_macos/test/warm_alarm_macos_test.dart`
 
 Expected: all PASS
 
-- [ ] **Step 2: Run workspace generation, formatting, and full tests**
+- [x] **Step 2: Run workspace generation, formatting, and full tests**
 
 Run: `melos run generate`
 
@@ -632,13 +632,13 @@ Run: `melos run test`
 
 Expected: all commands exit 0
 
-- [ ] **Step 3: Smoke-test the example app interface**
+- [x] **Step 3: Smoke-test the example app interface**
 
 Run: `flutter test warm_alarm/test/warm_alarm_test.dart --plain-name "scheduleAlarm forwards to platform and returns typed result"`
 
 Expected: PASS and confirms the front-facing API no longer depends on `getPlatformName()`.
 
-- [ ] **Step 4: Commit the verification-safe Phase 1A batch**
+- [x] **Step 4: Commit the verification-safe Phase 1A batch**
 
 ```bash
 git add warm_alarm warm_alarm_platform_interface warm_alarm_android warm_alarm_ios warm_alarm_macos docs/specs/2026-04-26-warm-alarm-plugin-design.md

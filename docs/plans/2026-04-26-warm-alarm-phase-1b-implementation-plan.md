@@ -1,6 +1,6 @@
 # Warm Alarm Phase 1B Android Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Turn the current Android runtime path in `warm_alarm_android` into a verified one-shot alarm proof: schedule an alarm, fire it while backgrounded, play audio, and deliver stop/snooze lifecycle events back to Dart.
 
@@ -48,7 +48,7 @@
 
 - Modify: `warm_alarm_android/test/warm_alarm_android_test.dart`
 
-- [ ] **Step 1: Write failing tests for schedule/cancel/snapshots and failed-event mapping**
+- [x] **Step 1: Write failing tests for schedule/cancel/snapshots and failed-event mapping**
 
 ```dart
 test('scheduleAlarm maps schedule result warning and readiness', () async {
@@ -128,13 +128,13 @@ test('emitEvent maps failed event payload', () async {
 });
 ```
 
-- [ ] **Step 2: Run the Android wrapper tests to verify they fail correctly**
+- [x] **Step 2: Run the Android wrapper tests to verify they fail correctly**
 
 Run: `flutter test warm_alarm_android/test/warm_alarm_android_test.dart`
 
 Expected: FAIL because the current wrapper/runtime do not yet guarantee the new scheduling/failure assertions.
 
-- [ ] **Step 3: Implement only the minimal Dart-side mapping needed to satisfy the new tests**
+- [x] **Step 3: Implement only the minimal Dart-side mapping needed to satisfy the new tests**
 
 ```dart
 @override
@@ -146,7 +146,7 @@ Future<List<WarmAlarmSnapshot>> getScheduledAlarms() async =>
     (await api.getScheduledAlarms()).map(_snapshotFromWire).toList(growable: false);
 ```
 
-- [ ] **Step 4: Re-run Android wrapper tests**
+- [x] **Step 4: Re-run Android wrapper tests**
 
 Run: `flutter test warm_alarm_android/test/warm_alarm_android_test.dart`
 
@@ -162,7 +162,7 @@ Expected: PASS
 - Modify: `warm_alarm_android/android/src/main/kotlin/com/andrew/alarm/WarmAlarmReceiver.kt`
 - Modify: `warm_alarm_android/android/src/main/kotlin/com/andrew/alarm/WarmAlarmForegroundService.kt`
 
-- [ ] **Step 1: Add failing event-mapping assertions in the Android wrapper test**
+- [x] **Step 1: Add failing event-mapping assertions in the Android wrapper test**
 
 ```dart
 test('emitEvent maps scheduled event', () async {
@@ -186,13 +186,13 @@ test('emitEvent maps scheduled event', () async {
 });
 ```
 
-- [ ] **Step 2: Run the Android wrapper tests to verify the current failure shape**
+- [x] **Step 2: Run the Android wrapper tests to verify the current failure shape**
 
 Run: `flutter test warm_alarm_android/test/warm_alarm_android_test.dart`
 
 Expected: FAIL if event translation or native event types are missing/incomplete.
 
-- [ ] **Step 3: Emit `scheduled` when Android accepts a schedule and emit `failed` when foreground playback cannot start**
+- [x] **Step 3: Emit `scheduled` when Android accepts a schedule and emit `failed` when foreground playback cannot start**
 
 ```kotlin
 WarmAlarmPlugin.emitEventFromBackground(
@@ -218,7 +218,7 @@ WarmAlarmPlugin.emitEventFromBackground(
 )
 ```
 
-- [ ] **Step 4: Re-run Android wrapper tests**
+- [x] **Step 4: Re-run Android wrapper tests**
 
 Run: `flutter test warm_alarm_android/test/warm_alarm_android_test.dart`
 
@@ -234,7 +234,7 @@ Expected: PASS
 - Modify: `warm_alarm_android/android/src/main/kotlin/com/andrew/alarm/WarmAlarmForegroundService.kt`
 - Modify: `warm_alarm_android/android/src/main/kotlin/com/andrew/alarm/WarmAlarmStore.kt`
 
-- [ ] **Step 1: Add a failing test for limited scheduling when exact alarms are unavailable**
+- [x] **Step 1: Add a failing test for limited scheduling when exact alarms are unavailable**
 
 ```dart
 test('scheduleAlarm returns limited readiness and warning when exact scheduling is unavailable', () async {
@@ -270,13 +270,13 @@ test('scheduleAlarm returns limited readiness and warning when exact scheduling 
 });
 ```
 
-- [ ] **Step 2: Run the Android wrapper tests to verify the current readiness contract**
+- [x] **Step 2: Run the Android wrapper tests to verify the current readiness contract**
 
 Run: `flutter test warm_alarm_android/test/warm_alarm_android_test.dart`
 
 Expected: FAIL if the current readiness/warning contract remains too coarse.
 
-- [ ] **Step 3: Implement the minimal Android runtime corrections for the one-shot proof**
+- [x] **Step 3: Implement the minimal Android runtime corrections for the one-shot proof**
 
 ```kotlin
 val inexact = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()
@@ -313,7 +313,7 @@ private fun handleSnooze(alarmId: Long) {
 }
 ```
 
-- [ ] **Step 4: Re-run Android wrapper tests**
+- [x] **Step 4: Re-run Android wrapper tests**
 
 Run: `flutter test warm_alarm_android/test/warm_alarm_android_test.dart`
 
@@ -328,7 +328,7 @@ Expected: PASS
 - Modify: `warm_alarm/example/lib/main.dart`
 - Modify: `warm_alarm/example/integration_test/app_test.dart`
 
-- [ ] **Step 1: Add a failing integration test for the schedule/event proof surface**
+- [x] **Step 1: Add a failing integration test for the schedule/event proof surface**
 
 ```dart
 testWidgets('shows schedule result and event log entries', (tester) async {
@@ -343,13 +343,13 @@ testWidgets('shows schedule result and event log entries', (tester) async {
 });
 ```
 
-- [ ] **Step 2: Run the integration test to verify it fails**
+- [x] **Step 2: Run the integration test to verify it fails**
 
 Run: `flutter test warm_alarm/example/integration_test/app_test.dart`
 
 Expected: FAIL because the example app currently only inspects readiness and exact scheduling.
 
-- [ ] **Step 3: Update the example UI to schedule a short alarm and display incoming events**
+- [x] **Step 3: Update the example UI to schedule a short alarm and display incoming events**
 
 ```dart
 final schedule = WarmAlarmSchedule(
@@ -376,7 +376,7 @@ _subscription ??= WarmAlarm.events.listen((event) {
 });
 ```
 
-- [ ] **Step 4: Re-run the integration test**
+- [x] **Step 4: Re-run the integration test**
 
 Run: `flutter test warm_alarm/example/integration_test/app_test.dart`
 
@@ -391,7 +391,7 @@ Expected: PASS
 - Modify: `docs/specs/2026-04-26-warm-alarm-plugin-design.md` only if implementation forces a correction
 - Test: Android package, integration surface, and example app builds
 
-- [ ] **Step 1: Run targeted Dart tests**
+- [x] **Step 1: Run targeted Dart tests**
 
 Run: `flutter test warm_alarm_android/test/warm_alarm_android_test.dart`
 
@@ -401,7 +401,7 @@ Run: `flutter test warm_alarm/example/integration_test/app_test.dart`
 
 Expected: all PASS
 
-- [ ] **Step 2: Regenerate bindings, format, and rerun the workspace tests**
+- [x] **Step 2: Regenerate bindings, format, and rerun the workspace tests**
 
 Run: `melos run generate`
 
@@ -411,7 +411,7 @@ Run: `melos run test`
 
 Expected: all commands exit 0
 
-- [ ] **Step 3: Build the Android example app**
+- [x] **Step 3: Build the Android example app**
 
 Run: `flutter build apk --debug`
 
@@ -419,7 +419,7 @@ Workdir: `warm_alarm/example`
 
 Expected: `app-debug.apk` built successfully
 
-- [ ] **Step 4: Manual Android proof on a connected device**
+- [x] **Step 4: Manual Android proof on a connected device**
 
 Run app on device, then verify these scenarios with captured logs/screenshots:
 
@@ -438,7 +438,7 @@ adb shell dumpsys alarm
 adb logcat -v time *:S flutter:D WarmAlarm:D
 ```
 
-- [ ] **Step 5: Record the product-proof result**
+- [x] **Step 5: Record the product-proof result**
 
 Document whether Phase 1B is:
 
