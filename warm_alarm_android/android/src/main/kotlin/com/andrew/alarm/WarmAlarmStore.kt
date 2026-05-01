@@ -29,6 +29,20 @@ internal object WarmAlarmStore {
         val all = loadAll(context).toMutableMap()
         all.remove(id)
         persist(context, all)
+        prefs(context).edit().remove("retrigger_$id").apply()
+    }
+
+    fun getRetriggerCount(
+        context: Context,
+        id: Long,
+    ): Int = prefs(context).getInt("retrigger_$id", 0)
+
+    fun incrementRetriggerCount(
+        context: Context,
+        id: Long,
+    ) {
+        val current = getRetriggerCount(context, id)
+        prefs(context).edit().putInt("retrigger_$id", current + 1).apply()
     }
 
     fun reschedule(
@@ -91,6 +105,16 @@ internal object WarmAlarmStore {
                 },
             )
             s.snooze?.let { put("snooze", JSONObject().apply { put("durationMillis", it.durationMillis) }) }
+            s.wakeCheck?.let {
+                put(
+                    "wakeCheck",
+                    JSONObject().apply {
+                        put("checkDelayMillis", it.checkDelayMillis)
+                        it.retriggerDelayMillis?.let { d -> put("retriggerDelayMillis", d) }
+                        it.maxRetriggers?.let { m -> put("maxRetriggers", m) }
+                    },
+                )
+            }
         }
 
     private fun decode(obj: JSONObject): WarmAlarmScheduleWire {
@@ -118,6 +142,17 @@ internal object WarmAlarmStore {
             snooze =
                 if (obj.has("snooze")) {
                     WarmAlarmSnoozeWire(obj.getJSONObject("snooze").getLong("durationMillis"))
+                } else {
+                    null
+                },
+            wakeCheck =
+                if (obj.has("wakeCheck")) {
+                    val w = obj.getJSONObject("wakeCheck")
+                    WarmAlarmWakeCheckWire(
+                        checkDelayMillis = w.getLong("checkDelayMillis"),
+                        retriggerDelayMillis = if (w.has("retriggerDelayMillis")) w.getLong("retriggerDelayMillis") else null,
+                        maxRetriggers = if (w.has("maxRetriggers")) w.getLong("maxRetriggers") else null,
+                    )
                 } else {
                     null
                 },
