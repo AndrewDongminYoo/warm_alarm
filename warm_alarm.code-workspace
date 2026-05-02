@@ -1,0 +1,25 @@
+{
+	"folders": [
+		{
+			"path": "warm_alarm",
+      "name": "main package",
+		},
+		{
+			"path": "warm_alarm_android",
+      "name": "android package",
+		},
+		{
+			"path": "warm_alarm_ios",
+      "name": "ios package",
+		},
+		{
+			"path": "warm_alarm_macos",
+      "name": "macos package",
+		},
+		{
+			"path": "warm_alarm_platform_interface",
+      "name": "platform interface",
+		}
+	],
+	"settings": {}
+}
