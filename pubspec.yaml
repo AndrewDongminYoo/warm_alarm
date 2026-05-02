@@ -4,6 +4,8 @@ environment:
   sdk: ">=3.10.0 <4.0.0"
 workspace:
   - warm_alarm
+  - warm_alarm/example
+  - warm_alarm/example/actions/check_readiness
   - warm_alarm_android
   - warm_alarm_ios
   - warm_alarm_macos
@@ -16,18 +18,24 @@ topics:
 
 dev_dependencies:
   melos: ^7.5.1
+  very_good_cli: ^1.1.1
 
 melos:
   name: warm_alarm
 
   packages:
     - warm_alarm
+    - warm_alarm/example
     - warm_alarm_android
     - warm_alarm_ios
     - warm_alarm_macos
     - warm_alarm_platform_interface
 
   scripts:
+    get:
+      run: very_good packages get --recursive --ignore=.trunk
+      description: Get dependencies for all packages in this project.
+
     generate:
       run: melos exec --depends-on=pigeon -- "dart run pigeon --input pigeons/messages.dart"
       description: Build all generated files for Dart & Flutter packages in this project.
