@@ -328,7 +328,9 @@ WarmAlarmFailureWire _requireFailure(WarmAlarmFailureWire? failure) {
     failure != null,
     'WarmAlarmEventsApi: failed event received without failure payload (Swift contract violation)',
   );
+  // coverage:ignore-start
   return failure ?? WarmAlarmFailureWire(code: WarmAlarmFailureCodeWire.unknown);
+  // coverage:ignore-end
 }
 
 WarmAlarmEvent _eventFromWire(WarmAlarmEventWire wire) {

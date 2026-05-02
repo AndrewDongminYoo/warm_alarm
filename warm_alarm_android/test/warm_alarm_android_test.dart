@@ -68,6 +68,92 @@ void main() {
       verify(api.getCapabilities).called(1);
     });
 
+    test('getCapabilities maps unknown support status', () async {
+      when(api.getCapabilities).thenAnswer(
+        (_) async => WarmAlarmCapabilitiesWire(
+          exactScheduling: WarmAlarmSupportStatusWire.unknown,
+          notificationScheduling: WarmAlarmSupportStatusWire.supported,
+          backgroundAudioPlayback: WarmAlarmSupportStatusWire.limited,
+          fullScreenPresentation: WarmAlarmSupportStatusWire.unsupported,
+          wakeCheck: WarmAlarmSupportStatusWire.unknown,
+          liveActivity: WarmAlarmSupportStatusWire.unknown,
+        ),
+      );
+      final caps = await warmAlarm.getCapabilities();
+      expect(caps.exactScheduling, WarmAlarmSupportStatus.unknown);
+      expect(caps.wakeCheck, WarmAlarmSupportStatus.unknown);
+    });
+
+    test('cancelAlarm delegates to api', () async {
+      when(() => api.cancelAlarm(any())).thenAnswer((_) async {});
+      await warmAlarm.cancelAlarm(5);
+      verify(() => api.cancelAlarm(5)).called(1);
+    });
+
+    test('cancelAllAlarms delegates to api', () async {
+      when(api.cancelAllAlarms).thenAnswer((_) async {});
+      await warmAlarm.cancelAllAlarms();
+      verify(api.cancelAllAlarms).called(1);
+    });
+
+    test('getPermissionState returns typed permission state', () async {
+      when(api.getPermissionState).thenAnswer(
+        (_) async => WarmAlarmPermissionStateWire(
+          notificationsGranted: true,
+          exactAlarmGranted: false,
+          fullScreenIntentGranted: true,
+        ),
+      );
+      final state = await warmAlarm.getPermissionState();
+      expect(state.notificationsGranted, isTrue);
+      expect(state.exactAlarmGranted, isFalse);
+      expect(state.fullScreenIntentGranted, isTrue);
+      verify(api.getPermissionState).called(1);
+    });
+
+    test('getReadiness maps blocked level with all reason variants', () async {
+      when(api.getReadiness).thenAnswer(
+        (_) async => WarmAlarmReadinessWire(
+          level: WarmAlarmReadinessLevelWire.blocked,
+          reasons: <WarmAlarmReadinessReasonWire>[
+            WarmAlarmReadinessReasonWire.notificationPermissionDenied,
+            WarmAlarmReadinessReasonWire.fullScreenPermissionDenied,
+            WarmAlarmReadinessReasonWire.backgroundExecutionLimited,
+            WarmAlarmReadinessReasonWire.backgroundAudioLimited,
+            WarmAlarmReadinessReasonWire.platformUnsupported,
+            WarmAlarmReadinessReasonWire.batteryOptimizationMayDelay,
+            WarmAlarmReadinessReasonWire.unknown,
+          ],
+        ),
+      );
+      final readiness = await warmAlarm.getReadiness();
+      expect(readiness.level, WarmAlarmReadinessLevel.blocked);
+      expect(
+        readiness.reasons,
+        containsAll(<WarmAlarmReadinessReason>[
+          WarmAlarmReadinessReason.notificationPermissionDenied,
+          WarmAlarmReadinessReason.fullScreenPermissionDenied,
+          WarmAlarmReadinessReason.backgroundExecutionLimited,
+          WarmAlarmReadinessReason.backgroundAudioLimited,
+          WarmAlarmReadinessReason.platformUnsupported,
+          WarmAlarmReadinessReason.batteryOptimizationMayDelay,
+          WarmAlarmReadinessReason.unknown,
+        ]),
+      );
+      verify(api.getReadiness).called(1);
+    });
+
+    test('getReadiness maps unsupported level', () async {
+      when(api.getReadiness).thenAnswer(
+        (_) async => WarmAlarmReadinessWire(
+          level: WarmAlarmReadinessLevelWire.unsupported,
+          reasons: <WarmAlarmReadinessReasonWire>[],
+        ),
+      );
+      final readiness = await warmAlarm.getReadiness();
+      expect(readiness.level, WarmAlarmReadinessLevel.unsupported);
+    });
+
     test('scheduleAlarm maps schedule result warning and readiness', () async {
       final schedule = WarmAlarmSchedule(
         id: 9,
