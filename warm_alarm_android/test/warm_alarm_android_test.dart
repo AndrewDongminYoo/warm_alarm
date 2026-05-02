@@ -630,10 +630,10 @@ void main() {
             audio: const WarmAlarmAudio(
               volumeEnforced: true,
               fadeSteps: <WarmAlarmVolumeFadeStep>[
-                WarmAlarmVolumeFadeStep(time: Duration.zero, volume: 0.0),
+                WarmAlarmVolumeFadeStep(time: Duration.zero, volume: 0),
                 WarmAlarmVolumeFadeStep(
                   time: Duration(seconds: 10),
-                  volume: 1.0,
+                  volume: 1,
                 ),
               ],
             ),
