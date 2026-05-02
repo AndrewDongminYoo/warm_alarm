@@ -2,12 +2,38 @@ import Flutter
 import UIKit
 import UserNotifications
 
-public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDelegate, WarmAlarmApi {
+public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     private let delegate: WarmAlarmDelegate
     private static let killWarningNotifId = "warm_alarm_kill_warning_notif"
+    private var lifecycleObservers: [NSObjectProtocol] = []
 
     init(delegate: WarmAlarmDelegate) {
         self.delegate = delegate
+        super.init()
+        setupLifecycleObservers()
+    }
+
+    deinit {
+        lifecycleObservers.forEach { NotificationCenter.default.removeObserver($0) }
+    }
+
+    private func setupLifecycleObservers() {
+        let center = NotificationCenter.default
+        // Scene-based apps (iOS 13+, UIApplicationSceneManifest declared): UIKit routes
+        // foreground/background transitions through UISceneDelegate, not UIApplicationDelegate.
+        lifecycleObservers.append(center.addObserver(
+            forName: UIScene.willDeactivateNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.postKillWarningIfNeeded() })
+        lifecycleObservers.append(center.addObserver(
+            forName: UIScene.didActivateNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.cancelKillWarning() })
+        // Legacy apps without UIApplicationSceneManifest.
+        lifecycleObservers.append(center.addObserver(
+            forName: UIApplication.willResignActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.postKillWarningIfNeeded() })
+        lifecycleObservers.append(center.addObserver(
+            forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.cancelKillWarning() })
     }
 
     public static func register(with registrar: FlutterPluginRegistrar) {
@@ -19,7 +45,6 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCyc
         UNUserNotificationCenter.current().delegate = delegate
         WarmAlarmDelegate.registerCategories()
         WarmAlarmApiSetup.setUp(binaryMessenger: binaryMessenger, api: instance)
-        registrar.addApplicationDelegate(instance)
         registrar.publish(instance)
     }
 
@@ -159,7 +184,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCyc
         }
     }
 
-    public func applicationWillResignActive(_ application: UIApplication) {
+    private func postKillWarningIfNeeded() {
         guard delegate.currentlyPlayingAlarmId != nil,
               let dict = UserDefaults.standard.dictionary(forKey: "warm_alarm_kill_warning"),
               let title = dict["title"] as? String,
@@ -175,7 +200,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterApplicationLifeCyc
         UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
     }
 
-    public func applicationDidBecomeActive(_ application: UIApplication) {
+    private func cancelKillWarning() {
         UNUserNotificationCenter.current().removePendingNotificationRequests(
             withIdentifiers: [WarmAlarmPlugin.killWarningNotifId])
     }
