@@ -696,7 +696,7 @@ void main() {
               volumeEnforced: false,
               fadeSteps: <WarmAlarmVolumeFadeStepWire>[
                 WarmAlarmVolumeFadeStepWire(timeMillis: 0, volume: 0.3),
-                WarmAlarmVolumeFadeStepWire(timeMillis: 10000, volume: 1.0),
+                WarmAlarmVolumeFadeStepWire(timeMillis: 10000, volume: 1),
               ],
             ),
           ),
@@ -767,7 +767,7 @@ void main() {
                 WarmAlarmVolumeFadeStep(time: Duration.zero, volume: 0.2),
                 WarmAlarmVolumeFadeStep(
                   time: Duration(seconds: 10),
-                  volume: 1.0,
+                  volume: 1,
                 ),
               ],
             ),

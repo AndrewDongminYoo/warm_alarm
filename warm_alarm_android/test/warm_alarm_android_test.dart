@@ -801,7 +801,7 @@ void main() {
               volumeEnforced: true,
               fadeSteps: <WarmAlarmVolumeFadeStepWire>[
                 WarmAlarmVolumeFadeStepWire(timeMillis: 0, volume: 0.2),
-                WarmAlarmVolumeFadeStepWire(timeMillis: 5000, volume: 1.0),
+                WarmAlarmVolumeFadeStepWire(timeMillis: 5000, volume: 1),
               ],
             ),
           ),

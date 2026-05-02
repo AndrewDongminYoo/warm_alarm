@@ -51,6 +51,7 @@ Riverpod
 RSSI
 RUNPATH
 rxdart
+sched
 SDKROOT
 simctl
 SRCROOT
