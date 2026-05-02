@@ -222,4 +222,86 @@ void main() {
       },
     );
   });
+
+  group('Model constructors', () {
+    final at = DateTime(2026, 5, 1, 7);
+
+    test('WarmAlarmScheduled constructs correctly', () {
+      final event = WarmAlarmScheduled(alarmId: 1, occurredAt: at);
+      expect(event.alarmId, 1);
+      expect(event, isA<WarmAlarmEvent>());
+    });
+
+    test('WarmAlarmFired constructs with optional payload', () {
+      final event = WarmAlarmFired(alarmId: 2, occurredAt: at, payload: 'p');
+      expect(event.payload, 'p');
+      expect(event, isA<WarmAlarmEvent>());
+    });
+
+    test('WarmAlarmStopped constructs with optional payload', () {
+      final event = WarmAlarmStopped(alarmId: 3, occurredAt: at);
+      expect(event.payload, isNull);
+      expect(event, isA<WarmAlarmEvent>());
+    });
+
+    test('WarmAlarmSnoozed constructs with duration and optional payload', () {
+      final event = WarmAlarmSnoozed(
+        alarmId: 4,
+        occurredAt: at,
+        duration: const Duration(minutes: 5),
+        payload: 'snooze-data',
+      );
+      expect(event.duration, const Duration(minutes: 5));
+      expect(event.payload, 'snooze-data');
+      expect(event, isA<WarmAlarmEvent>());
+    });
+
+    test('WarmAlarmFailed constructs with failure', () {
+      final event = WarmAlarmFailed(
+        alarmId: 5,
+        occurredAt: at,
+        failure: const WarmAlarmFailure(
+          code: WarmAlarmFailureCode.schedulingFailed,
+        ),
+      );
+      expect(event.failure.code, WarmAlarmFailureCode.schedulingFailed);
+      expect(event, isA<WarmAlarmEvent>());
+    });
+
+    test('WarmAlarmRecurrence constructs with weekdays', () {
+      const rec = WarmAlarmRecurrence(weekdays: [1, 3, 5]);
+      expect(rec.weekdays, [1, 3, 5]);
+    });
+
+    test('WarmAlarmSnooze constructs with duration', () {
+      const snooze = WarmAlarmSnooze(duration: Duration(minutes: 10));
+      expect(snooze.duration.inMinutes, 10);
+    });
+
+    test('WarmAlarmSnapshot constructs with required fields', () {
+      final snap = WarmAlarmSnapshot(
+        id: 7,
+        scheduledAt: at,
+        notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+        audio: const WarmAlarmAudio(),
+      );
+      expect(snap.id, 7);
+      expect(snap.recurrence, isNull);
+      expect(snap.wakeCheck, isNull);
+    });
+
+    test('WarmAlarmWarning constructs with message', () {
+      const w = WarmAlarmWarning(message: 'low battery');
+      expect(w.message, 'low battery');
+    });
+
+    test('WarmAlarmFailure constructs with code and optional message', () {
+      const f = WarmAlarmFailure(
+        code: WarmAlarmFailureCode.permissionDenied,
+        message: 'denied',
+      );
+      expect(f.code, WarmAlarmFailureCode.permissionDenied);
+      expect(f.message, 'denied');
+    });
+  });
 }
