@@ -55,7 +55,7 @@ permission) to reschedule any alarms that were lost when the device restarted.
 
 ### Kill warning
 
-`setKillWarning(title, body)` posts a persistent, non-dismissable notification to discourage users
+`setKillWarning(title, body)` posts a persistent, non-dismissible notification to discourage users
 from force-quitting the app before an alarm fires. Call `clearKillWarning()` to remove it.
 
 ---
