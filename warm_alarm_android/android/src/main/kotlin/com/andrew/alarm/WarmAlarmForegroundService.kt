@@ -159,12 +159,13 @@ class WarmAlarmForegroundService : Service() {
     ) {
         val audio = schedule?.audio
         val fadeSteps = audio?.fadeSteps
+        val zeroStep = fadeSteps?.firstOrNull { it.timeMillis == 0L }
         val initialVolume =
-            if (fadeSteps != null) {
-                (fadeSteps.firstOrNull { it.timeMillis == 0L }?.volume?.toFloat() ?: 0f).coerceIn(0f, 1f)
-            } else {
-                audio?.volume?.toFloat()?.coerceIn(0f, 1f) ?: 1f
-            }
+            (
+                zeroStep?.volume?.toFloat()
+                    ?: audio?.volume?.toFloat()
+                    ?: 1f
+            ).coerceIn(0f, 1f)
         val hasFilePath = !audio?.filePath.isNullOrBlank()
         val hasAssetPath = !audio?.assetPath.isNullOrBlank()
 
