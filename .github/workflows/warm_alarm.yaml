@@ -38,6 +38,8 @@ jobs:
 
   pana:
     uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/pana.yml@v1
+    with:
+      working_directory: warm_alarm
 
   android:
     runs-on: macos-latest
