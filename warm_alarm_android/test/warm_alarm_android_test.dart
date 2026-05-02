@@ -753,4 +753,128 @@ void main() {
       verify(api.clearKillWarning).called(1);
     });
   });
+
+  group('WarmAlarmAndroid coverage gaps', () {
+    test('scheduleAlarm with recurrence passes weekdays to wire', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      final captured = <WarmAlarmScheduleWire>[];
+      when(() => api.scheduleAlarm(any())).thenAnswer((inv) async {
+        captured.add(inv.positionalArguments[0] as WarmAlarmScheduleWire);
+        return WarmAlarmScheduleResultWire(
+          alarmId: 10,
+          readiness: WarmAlarmReadinessWire(
+            level: WarmAlarmReadinessLevelWire.ready,
+            reasons: <WarmAlarmReadinessReasonWire>[],
+          ),
+        );
+      });
+      await platform.scheduleAlarm(
+        WarmAlarmSchedule(
+          id: 10,
+          scheduledAt: DateTime(2026, 5, 1, 7),
+          notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+          audio: const WarmAlarmAudio(),
+          recurrence: const WarmAlarmRecurrence(weekdays: [1, 3, 5]),
+        ),
+      );
+      expect(captured.single.recurrence!.weekdays, [1, 3, 5]);
+    });
+
+    test('getScheduledAlarms maps snapshot audio with fadeSteps', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      final now = DateTime.now().millisecondsSinceEpoch;
+      when(api.getScheduledAlarms).thenAnswer(
+        (_) async => <WarmAlarmSnapshotWire>[
+          WarmAlarmSnapshotWire(
+            id: 20,
+            scheduledAtMillis: now,
+            notification: WarmAlarmNotificationWire(
+              title: 'T',
+              body: 'B',
+              keepNotificationAfterAlarmEnds: false,
+            ),
+            audio: WarmAlarmAudioWire(
+              loop: false,
+              vibrate: false,
+              volumeEnforced: true,
+              fadeSteps: <WarmAlarmVolumeFadeStepWire>[
+                WarmAlarmVolumeFadeStepWire(timeMillis: 0, volume: 0.2),
+                WarmAlarmVolumeFadeStepWire(timeMillis: 5000, volume: 1.0),
+              ],
+            ),
+          ),
+        ],
+      );
+      final snapshots = await platform.getScheduledAlarms();
+      expect(snapshots.single.audio.fadeSteps, hasLength(2));
+      expect(snapshots.single.audio.fadeSteps!.first.volume, 0.2);
+      expect(
+        snapshots.single.audio.fadeSteps!.last.time,
+        const Duration(seconds: 5),
+      );
+    });
+
+    test('emitEvent maps failed with platformInternalError code', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      final emitted = <WarmAlarmEvent>[];
+      final sub = platform.events.listen(emitted.add);
+      await platform.emitEvent(
+        WarmAlarmEventWire(
+          alarmId: 99,
+          type: WarmAlarmEventTypeWire.failed,
+          occurredAtMillis: DateTime.now().millisecondsSinceEpoch,
+          failure: WarmAlarmFailureWire(
+            code: WarmAlarmFailureCodeWire.platformInternalError,
+          ),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        (emitted.single as WarmAlarmFailed).failure.code,
+        WarmAlarmFailureCode.platformInternalError,
+      );
+      await sub.cancel();
+    });
+
+    test(
+      'getScheduledAlarms maps snapshot with wakeCheck retriggerDelayMillis',
+      () async {
+        final api = _MockWarmAlarmApi();
+        final platform = WarmAlarmAndroid(api: api);
+        final now = DateTime.now().millisecondsSinceEpoch;
+        when(api.getScheduledAlarms).thenAnswer(
+          (_) async => <WarmAlarmSnapshotWire>[
+            WarmAlarmSnapshotWire(
+              id: 30,
+              scheduledAtMillis: now,
+              notification: WarmAlarmNotificationWire(
+                title: 'T',
+                body: 'B',
+                keepNotificationAfterAlarmEnds: false,
+              ),
+              audio: WarmAlarmAudioWire(
+                loop: false,
+                vibrate: false,
+                volumeEnforced: false,
+              ),
+              wakeCheck: WarmAlarmWakeCheckWire(
+                checkDelayMillis: 60000,
+                retriggerDelayMillis: 120000,
+                maxRetriggers: 3,
+              ),
+            ),
+          ],
+        );
+        final snapshots = await platform.getScheduledAlarms();
+        expect(
+          snapshots.single.wakeCheck!.retriggerDelay,
+          const Duration(minutes: 2),
+        );
+        expect(snapshots.single.wakeCheck!.maxRetriggers, 3);
+      },
+    );
+  });
 }
