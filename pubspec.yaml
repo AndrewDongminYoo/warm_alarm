@@ -42,7 +42,7 @@ melos:
       description: Build all generated files for Dart & Flutter packages in this project.
 
     test:
-      run: melos exec --dir-exists=test --fail-fast -- "flutter test --test-randomize-ordering-seed random"
+      run: melos exec --dir-exists=test --fail-fast -- "flutter test --coverage --test-randomize-ordering-seed random"
       description: Run Flutter tests for a specific package in this project.
 
     test:ci:
