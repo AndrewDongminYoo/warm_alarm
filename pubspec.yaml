@@ -2,6 +2,7 @@ name: warm_alarm_root
 publish_to: none
 environment:
   sdk: ">=3.10.0 <4.0.0"
+  flutter: ">=3.18.0-18.0.pre.54"
 workspace:
   - warm_alarm
   - warm_alarm/example
