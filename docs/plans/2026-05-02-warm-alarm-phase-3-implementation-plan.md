@@ -261,7 +261,6 @@ so the warning is less critical but still available.
 
 ## Definition of Done
 
-```
 □ WarmAlarmPlatform exposes isRinging({int? id}) and setKillWarning/clearKillWarning
 □ WarmAlarmSchedule, WarmAlarmSnapshot, and relevant WarmAlarmEvent subtypes carry payload
 □ WarmAlarmSnapshot returns full schedule data (reconstructable from getScheduledAlarms())
@@ -273,4 +272,3 @@ so the warning is less critical but still available.
 □ flutter build apk --debug passes
 □ flutter build ios --no-codesign passes
 □ flutter build macos passes
-```

@@ -132,24 +132,42 @@ class WarmAlarmNotificationWire {
   const WarmAlarmNotificationWire({
     required this.title,
     required this.body,
+    required this.keepNotificationAfterAlarmEnds,
     this.stopActionTitle,
     this.snoozeActionTitle,
+    this.androidIcon,
+    this.androidIconColor,
   });
 
   final String title;
   final String body;
   final String? stopActionTitle;
   final String? snoozeActionTitle;
+  final String? androidIcon;
+  final int? androidIconColor;
+  final bool keepNotificationAfterAlarmEnds;
+}
+
+class WarmAlarmVolumeFadeStepWire {
+  const WarmAlarmVolumeFadeStepWire({
+    required this.timeMillis,
+    required this.volume,
+  });
+
+  final int timeMillis;
+  final double volume;
 }
 
 class WarmAlarmAudioWire {
   const WarmAlarmAudioWire({
     required this.loop,
     required this.vibrate,
+    required this.volumeEnforced,
     this.filePath,
     this.assetPath,
     this.volume,
     this.fadeInDurationMillis,
+    this.fadeSteps,
   });
 
   final String? filePath;
@@ -158,6 +176,8 @@ class WarmAlarmAudioWire {
   final double? volume;
   final int? fadeInDurationMillis;
   final bool vibrate;
+  final bool volumeEnforced;
+  final List<WarmAlarmVolumeFadeStepWire>? fadeSteps;
 }
 
 class WarmAlarmRecurrenceWire {
@@ -197,6 +217,7 @@ class WarmAlarmScheduleWire {
     this.recurrence,
     this.snooze,
     this.wakeCheck,
+    this.payload,
   });
 
   final int id;
@@ -206,16 +227,29 @@ class WarmAlarmScheduleWire {
   final WarmAlarmRecurrenceWire? recurrence;
   final WarmAlarmSnoozeWire? snooze;
   final WarmAlarmWakeCheckWire? wakeCheck;
+  final String? payload;
 }
 
 class WarmAlarmSnapshotWire {
   const WarmAlarmSnapshotWire({
     required this.id,
     required this.scheduledAtMillis,
+    required this.notification,
+    required this.audio,
+    this.recurrence,
+    this.snooze,
+    this.wakeCheck,
+    this.payload,
   });
 
   final int id;
   final int scheduledAtMillis;
+  final WarmAlarmNotificationWire notification;
+  final WarmAlarmAudioWire audio;
+  final WarmAlarmRecurrenceWire? recurrence;
+  final WarmAlarmSnoozeWire? snooze;
+  final WarmAlarmWakeCheckWire? wakeCheck;
+  final String? payload;
 }
 
 class WarmAlarmEventWire {
@@ -225,6 +259,7 @@ class WarmAlarmEventWire {
     required this.occurredAtMillis,
     this.snoozeDurationMillis,
     this.failure,
+    this.payload,
   });
 
   final int alarmId;
@@ -232,6 +267,7 @@ class WarmAlarmEventWire {
   final int occurredAtMillis;
   final int? snoozeDurationMillis;
   final WarmAlarmFailureWire? failure;
+  final String? payload;
 }
 
 @HostApi()
@@ -256,6 +292,15 @@ abstract class WarmAlarmApi {
 
   @async
   List<WarmAlarmSnapshotWire> getScheduledAlarms();
+
+  @async
+  bool isRinging(int? alarmId);
+
+  @async
+  void setKillWarning(String title, String body);
+
+  @async
+  void clearKillWarning();
 }
 
 @FlutterApi()

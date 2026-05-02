@@ -44,6 +44,18 @@ class WarmAlarmMock extends WarmAlarmPlatform {
   Future<List<WarmAlarmSnapshot>> getScheduledAlarms() async => const <WarmAlarmSnapshot>[];
 
   @override
+  Future<bool> isRinging({int? id}) async => false;
+
+  @override
+  Future<void> setKillWarning({
+    required String title,
+    required String body,
+  }) async {}
+
+  @override
+  Future<void> clearKillWarning() async {}
+
+  @override
   Future<WarmAlarmScheduleResult> scheduleAlarm(
     WarmAlarmSchedule schedule,
   ) async => const WarmAlarmScheduleResult(
@@ -148,6 +160,66 @@ void main() {
     expect(
       await WarmAlarmPlatform.instance.getReadiness(),
       isA<WarmAlarmReadiness>(),
+    );
+  });
+
+  group('A1+N1+W1 models', () {
+    test('WarmAlarmVolumeFadeStep constructs with time and volume', () {
+      const step = WarmAlarmVolumeFadeStep(
+        time: Duration(seconds: 3),
+        volume: 0.5,
+      );
+      expect(step.time, const Duration(seconds: 3));
+      expect(step.volume, 0.5);
+    });
+
+    test('WarmAlarmAudio accepts fadeSteps and volumeEnforced', () {
+      const audio = WarmAlarmAudio(
+        volumeEnforced: true,
+        fadeSteps: <WarmAlarmVolumeFadeStep>[
+          WarmAlarmVolumeFadeStep(time: Duration.zero, volume: 0.2),
+          WarmAlarmVolumeFadeStep(time: Duration(seconds: 5), volume: 1),
+        ],
+      );
+      expect(audio.volumeEnforced, isTrue);
+      expect(audio.fadeSteps, hasLength(2));
+      expect(audio.fadeSteps!.first.volume, 0.2);
+      expect(audio.fadeSteps!.last.time, const Duration(seconds: 5));
+    });
+
+    test(
+      'WarmAlarmNotification accepts androidIcon, androidIconColor, keepNotificationAfterAlarmEnds',
+      () {
+        const notif = WarmAlarmNotification(
+          title: 'T',
+          body: 'B',
+          androidIcon: 'ic_alarm_custom',
+          androidIconColor: 0xFFFF0000,
+          keepNotificationAfterAlarmEnds: true,
+        );
+        expect(notif.androidIcon, 'ic_alarm_custom');
+        expect(notif.androidIconColor, 0xFFFF0000);
+        expect(notif.keepNotificationAfterAlarmEnds, isTrue);
+      },
+    );
+
+    test(
+      'setKillWarning and clearKillWarning complete without error',
+      () async {
+        final platform = WarmAlarmMock();
+        WarmAlarmPlatform.instance = platform;
+        await expectLater(
+          WarmAlarmPlatform.instance.setKillWarning(
+            title: 'App killed',
+            body: 'Alarm interrupted',
+          ),
+          completes,
+        );
+        await expectLater(
+          WarmAlarmPlatform.instance.clearKillWarning(),
+          completes,
+        );
+      },
     );
   });
 }

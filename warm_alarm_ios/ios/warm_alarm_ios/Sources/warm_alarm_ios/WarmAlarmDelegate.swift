@@ -11,6 +11,9 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
     private let eventsApi: WarmAlarmEventsApi
     private var audioPlayer: AVAudioPlayer?
+    private(set) var currentlyPlayingAlarmId: Int64?
+    private var fadeWorkItems: [DispatchWorkItem] = []
+    private var volumeEnforcerTimer: Timer?
 
     init(eventsApi: WarmAlarmEventsApi) {
         self.eventsApi = eventsApi
@@ -29,8 +32,9 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             return
         }
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
-        startAudio(for: schedule)
-        emitEvent(WarmAlarmEventWire(alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis()))
+        startAudio(alarmId: alarmId, for: schedule)
+        emitEvent(WarmAlarmEventWire(
+            alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis(), payload: schedule?.payload))
         completionHandler([.alert])
     }
 
@@ -50,8 +54,9 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             handleSnooze(alarmId: alarmId)
         case UNNotificationDefaultActionIdentifier:
             let schedule = WarmAlarmStore.shared.load(id: alarmId)
-            startAudio(for: schedule)
-            emitEvent(WarmAlarmEventWire(alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis()))
+            startAudio(alarmId: alarmId, for: schedule)
+            emitEvent(WarmAlarmEventWire(
+                alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis(), payload: schedule?.payload))
         default:
             break
         }
@@ -60,14 +65,22 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     // MARK: - Actions
 
     func handleStop(alarmId: Int64) {
+        let schedule = WarmAlarmStore.shared.load(id: alarmId)
         stopAudio()
         WarmAlarmStore.shared.remove(id: alarmId)
-        emitEvent(WarmAlarmEventWire(alarmId: alarmId, type: .stopped, occurredAtMillis: nowMillis()))
+        if schedule?.keepNotificationAfterAlarmEnds != true {
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [String(alarmId)])
+        }
+        emitEvent(WarmAlarmEventWire(
+            alarmId: alarmId, type: .stopped, occurredAtMillis: nowMillis(), payload: schedule?.payload))
     }
 
     func handleSnooze(alarmId: Int64) {
         stopAudio()
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
+        if schedule?.keepNotificationAfterAlarmEnds != true {
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [String(alarmId)])
+        }
         let snoozeDurationMillis = schedule?.snoozeDurationMillis ?? (5 * 60 * 1000)
         let fireAt = nowMillis() + snoozeDurationMillis
         reschedule(alarmId: alarmId, fireAtMillis: fireAt, existing: schedule)
@@ -75,7 +88,8 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             alarmId: alarmId,
             type: .snoozed,
             occurredAtMillis: nowMillis(),
-            snoozeDurationMillis: snoozeDurationMillis
+            snoozeDurationMillis: snoozeDurationMillis,
+            payload: schedule?.payload
         ))
     }
 
@@ -122,7 +136,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
     // MARK: - Audio
 
-    private func startAudio(for schedule: WarmAlarmScheduleData?) {
+    private func startAudio(alarmId: Int64, for schedule: WarmAlarmScheduleData?) {
         configureAudioSession()
         let player: AVAudioPlayer?
         if let path = schedule?.filePath, !path.isEmpty {
@@ -134,15 +148,47 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             player = nil
         }
         if let p = player {
+            let steps = schedule?.fadeSteps
+            if let first = steps?.first, first.timeMillis == 0 {
+                p.volume = max(0.0, min(1.0, Float(first.volume)))
+            } else if let v = schedule?.volume {
+                p.volume = max(0.0, min(1.0, Float(v)))
+            } else {
+                p.volume = 1.0
+            }
             p.numberOfLoops = (schedule?.loop ?? true) ? -1 : 0
             p.play()
             audioPlayer = p
+            currentlyPlayingAlarmId = alarmId
+            if let steps = steps { applyFadeSteps(steps, to: p) }
+            if schedule?.volumeEnforced == true { startVolumeEnforcer(for: p) }
+        }
+    }
+
+    private func applyFadeSteps(_ steps: [FadeStep], to player: AVAudioPlayer) {
+        for step in steps {
+            guard step.timeMillis > 0 else { continue }
+            let vol = max(0.0, min(1.0, Float(step.volume)))
+            let item = DispatchWorkItem { [weak player] in player?.volume = vol }
+            fadeWorkItems.append(item)
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(step.timeMillis) / 1000.0, execute: item)
+        }
+    }
+
+    private func startVolumeEnforcer(for player: AVAudioPlayer) {
+        volumeEnforcerTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak player] _ in
+            player?.volume = 1.0
         }
     }
 
     private func stopAudio() {
+        fadeWorkItems.forEach { $0.cancel() }
+        fadeWorkItems = []
+        volumeEnforcerTimer?.invalidate()
+        volumeEnforcerTimer = nil
         audioPlayer?.stop()
         audioPlayer = nil
+        currentlyPlayingAlarmId = nil
         deactivateAudioSession()
     }
 
@@ -168,7 +214,14 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             notificationTitle: existing.notificationTitle, notificationBody: existing.notificationBody,
             stopActionTitle: existing.stopActionTitle, snoozeActionTitle: existing.snoozeActionTitle,
             filePath: existing.filePath, assetPath: existing.assetPath,
-            loop: existing.loop, snoozeDurationMillis: existing.snoozeDurationMillis
+            loop: existing.loop, volume: existing.volume, vibrate: existing.vibrate,
+            fadeInDurationMillis: existing.fadeInDurationMillis,
+            recurrenceWeekdays: existing.recurrenceWeekdays,
+            snoozeDurationMillis: existing.snoozeDurationMillis,
+            payload: existing.payload,
+            volumeEnforced: existing.volumeEnforced,
+            fadeSteps: existing.fadeSteps,
+            keepNotificationAfterAlarmEnds: existing.keepNotificationAfterAlarmEnds
         )
         WarmAlarmStore.shared.save(updated)
         let content = makeContent(from: updated)

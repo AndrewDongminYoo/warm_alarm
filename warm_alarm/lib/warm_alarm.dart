@@ -22,4 +22,13 @@ class WarmAlarm {
   static Future<List<WarmAlarmSnapshot>> getScheduledAlarms() => _platform.getScheduledAlarms();
 
   static Stream<WarmAlarmEvent> get events => _platform.events;
+
+  static Future<bool> isRinging({int? id}) => _platform.isRinging(id: id);
+
+  static Future<void> setKillWarning({
+    required String title,
+    required String body,
+  }) => _platform.setKillWarning(title: title, body: body);
+
+  static Future<void> clearKillWarning() => _platform.clearKillWarning();
 }

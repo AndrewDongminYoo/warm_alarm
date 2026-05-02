@@ -62,7 +62,6 @@ Pigeon `FlutterApi` (`WarmAlarmEventsApi`), `mocktail` (Dart tests)
 
 ## Definition of Done (verified)
 
-```
 ✓ WarmAlarmEventsApi wired in Dart for iOS and macOS (deferred setUp pattern)
 ✓ iOS: WarmAlarmStore.swift (UserDefaults + Codable)
 ✓ iOS: WarmAlarmDelegate.swift (UNUserNotificationCenterDelegate + AVAudioPlayer + AVAudioSession)
@@ -75,7 +74,6 @@ Pigeon `FlutterApi` (`WarmAlarmEventsApi`), `mocktail` (Dart tests)
 ✓ melos run test passes (all 5 packages — 14 Dart tests)
 ✓ flutter build ios --simulator --no-codesign passes
 ✓ flutter build macos --debug passes
-```
 
 ## Not in Phase 1C Scope (deferred)
 

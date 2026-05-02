@@ -1,5 +1,10 @@
 import Foundation
 
+struct FadeStep: Codable {
+    let timeMillis: Int64
+    let volume: Double
+}
+
 struct WarmAlarmScheduleData: Codable {
     let id: Int64
     let scheduledAtMillis: Int64
@@ -10,10 +15,52 @@ struct WarmAlarmScheduleData: Codable {
     let filePath: String?
     let assetPath: String?
     let loop: Bool
+    let volume: Double?
+    let vibrate: Bool
+    let fadeInDurationMillis: Int64?
+    let recurrenceWeekdays: [Int64]?
     let snoozeDurationMillis: Int64?
+    let payload: String?
+    let volumeEnforced: Bool?
+    let fadeSteps: [FadeStep]?
+    let keepNotificationAfterAlarmEnds: Bool?
+
+    // Explicit CodingKeys lets the synthesized encode(to:) work while we
+    // override init(from:) in the extension below to add migration defaults.
+    private enum CodingKeys: String, CodingKey {
+        case id, scheduledAtMillis, notificationTitle, notificationBody
+        case stopActionTitle, snoozeActionTitle, filePath, assetPath
+        case loop, volume, vibrate, fadeInDurationMillis
+        case recurrenceWeekdays, snoozeDurationMillis, payload
+        case volumeEnforced, fadeSteps, keepNotificationAfterAlarmEnds
+    }
 }
 
 extension WarmAlarmScheduleData {
+    // Custom decoder provides defaults for fields absent in pre-Phase-3 payloads.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int64.self, forKey: .id)
+        scheduledAtMillis = try c.decode(Int64.self, forKey: .scheduledAtMillis)
+        notificationTitle = try c.decode(String.self, forKey: .notificationTitle)
+        notificationBody = try c.decode(String.self, forKey: .notificationBody)
+        stopActionTitle = try c.decodeIfPresent(String.self, forKey: .stopActionTitle)
+        snoozeActionTitle = try c.decodeIfPresent(String.self, forKey: .snoozeActionTitle)
+        filePath = try c.decodeIfPresent(String.self, forKey: .filePath)
+        assetPath = try c.decodeIfPresent(String.self, forKey: .assetPath)
+        loop = try c.decodeIfPresent(Bool.self, forKey: .loop) ?? true
+        volume = try c.decodeIfPresent(Double.self, forKey: .volume)
+        vibrate = try c.decodeIfPresent(Bool.self, forKey: .vibrate) ?? false
+        fadeInDurationMillis = try c.decodeIfPresent(Int64.self, forKey: .fadeInDurationMillis)
+        recurrenceWeekdays = try c.decodeIfPresent([Int64].self, forKey: .recurrenceWeekdays)
+        snoozeDurationMillis = try c.decodeIfPresent(Int64.self, forKey: .snoozeDurationMillis)
+        payload = try c.decodeIfPresent(String.self, forKey: .payload)
+        volumeEnforced = try c.decodeIfPresent(Bool.self, forKey: .volumeEnforced)
+        fadeSteps = try c.decodeIfPresent([FadeStep].self, forKey: .fadeSteps)
+        keepNotificationAfterAlarmEnds = try c.decodeIfPresent(
+            Bool.self, forKey: .keepNotificationAfterAlarmEnds)
+    }
+
     static func from(wire: WarmAlarmScheduleWire) -> WarmAlarmScheduleData {
         WarmAlarmScheduleData(
             id: wire.id,
@@ -25,7 +72,15 @@ extension WarmAlarmScheduleData {
             filePath: wire.audio.filePath,
             assetPath: wire.audio.assetPath,
             loop: wire.audio.loop,
-            snoozeDurationMillis: wire.snooze?.durationMillis
+            volume: wire.audio.volume,
+            vibrate: wire.audio.vibrate,
+            fadeInDurationMillis: wire.audio.fadeInDurationMillis,
+            recurrenceWeekdays: wire.recurrence?.weekdays,
+            snoozeDurationMillis: wire.snooze?.durationMillis,
+            payload: wire.payload,
+            volumeEnforced: wire.audio.volumeEnforced,
+            fadeSteps: wire.audio.fadeSteps?.map { FadeStep(timeMillis: $0.timeMillis, volume: $0.volume) },
+            keepNotificationAfterAlarmEnds: wire.notification.keepNotificationAfterAlarmEnds
         )
     }
 }

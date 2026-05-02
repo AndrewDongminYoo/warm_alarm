@@ -59,6 +59,15 @@ class WarmAlarmIOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
       (await api.getScheduledAlarms()).map(_snapshotFromWire).toList(growable: false);
 
   @override
+  Future<bool> isRinging({int? id}) => api.isRinging(id);
+
+  @override
+  Future<void> setKillWarning({required String title, required String body}) => api.setKillWarning(title, body);
+
+  @override
+  Future<void> clearKillWarning() => api.clearKillWarning();
+
+  @override
   Future<WarmAlarmScheduleResult> scheduleAlarm(
     WarmAlarmSchedule schedule,
   ) async => _scheduleResultFromWire(
@@ -79,6 +88,35 @@ WarmAlarmAudioWire _audioToWire(WarmAlarmAudio audio) {
     volume: audio.volume,
     fadeInDurationMillis: audio.fadeInDuration?.inMilliseconds,
     vibrate: audio.vibrate,
+    volumeEnforced: audio.volumeEnforced,
+    fadeSteps: audio.fadeSteps?.map(_fadeStepToWire).toList(growable: false),
+  );
+}
+
+WarmAlarmAudio _audioFromWire(WarmAlarmAudioWire wire) {
+  return WarmAlarmAudio(
+    filePath: wire.filePath,
+    assetPath: wire.assetPath,
+    loop: wire.loop,
+    volume: wire.volume,
+    fadeInDuration: wire.fadeInDurationMillis == null ? null : Duration(milliseconds: wire.fadeInDurationMillis!),
+    vibrate: wire.vibrate,
+    volumeEnforced: wire.volumeEnforced,
+    fadeSteps: wire.fadeSteps?.map(_fadeStepFromWire).toList(growable: false),
+  );
+}
+
+WarmAlarmVolumeFadeStepWire _fadeStepToWire(WarmAlarmVolumeFadeStep step) {
+  return WarmAlarmVolumeFadeStepWire(
+    timeMillis: step.time.inMilliseconds,
+    volume: step.volume,
+  );
+}
+
+WarmAlarmVolumeFadeStep _fadeStepFromWire(WarmAlarmVolumeFadeStepWire wire) {
+  return WarmAlarmVolumeFadeStep(
+    time: Duration(milliseconds: wire.timeMillis),
+    volume: wire.volume,
   );
 }
 
@@ -137,6 +175,21 @@ WarmAlarmNotificationWire _notificationToWire(
     body: notification.body,
     stopActionTitle: notification.stopActionTitle,
     snoozeActionTitle: notification.snoozeActionTitle,
+    androidIcon: notification.androidIcon,
+    androidIconColor: notification.androidIconColor,
+    keepNotificationAfterAlarmEnds: notification.keepNotificationAfterAlarmEnds,
+  );
+}
+
+WarmAlarmNotification _notificationFromWire(WarmAlarmNotificationWire wire) {
+  return WarmAlarmNotification(
+    title: wire.title,
+    body: wire.body,
+    stopActionTitle: wire.stopActionTitle,
+    snoozeActionTitle: wire.snoozeActionTitle,
+    androidIcon: wire.androidIcon,
+    androidIconColor: wire.androidIconColor,
+    keepNotificationAfterAlarmEnds: wire.keepNotificationAfterAlarmEnds,
   );
 }
 
@@ -221,6 +274,7 @@ WarmAlarmScheduleWire _scheduleToWire(WarmAlarmSchedule schedule) {
     audio: _audioToWire(schedule.audio),
     recurrence: _recurrenceToWire(schedule.recurrence),
     snooze: _snoozeToWire(schedule.snooze),
+    payload: schedule.payload,
   );
 }
 
@@ -228,6 +282,15 @@ WarmAlarmSnapshot _snapshotFromWire(WarmAlarmSnapshotWire wire) {
   return WarmAlarmSnapshot(
     id: wire.id,
     scheduledAt: DateTime.fromMillisecondsSinceEpoch(wire.scheduledAtMillis),
+    notification: _notificationFromWire(wire.notification),
+    audio: _audioFromWire(wire.audio),
+    recurrence: wire.recurrence == null ? null : WarmAlarmRecurrence(weekdays: wire.recurrence!.weekdays),
+    snooze: wire.snooze == null
+        ? null
+        : WarmAlarmSnooze(
+            duration: Duration(milliseconds: wire.snooze!.durationMillis),
+          ),
+    payload: wire.payload,
   );
 }
 
@@ -279,10 +342,12 @@ WarmAlarmEvent _eventFromWire(WarmAlarmEventWire wire) {
     WarmAlarmEventTypeWire.fired => WarmAlarmFired(
       alarmId: alarmId,
       occurredAt: occurredAt,
+      payload: wire.payload,
     ),
     WarmAlarmEventTypeWire.stopped => WarmAlarmStopped(
       alarmId: alarmId,
       occurredAt: occurredAt,
+      payload: wire.payload,
     ),
     WarmAlarmEventTypeWire.snoozed => WarmAlarmSnoozed(
       alarmId: alarmId,
@@ -290,6 +355,7 @@ WarmAlarmEvent _eventFromWire(WarmAlarmEventWire wire) {
       duration: Duration(
         milliseconds: _requireSnoozeDuration(wire.snoozeDurationMillis),
       ),
+      payload: wire.payload,
     ),
     WarmAlarmEventTypeWire.failed => WarmAlarmFailed(
       alarmId: alarmId,

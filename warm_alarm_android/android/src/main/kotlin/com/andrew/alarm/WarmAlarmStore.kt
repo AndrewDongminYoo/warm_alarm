@@ -91,6 +91,9 @@ internal object WarmAlarmStore {
                     put("body", s.notification.body)
                     s.notification.stopActionTitle?.let { put("stopActionTitle", it) }
                     s.notification.snoozeActionTitle?.let { put("snoozeActionTitle", it) }
+                    s.notification.androidIcon?.let { put("androidIcon", it) }
+                    s.notification.androidIconColor?.let { put("androidIconColor", it) }
+                    put("keepNotificationAfterAlarmEnds", s.notification.keepNotificationAfterAlarmEnds)
                 },
             )
             put(
@@ -102,6 +105,22 @@ internal object WarmAlarmStore {
                     s.audio.volume?.let { put("volume", it) }
                     s.audio.fadeInDurationMillis?.let { put("fadeInDurationMillis", it) }
                     put("vibrate", s.audio.vibrate)
+                    put("volumeEnforced", s.audio.volumeEnforced)
+                    s.audio.fadeSteps?.let { steps ->
+                        put(
+                            "fadeSteps",
+                            JSONArray().also { arr ->
+                                steps.forEach { step ->
+                                    arr.put(
+                                        JSONObject().apply {
+                                            put("timeMillis", step.timeMillis)
+                                            put("volume", step.volume)
+                                        },
+                                    )
+                                }
+                            },
+                        )
+                    }
                 },
             )
             s.snooze?.let { put("snooze", JSONObject().apply { put("durationMillis", it.durationMillis) }) }
@@ -115,6 +134,7 @@ internal object WarmAlarmStore {
                     },
                 )
             }
+            s.payload?.let { put("payload", it) }
         }
 
     private fun decode(obj: JSONObject): WarmAlarmScheduleWire {
@@ -129,6 +149,9 @@ internal object WarmAlarmStore {
                     body = n.getString("body"),
                     stopActionTitle = n.optString("stopActionTitle").takeIf { it.isNotEmpty() },
                     snoozeActionTitle = n.optString("snoozeActionTitle").takeIf { it.isNotEmpty() },
+                    androidIcon = n.optString("androidIcon").takeIf { it.isNotEmpty() },
+                    androidIconColor = if (n.has("androidIconColor")) n.getLong("androidIconColor") else null,
+                    keepNotificationAfterAlarmEnds = n.optBoolean("keepNotificationAfterAlarmEnds", false),
                 ),
             audio =
                 WarmAlarmAudioWire(
@@ -138,6 +161,20 @@ internal object WarmAlarmStore {
                     volume = if (a.has("volume")) a.getDouble("volume") else null,
                     fadeInDurationMillis = if (a.has("fadeInDurationMillis")) a.getLong("fadeInDurationMillis") else null,
                     vibrate = a.getBoolean("vibrate"),
+                    volumeEnforced = a.optBoolean("volumeEnforced", false),
+                    fadeSteps =
+                        if (a.has("fadeSteps")) {
+                            val arr = a.getJSONArray("fadeSteps")
+                            (0 until arr.length()).map { i ->
+                                val fs = arr.getJSONObject(i)
+                                WarmAlarmVolumeFadeStepWire(
+                                    timeMillis = fs.getLong("timeMillis"),
+                                    volume = fs.getDouble("volume"),
+                                )
+                            }
+                        } else {
+                            null
+                        },
                 ),
             snooze =
                 if (obj.has("snooze")) {
@@ -156,6 +193,7 @@ internal object WarmAlarmStore {
                 } else {
                     null
                 },
+            payload = obj.optString("payload").takeIf { it.isNotEmpty() },
         )
     }
 }

@@ -27,6 +27,7 @@ final class WarmAlarmSchedule {
     this.recurrence,
     this.snooze,
     this.wakeCheck,
+    this.payload,
   });
 
   final int id;
@@ -36,4 +37,5 @@ final class WarmAlarmSchedule {
   final WarmAlarmRecurrence? recurrence;
   final WarmAlarmSnooze? snooze;
   final WarmAlarmWakeCheck? wakeCheck;
+  final String? payload;
 }

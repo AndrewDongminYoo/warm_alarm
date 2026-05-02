@@ -47,6 +47,18 @@ class MethodChannelWarmAlarm extends WarmAlarmPlatform {
   Future<List<WarmAlarmSnapshot>> getScheduledAlarms() async => const <WarmAlarmSnapshot>[];
 
   @override
+  Future<bool> isRinging({int? id}) async => false;
+
+  @override
+  Future<void> setKillWarning({
+    required String title,
+    required String body,
+  }) async {}
+
+  @override
+  Future<void> clearKillWarning() async {}
+
+  @override
   Future<WarmAlarmScheduleResult> scheduleAlarm(
     WarmAlarmSchedule schedule,
   ) async => const WarmAlarmScheduleResult(

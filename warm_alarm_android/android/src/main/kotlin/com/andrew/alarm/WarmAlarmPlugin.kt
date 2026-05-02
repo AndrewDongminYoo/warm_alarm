@@ -125,9 +125,55 @@ class WarmAlarmPlugin :
     override fun getScheduledAlarms(callback: (Result<List<WarmAlarmSnapshotWire>>) -> Unit) {
         val snapshots =
             WarmAlarmStore.loadAll(context).values.map { s ->
-                WarmAlarmSnapshotWire(id = s.id, scheduledAtMillis = s.scheduledAtMillis)
+                WarmAlarmSnapshotWire(
+                    id = s.id,
+                    scheduledAtMillis = s.scheduledAtMillis,
+                    notification = s.notification,
+                    audio = s.audio,
+                    recurrence = s.recurrence,
+                    snooze = s.snooze,
+                    wakeCheck = s.wakeCheck,
+                    payload = s.payload,
+                )
             }
         callback(Result.success(snapshots))
+    }
+
+    override fun isRinging(
+        alarmId: Long?,
+        callback: (Result<Boolean>) -> Unit,
+    ) {
+        val ringing = WarmAlarmForegroundService.isRinging
+        val currentId = WarmAlarmForegroundService.currentAlarmId
+        callback(
+            Result.success(
+                if (alarmId == null) ringing else ringing && currentId == alarmId,
+            ),
+        )
+    }
+
+    override fun setKillWarning(
+        title: String,
+        body: String,
+        callback: (Result<Unit>) -> Unit,
+    ) {
+        context
+            .getSharedPreferences(KILL_WARNING_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString("title", title)
+            .putString("body", body)
+            .apply()
+        callback(Result.success(Unit))
+    }
+
+    override fun clearKillWarning(callback: (Result<Unit>) -> Unit) {
+        context
+            .getSharedPreferences(KILL_WARNING_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .remove("title")
+            .remove("body")
+            .apply()
+        callback(Result.success(Unit))
     }
 
     private fun currentPermissionState(): WarmAlarmPermissionStateWire {
@@ -189,6 +235,7 @@ class WarmAlarmPlugin :
     }
 
     companion object {
+        const val KILL_WARNING_PREFS = "warm_alarm_kill_warning"
         private var pluginInstance: WarmAlarmPlugin? = null
 
         fun emitEventFromBackground(event: WarmAlarmEventWire) {

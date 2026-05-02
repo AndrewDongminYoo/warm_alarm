@@ -1,11 +1,39 @@
 import Flutter
+import UIKit
 import UserNotifications
 
 public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     private let delegate: WarmAlarmDelegate
+    private static let killWarningNotifId = "warm_alarm_kill_warning_notif"
+    private var lifecycleObservers: [NSObjectProtocol] = []
 
     init(delegate: WarmAlarmDelegate) {
         self.delegate = delegate
+        super.init()
+        setupLifecycleObservers()
+    }
+
+    deinit {
+        lifecycleObservers.forEach { NotificationCenter.default.removeObserver($0) }
+    }
+
+    private func setupLifecycleObservers() {
+        let center = NotificationCenter.default
+        // Scene-based apps (iOS 13+, UIApplicationSceneManifest declared): UIKit routes
+        // foreground/background transitions through UISceneDelegate, not UIApplicationDelegate.
+        lifecycleObservers.append(center.addObserver(
+            forName: UIScene.willDeactivateNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.postKillWarningIfNeeded() })
+        lifecycleObservers.append(center.addObserver(
+            forName: UIScene.didActivateNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.cancelKillWarning() })
+        // Legacy apps without UIApplicationSceneManifest.
+        lifecycleObservers.append(center.addObserver(
+            forName: UIApplication.willResignActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.postKillWarningIfNeeded() })
+        lifecycleObservers.append(center.addObserver(
+            forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.cancelKillWarning() })
     }
 
     public static func register(with registrar: FlutterPluginRegistrar) {
@@ -104,9 +132,76 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     }
 
     func getScheduledAlarms(completion: @escaping (Result<[WarmAlarmSnapshotWire], Error>) -> Void) {
-        let snapshots = WarmAlarmStore.shared.loadAll().map { id, data in
-            WarmAlarmSnapshotWire(id: id, scheduledAtMillis: data.scheduledAtMillis)
+        let snapshots = WarmAlarmStore.shared.loadAll().map { _, data in
+            WarmAlarmSnapshotWire(
+                id: data.id,
+                scheduledAtMillis: data.scheduledAtMillis,
+                notification: WarmAlarmNotificationWire(
+                    title: data.notificationTitle,
+                    body: data.notificationBody,
+                    stopActionTitle: data.stopActionTitle,
+                    snoozeActionTitle: data.snoozeActionTitle,
+                    keepNotificationAfterAlarmEnds: data.keepNotificationAfterAlarmEnds ?? false
+                ),
+                audio: WarmAlarmAudioWire(
+                    filePath: data.filePath,
+                    assetPath: data.assetPath,
+                    loop: data.loop,
+                    volume: data.volume,
+                    fadeInDurationMillis: data.fadeInDurationMillis,
+                    vibrate: data.vibrate,
+                    volumeEnforced: data.volumeEnforced ?? false,
+                    fadeSteps: data.fadeSteps?.map {
+                        WarmAlarmVolumeFadeStepWire(timeMillis: $0.timeMillis, volume: $0.volume)
+                    }
+                ),
+                recurrence: data.recurrenceWeekdays.map { WarmAlarmRecurrenceWire(weekdays: $0) },
+                snooze: data.snoozeDurationMillis.map { WarmAlarmSnoozeWire(durationMillis: $0) },
+                payload: data.payload
+            )
         }
         completion(.success(snapshots))
+    }
+
+    func setKillWarning(
+        title: String, body: String, completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        UserDefaults.standard.setValue(["title": title, "body": body], forKey: "warm_alarm_kill_warning")
+        completion(.success(()))
+    }
+
+    func clearKillWarning(completion: @escaping (Result<Void, Error>) -> Void) {
+        UserDefaults.standard.removeObject(forKey: "warm_alarm_kill_warning")
+        completion(.success(()))
+    }
+
+    func isRinging(alarmId: Int64?, completion: @escaping (Result<Bool, Error>) -> Void) {
+        let playingId = delegate.currentlyPlayingAlarmId
+        if let id = alarmId {
+            completion(.success(playingId == id))
+        } else {
+            completion(.success(playingId != nil))
+        }
+    }
+
+    private func postKillWarningIfNeeded() {
+        guard delegate.currentlyPlayingAlarmId != nil,
+              let dict = UserDefaults.standard.dictionary(forKey: "warm_alarm_kill_warning"),
+              let title = dict["title"] as? String,
+              let body = dict["body"] as? String
+        else { return }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1.0, repeats: false)
+        let request = UNNotificationRequest(
+            identifier: WarmAlarmPlugin.killWarningNotifId, content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
+    }
+
+    private func cancelKillWarning() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(
+            withIdentifiers: [WarmAlarmPlugin.killWarningNotifId])
     }
 }

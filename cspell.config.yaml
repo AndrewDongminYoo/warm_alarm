@@ -19,6 +19,7 @@ allowsCompoundWords: true
 ignoreWords:
   - meta-data
   - datatype
+  - plaintext
 words:
   - Dongmin
   - fluttium

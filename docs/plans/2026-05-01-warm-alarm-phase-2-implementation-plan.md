@@ -12,7 +12,7 @@
 
 ## Wake-Check Event Flow (Android)
 
-```
+```log
 t=0      Alarm fires               → WarmAlarmFired
          User presses STOP         → WarmAlarmStopped
                                      (schedule check alarm at t+checkDelay)
@@ -130,12 +130,11 @@ t+check  Check alarm fires         → WarmAlarmWakeCheckShown
 
 ## Definition of Done
 
-```
 ✓ WarmAlarmWakeCheck public model in platform interface
 ✓ WarmAlarmSchedule.wakeCheck optional field
 ✓ WarmAlarmWakeCheckShown, WarmAlarmWakeCheckDismissed, WarmAlarmWakeCheckExpired, WarmAlarmRetriggered event types
 ✓ Android Pigeon: WarmAlarmWakeCheckWire + 4 new event type enum values
-✓ Android Dart: _wakeCheckToWire mapping + _eventFromWire new cases
+✓ Android Dart: \_wakeCheckToWire mapping + \_eventFromWire new cases
 ✓ Android: WarmAlarmStore persists wake-check config + retriggerCount
 ✓ Android: ForegroundService schedules wake-check alarm after STOP
 ✓ Android: WarmAlarmReceiver handles ACTION_WAKE_CHECK_FIRE (show notification + schedule retrigger)
@@ -143,7 +142,6 @@ t+check  Check alarm fires         → WarmAlarmWakeCheckShown
 ✓ Android: Retrigger fire emits WakeCheckExpired + Retriggered, increments retriggerCount
 ✓ melos run test passes (all 5 packages)
 ✓ flutter build apk --debug passes
-```
 
 ## Not in Phase 2 Scope (Phase 3+)
 

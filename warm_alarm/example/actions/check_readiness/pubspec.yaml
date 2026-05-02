@@ -1,9 +1,11 @@
 name: check_readiness
 description: A custom action for Fluttium.
 version: 0.1.0+1
+resolution: workspace
 
 environment:
-  sdk: ">=3.11.5 <4.0.0"
+  sdk: ">=3.10.0 <4.0.0"
+  flutter: ">=3.18.0-18.0.pre.54"
 
 dependencies:
   flutter:
