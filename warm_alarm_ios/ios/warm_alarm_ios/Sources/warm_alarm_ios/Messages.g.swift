@@ -1017,6 +1017,7 @@ class MessagesPigeonCodec: FlutterStandardMessageCodec, @unchecked Sendable {
 
 /// Generated protocol from Pigeon that represents a handler of messages from Flutter.
 protocol WarmAlarmApi {
+  func initialize(completion: @escaping (Result<Void, Error>) -> Void)
   func getCapabilities(completion: @escaping (Result<WarmAlarmCapabilitiesWire, Error>) -> Void)
   func getPermissionState(completion: @escaping (Result<WarmAlarmPermissionStateWire, Error>) -> Void)
   func getReadiness(completion: @escaping (Result<WarmAlarmReadinessWire, Error>) -> Void)
@@ -1035,6 +1036,21 @@ class WarmAlarmApiSetup {
   /// Sets up an instance of `WarmAlarmApi` to handle messages through the `binaryMessenger`.
   static func setUp(binaryMessenger: FlutterBinaryMessenger, api: WarmAlarmApi?, messageChannelSuffix: String = "") {
     let channelSuffix = messageChannelSuffix.count > 0 ? ".\(messageChannelSuffix)" : ""
+    let initializeChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.warm_alarm.WarmAlarmApi.initialize\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      initializeChannel.setMessageHandler { _, reply in
+        api.initialize { result in
+          switch result {
+          case .success:
+            reply(wrapResult(nil))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      initializeChannel.setMessageHandler(nil)
+    }
     let getCapabilitiesChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.warm_alarm.WarmAlarmApi.getCapabilities\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       getCapabilitiesChannel.setMessageHandler { _, reply in

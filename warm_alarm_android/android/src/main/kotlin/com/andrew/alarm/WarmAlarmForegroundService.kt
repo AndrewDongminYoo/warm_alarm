@@ -314,6 +314,27 @@ class WarmAlarmForegroundService : Service() {
         }
 
         schedule?.notification?.androidIconColor?.let { builder.setColor(it.toInt()) }
+
+        if (schedule?.androidFullScreenIntent != false) {
+            val launchIntent =
+                packageManager
+                    .getLaunchIntentForPackage(packageName)
+                    ?.apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        putExtra(EXTRA_ALARM_ID, alarmId)
+                    }
+            if (launchIntent != null) {
+                val fullScreenPendingIntent =
+                    PendingIntent.getActivity(
+                        this,
+                        alarmId.toInt(),
+                        launchIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    )
+                builder.setFullScreenIntent(fullScreenPendingIntent, true)
+            }
+        }
+
         return builder.build()
     }
 

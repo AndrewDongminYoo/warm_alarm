@@ -26,6 +26,16 @@
             </intent-filter>
         </receiver>
 
+        <receiver
+            android:name=".WarmAlarmBootReceiver"
+            android:directBootAware="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
         <service
             android:name=".WarmAlarmForegroundService"
             android:exported="false"

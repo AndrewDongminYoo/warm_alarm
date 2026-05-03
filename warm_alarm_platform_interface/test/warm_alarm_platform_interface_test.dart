@@ -7,6 +7,9 @@ class WarmAlarmMock extends WarmAlarmPlatform {
   final _events = StreamController<WarmAlarmEvent>.broadcast();
 
   @override
+  Future<void> init() async {}
+
+  @override
   Future<void> cancelAlarm(int id) async {}
 
   @override
@@ -16,21 +19,23 @@ class WarmAlarmMock extends WarmAlarmPlatform {
   Stream<WarmAlarmEvent> get events => _events.stream;
 
   @override
-  Future<WarmAlarmCapabilities> getCapabilities() async => const WarmAlarmCapabilities(
-    exactScheduling: WarmAlarmSupportStatus.supported,
-    notificationScheduling: WarmAlarmSupportStatus.supported,
-    backgroundAudioPlayback: WarmAlarmSupportStatus.limited,
-    fullScreenPresentation: WarmAlarmSupportStatus.unsupported,
-    wakeCheck: WarmAlarmSupportStatus.unsupported,
-    liveActivity: WarmAlarmSupportStatus.unsupported,
-  );
+  Future<WarmAlarmCapabilities> getCapabilities() async =>
+      const WarmAlarmCapabilities(
+        exactScheduling: WarmAlarmSupportStatus.supported,
+        notificationScheduling: WarmAlarmSupportStatus.supported,
+        backgroundAudioPlayback: WarmAlarmSupportStatus.limited,
+        fullScreenPresentation: WarmAlarmSupportStatus.unsupported,
+        wakeCheck: WarmAlarmSupportStatus.unsupported,
+        liveActivity: WarmAlarmSupportStatus.unsupported,
+      );
 
   @override
-  Future<WarmAlarmPermissionState> getPermissionState() async => const WarmAlarmPermissionState(
-    notificationsGranted: true,
-    exactAlarmGranted: false,
-    fullScreenIntentGranted: false,
-  );
+  Future<WarmAlarmPermissionState> getPermissionState() async =>
+      const WarmAlarmPermissionState(
+        notificationsGranted: true,
+        exactAlarmGranted: false,
+        fullScreenIntentGranted: false,
+      );
 
   @override
   Future<WarmAlarmReadiness> getReadiness() async => const WarmAlarmReadiness(
@@ -41,7 +46,8 @@ class WarmAlarmMock extends WarmAlarmPlatform {
   );
 
   @override
-  Future<List<WarmAlarmSnapshot>> getScheduledAlarms() async => const <WarmAlarmSnapshot>[];
+  Future<List<WarmAlarmSnapshot>> getScheduledAlarms() async =>
+      const <WarmAlarmSnapshot>[];
 
   @override
   Future<bool> isRinging({int? id}) async => false;
@@ -302,6 +308,58 @@ void main() {
       );
       expect(f.code, WarmAlarmFailureCode.permissionDenied);
       expect(f.message, 'denied');
+    });
+  });
+
+  group('Phase 4 models', () {
+    final at = DateTime(2026, 5, 3, 8);
+
+    test('WarmAlarmSchedule.androidFullScreenIntent defaults to true', () {
+      final schedule = WarmAlarmSchedule(
+        id: 1,
+        scheduledAt: at,
+        notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+        audio: const WarmAlarmAudio(),
+      );
+      expect(schedule.androidFullScreenIntent, isTrue);
+    });
+
+    test('WarmAlarmSchedule.androidFullScreenIntent can be set to false', () {
+      final schedule = WarmAlarmSchedule(
+        id: 2,
+        scheduledAt: at,
+        notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+        audio: const WarmAlarmAudio(),
+        androidFullScreenIntent: false,
+      );
+      expect(schedule.androidFullScreenIntent, isFalse);
+    });
+
+    test('WarmAlarmSnapshot.androidFullScreenIntent defaults to true', () {
+      final snap = WarmAlarmSnapshot(
+        id: 3,
+        scheduledAt: at,
+        notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+        audio: const WarmAlarmAudio(),
+      );
+      expect(snap.androidFullScreenIntent, isTrue);
+    });
+
+    test('WarmAlarmSnapshot.androidFullScreenIntent can be set to false', () {
+      final snap = WarmAlarmSnapshot(
+        id: 4,
+        scheduledAt: at,
+        notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+        audio: const WarmAlarmAudio(),
+        androidFullScreenIntent: false,
+      );
+      expect(snap.androidFullScreenIntent, isFalse);
+    });
+
+    test('WarmAlarmPlatform.init() completes without error', () async {
+      final platform = WarmAlarmMock();
+      WarmAlarmPlatform.instance = platform;
+      await expectLater(WarmAlarmPlatform.instance.init(), completes);
     });
   });
 }

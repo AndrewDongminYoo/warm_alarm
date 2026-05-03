@@ -28,6 +28,7 @@ final class WarmAlarmSchedule {
     this.snooze,
     this.wakeCheck,
     this.payload,
+    this.androidFullScreenIntent = true,
   });
 
   final int id;
@@ -38,4 +39,7 @@ final class WarmAlarmSchedule {
   final WarmAlarmSnooze? snooze;
   final WarmAlarmWakeCheck? wakeCheck;
   final String? payload;
+
+  /// Android only — whether to present as a full-screen intent notification.
+  final bool androidFullScreenIntent;
 }

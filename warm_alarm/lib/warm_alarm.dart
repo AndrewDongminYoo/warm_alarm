@@ -5,9 +5,13 @@ export 'package:warm_alarm_platform_interface/warm_alarm_platform_interface.dart
 class WarmAlarm {
   static WarmAlarmPlatform get _platform => WarmAlarmPlatform.instance;
 
-  static Future<WarmAlarmCapabilities> getCapabilities() => _platform.getCapabilities();
+  static Future<void> init() => _platform.init();
 
-  static Future<WarmAlarmPermissionState> getPermissionState() => _platform.getPermissionState();
+  static Future<WarmAlarmCapabilities> getCapabilities() =>
+      _platform.getCapabilities();
+
+  static Future<WarmAlarmPermissionState> getPermissionState() =>
+      _platform.getPermissionState();
 
   static Future<WarmAlarmReadiness> getReadiness() => _platform.getReadiness();
 
@@ -19,7 +23,8 @@ class WarmAlarm {
 
   static Future<void> cancelAllAlarms() => _platform.cancelAllAlarms();
 
-  static Future<List<WarmAlarmSnapshot>> getScheduledAlarms() => _platform.getScheduledAlarms();
+  static Future<List<WarmAlarmSnapshot>> getScheduledAlarms() =>
+      _platform.getScheduledAlarms();
 
   static Stream<WarmAlarmEvent> get events => _platform.events;
 
@@ -31,4 +36,18 @@ class WarmAlarm {
   }) => _platform.setKillWarning(title: title, body: body);
 
   static Future<void> clearKillWarning() => _platform.clearKillWarning();
+
+  static Future<bool> hasAlarm() async {
+    final now = DateTime.now();
+    return (await getScheduledAlarms()).any((a) => a.scheduledAt.isAfter(now));
+  }
+
+  static Future<WarmAlarmSnapshot?> getAlarm(int id) async {
+    final now = DateTime.now();
+    final alarms = await getScheduledAlarms();
+    for (final alarm in alarms) {
+      if (alarm.id == id && alarm.scheduledAt.isAfter(now)) return alarm;
+    }
+    return null;
+  }
 }

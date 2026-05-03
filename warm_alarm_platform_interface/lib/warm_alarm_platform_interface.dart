@@ -36,6 +36,8 @@ abstract class WarmAlarmPlatform extends PlatformInterface {
     _instance = instance;
   }
 
+  Future<void> init();
+
   Future<WarmAlarmCapabilities> getCapabilities();
 
   Future<WarmAlarmPermissionState> getPermissionState();

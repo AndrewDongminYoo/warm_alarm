@@ -36,6 +36,23 @@ class WarmAlarmPlugin :
         pluginInstance = null
     }
 
+    override fun initialize(callback: (Result<Unit>) -> Unit) {
+        val now = System.currentTimeMillis()
+        WarmAlarmStore
+            .loadAll(context)
+            .values
+            .filter { it.scheduledAtMillis > now }
+            .forEach { schedule ->
+                val pending = alarmPendingIntent(schedule.id, PendingIntent.FLAG_UPDATE_CURRENT)!!
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, schedule.scheduledAtMillis, pending)
+                } else {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, schedule.scheduledAtMillis, pending)
+                }
+            }
+        callback(Result.success(Unit))
+    }
+
     override fun getCapabilities(callback: (Result<WarmAlarmCapabilitiesWire>) -> Unit) {
         callback(
             Result.success(
@@ -134,6 +151,7 @@ class WarmAlarmPlugin :
                     snooze = s.snooze,
                     wakeCheck = s.wakeCheck,
                     payload = s.payload,
+                    androidFullScreenIntent = s.androidFullScreenIntent,
                 )
             }
         callback(Result.success(snapshots))

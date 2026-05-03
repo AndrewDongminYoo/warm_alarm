@@ -732,4 +732,14 @@ void main() {
       },
     );
   });
+
+  group('WarmAlarmMacOS Phase 4 features', () {
+    test('init delegates to api', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmMacOS(api: api);
+      when(api.initialize).thenAnswer((_) async {});
+      await platform.init();
+      verify(api.initialize).called(1);
+    });
+  });
 }
