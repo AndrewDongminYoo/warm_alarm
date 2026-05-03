@@ -7,11 +7,9 @@ class WarmAlarm {
 
   static Future<void> init() => _platform.init();
 
-  static Future<WarmAlarmCapabilities> getCapabilities() =>
-      _platform.getCapabilities();
+  static Future<WarmAlarmCapabilities> getCapabilities() => _platform.getCapabilities();
 
-  static Future<WarmAlarmPermissionState> getPermissionState() =>
-      _platform.getPermissionState();
+  static Future<WarmAlarmPermissionState> getPermissionState() => _platform.getPermissionState();
 
   static Future<WarmAlarmReadiness> getReadiness() => _platform.getReadiness();
 
@@ -23,8 +21,7 @@ class WarmAlarm {
 
   static Future<void> cancelAllAlarms() => _platform.cancelAllAlarms();
 
-  static Future<List<WarmAlarmSnapshot>> getScheduledAlarms() =>
-      _platform.getScheduledAlarms();
+  static Future<List<WarmAlarmSnapshot>> getScheduledAlarms() => _platform.getScheduledAlarms();
 
   static Stream<WarmAlarmEvent> get events => _platform.events;
 

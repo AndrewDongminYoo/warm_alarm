@@ -4,8 +4,7 @@ import 'package:pigeon/pigeon.dart';
   PigeonOptions(
     dartOut: 'lib/src/messages.g.dart',
     dartPackageName: 'warm_alarm',
-    swiftOut:
-        'macos/warm_alarm_macos/Sources/warm_alarm_macos/Messages.g.swift',
+    swiftOut: 'macos/warm_alarm_macos/Sources/warm_alarm_macos/Messages.g.swift',
     swiftOptions: SwiftOptions(),
     copyrightHeader: 'pigeons/copyright.txt',
   ),

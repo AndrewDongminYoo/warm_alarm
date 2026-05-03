@@ -12,22 +12,21 @@ void main() {
 
     setUp(() {
       methodChannelWarmAlarm = MethodChannelWarmAlarm();
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(
-            methodChannelWarmAlarm.methodChannel,
-            (methodCall) async {
-              log.add(methodCall);
-              switch (methodCall.method) {
-                case 'getReadiness':
-                  return <String, Object?>{
-                    'level': 'unsupported',
-                    'reasons': <String>['platformUnsupported'],
-                  };
-                default:
-                  return null;
-              }
-            },
-          );
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+        methodChannelWarmAlarm.methodChannel,
+        (methodCall) async {
+          log.add(methodCall);
+          switch (methodCall.method) {
+            case 'getReadiness':
+              return <String, Object?>{
+                'level': 'unsupported',
+                'reasons': <String>['platformUnsupported'],
+              };
+            default:
+              return null;
+          }
+        },
+      );
     });
 
     tearDown(log.clear);
