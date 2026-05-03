@@ -36,7 +36,7 @@ class WarmAlarmPlugin :
         pluginInstance = null
     }
 
-    override fun init(callback: (Result<Unit>) -> Unit) {
+    override fun initialize(callback: (Result<Unit>) -> Unit) {
         val now = System.currentTimeMillis()
         WarmAlarmStore
             .loadAll(context)

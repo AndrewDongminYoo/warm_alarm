@@ -277,7 +277,7 @@ class WarmAlarmEventWire {
 @HostApi()
 abstract class WarmAlarmApi {
   @async
-  void init();
+  void initialize();
 
   @async
   WarmAlarmCapabilitiesWire getCapabilities();

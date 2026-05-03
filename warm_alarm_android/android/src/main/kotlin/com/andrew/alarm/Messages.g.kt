@@ -1339,7 +1339,7 @@ private open class MessagesPigeonCodec : StandardMessageCodec() {
 
 /** Generated interface from Pigeon that represents a handler of messages from Flutter. */
 interface WarmAlarmApi {
-    fun init(callback: (Result<Unit>) -> Unit)
+    fun initialize(callback: (Result<Unit>) -> Unit)
 
     fun getCapabilities(callback: (Result<WarmAlarmCapabilitiesWire>) -> Unit)
 
@@ -1392,12 +1392,12 @@ interface WarmAlarmApi {
                 val channel =
                     BasicMessageChannel<Any?>(
                         binaryMessenger,
-                        "dev.flutter.pigeon.warm_alarm.WarmAlarmApi.init$separatedMessageChannelSuffix",
+                        "dev.flutter.pigeon.warm_alarm.WarmAlarmApi.initialize$separatedMessageChannelSuffix",
                         codec,
                     )
                 if (api != null) {
                     channel.setMessageHandler { _, reply ->
-                        api.init { result: Result<Unit> ->
+                        api.initialize { result: Result<Unit> ->
                             val error = result.exceptionOrNull()
                             if (error != null) {
                                 reply.reply(MessagesPigeonUtils.wrapError(error))

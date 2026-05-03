@@ -737,9 +737,9 @@ void main() {
     test('init delegates to api', () async {
       final api = _MockWarmAlarmApi();
       final platform = WarmAlarmMacOS(api: api);
-      when(api.init).thenAnswer((_) async {});
+      when(api.initialize).thenAnswer((_) async {});
       await platform.init();
-      verify(api.init).called(1);
+      verify(api.initialize).called(1);
     });
   });
 }

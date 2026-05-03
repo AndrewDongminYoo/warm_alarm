@@ -48,7 +48,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         registrar.publish(instance)
     }
 
-    func `init`(completion: @escaping (Result<Void, Error>) -> Void) {
+    func initialize(completion: @escaping (Result<Void, Error>) -> Void) {
         let now = Date()
         let stored = WarmAlarmStore.shared.loadAll()
         let futureAlarms = stored.values.filter { data in

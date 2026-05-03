@@ -34,7 +34,7 @@ class WarmAlarmIOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   }
 
   @override
-  Future<void> init() => api.init();
+  Future<void> init() => api.initialize();
 
   @override
   Future<void> cancelAlarm(int id) => api.cancelAlarm(id);
