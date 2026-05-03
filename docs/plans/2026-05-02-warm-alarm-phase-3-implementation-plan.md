@@ -1,6 +1,6 @@
 # Phase 3: Parity Features — `isRinging`, Payload, Enriched Snapshot, Volume Fade, Notification Customization
 
-> **Status:** DRAFT — pending approval before implementation begins.
+> **Status:** COMPLETE — all task groups implemented and committed as of 2026-05-03.
 
 **Goal:** Close the feature gap identified in
 `docs/notes/2026-05-02-alarm-to-warm-alarm-migration-analysis.md` between `alarm` and
@@ -183,92 +183,92 @@ so the warning is less critical but still available.
 
 ### Group P1: `isRinging` API
 
-- [ ] **P1a** Add `Future<bool> isRinging({int? id})` to `WarmAlarmPlatform`
-- [ ] **P1b** Add `isRinging` to `WarmAlarm` facade
-- [ ] **P1c** Add `isRinging(int? alarmId)` to Android Pigeon `WarmAlarmApi` (HostApi, sync or async)
-- [ ] **P1d** Add `isRinging(int? alarmId)` to iOS Pigeon `WarmAlarmApi`
-- [ ] **P1e** Add `isRinging(int? alarmId)` to macOS Pigeon `WarmAlarmApi`
-- [ ] **P1f** `melos run generate`
-- [ ] **P1g** Implement `isRinging` in Android Kotlin (`WarmAlarmPlugin`): check if ForegroundService is running for the given id; if id null, check for any
-- [ ] **P1h** Implement `isRinging` in iOS Swift (`WarmAlarmPlugin`): check delegate audio player state
-- [ ] **P1i** Implement `isRinging` in macOS Swift: same pattern as iOS
-- [ ] **P1j** Map in Android/iOS/macOS Dart wrappers
-- [ ] **P1k** Add tests
+- [x] **P1a** Add `Future<bool> isRinging({int? id})` to `WarmAlarmPlatform`
+- [x] **P1b** Add `isRinging` to `WarmAlarm` facade
+- [x] **P1c** Add `isRinging(int? alarmId)` to Android Pigeon `WarmAlarmApi` (HostApi, sync or async)
+- [x] **P1d** Add `isRinging(int? alarmId)` to iOS Pigeon `WarmAlarmApi`
+- [x] **P1e** Add `isRinging(int? alarmId)` to macOS Pigeon `WarmAlarmApi`
+- [x] **P1f** `melos run generate`
+- [x] **P1g** Implement `isRinging` in Android Kotlin (`WarmAlarmPlugin`): check if ForegroundService is running for the given id; if id null, check for any
+- [x] **P1h** Implement `isRinging` in iOS Swift (`WarmAlarmPlugin`): check delegate audio player state
+- [x] **P1i** Implement `isRinging` in macOS Swift: same pattern as iOS
+- [x] **P1j** Map in Android/iOS/macOS Dart wrappers
+- [x] **P1k** Add tests
 
 ### Group P2: `payload` propagation
 
-- [ ] **P2a** Add `payload: String?` to `WarmAlarmSchedule`
-- [ ] **P2b** Add `payload: String?` to `WarmAlarmSnapshot`
-- [ ] **P2c** Add `payload: String?` to `WarmAlarmFired`, `WarmAlarmStopped`, `WarmAlarmSnoozed`, `WarmAlarmRetriggered`
-- [ ] **P2d** Add `payload: String?` to Android `WarmAlarmScheduleWire`, `WarmAlarmSnapshotWire`, `WarmAlarmEventWire`
-- [ ] **P2e** Add `payload: String?` to iOS / macOS Pigeon schemas
-- [ ] **P2f** `melos run generate`
-- [ ] **P2g** Persist `payload` in Android `WarmAlarmStore` (encode/decode JSON field)
-- [ ] **P2h** Persist `payload` in iOS/macOS `WarmAlarmStore` (Codable field)
-- [ ] **P2i** Propagate `payload` through Android Kotlin event emission (Fired, Stopped, Snoozed, Retriggered)
-- [ ] **P2j** Propagate `payload` through iOS/macOS Swift event emission
-- [ ] **P2k** Map `payload` in all Dart wrappers
-- [ ] **P2l** Add tests
+- [x] **P2a** Add `payload: String?` to `WarmAlarmSchedule`
+- [x] **P2b** Add `payload: String?` to `WarmAlarmSnapshot`
+- [x] **P2c** Add `payload: String?` to `WarmAlarmFired`, `WarmAlarmStopped`, `WarmAlarmSnoozed`, `WarmAlarmRetriggered`
+- [x] **P2d** Add `payload: String?` to Android `WarmAlarmScheduleWire`, `WarmAlarmSnapshotWire`, `WarmAlarmEventWire`
+- [x] **P2e** Add `payload: String?` to iOS / macOS Pigeon schemas
+- [x] **P2f** `melos run generate`
+- [x] **P2g** Persist `payload` in Android `WarmAlarmStore` (encode/decode JSON field)
+- [x] **P2h** Persist `payload` in iOS/macOS `WarmAlarmStore` (Codable field)
+- [x] **P2i** Propagate `payload` through Android Kotlin event emission (Fired, Stopped, Snoozed, Retriggered)
+- [x] **P2j** Propagate `payload` through iOS/macOS Swift event emission
+- [x] **P2k** Map `payload` in all Dart wrappers
+- [x] **P2l** Add tests
 
 ### Group P3: Enriched `WarmAlarmSnapshot`
 
-- [ ] **P3a** Add all `WarmAlarmSchedule` fields to `WarmAlarmSnapshot` (notification, audio, recurrence, snooze, wakeCheck, payload)
-- [ ] **P3b** Update Android `WarmAlarmSnapshotWire` with the new fields
-- [ ] **P3c** Update iOS/macOS `WarmAlarmSnapshotWire`
-- [ ] **P3d** `melos run generate`
-- [ ] **P3e** Update Android `WarmAlarmPlugin.getScheduledAlarms()` to reconstruct full snapshot from store
-- [ ] **P3f** Update iOS/macOS equivalent
-- [ ] **P3g** Map in Dart wrappers
-- [ ] **P3h** Add tests
+- [x] **P3a** Add all `WarmAlarmSchedule` fields to `WarmAlarmSnapshot` (notification, audio, recurrence, snooze, wakeCheck, payload)
+- [x] **P3b** Update Android `WarmAlarmSnapshotWire` with the new fields
+- [x] **P3c** Update iOS/macOS `WarmAlarmSnapshotWire`
+- [x] **P3d** `melos run generate`
+- [x] **P3e** Update Android `WarmAlarmPlugin.getScheduledAlarms()` to reconstruct full snapshot from store
+- [x] **P3f** Update iOS/macOS equivalent
+- [x] **P3g** Map in Dart wrappers
+- [x] **P3h** Add tests
 
 ### Group A1: Staircase volume fade
 
-- [ ] **A1a** Add `WarmAlarmVolumeFadeStep` class to platform interface
-- [ ] **A1b** Add `fadeSteps: List<WarmAlarmVolumeFadeStep>?` and `volumeEnforced: bool` to `WarmAlarmAudio`
-- [ ] **A1c** Add `WarmAlarmVolumeFadeStepWire` and fields to Android `WarmAlarmAudioWire`
-- [ ] **A1d** Add to iOS/macOS Pigeon schemas
-- [ ] **A1e** `melos run generate`
-- [ ] **A1f** Implement staircase fade in Android Kotlin (`WarmAlarmForegroundService` audio player)
-- [ ] **A1g** Implement in iOS/macOS Swift (`WarmAlarmDelegate` AVAudioPlayer + volume ramp timer)
-- [ ] **A1h** Implement `volumeEnforced` in Android (volume listener on `AudioManager`)
-- [ ] **A1i** Map in Dart wrappers
-- [ ] **A1j** Add tests
+- [x] **A1a** Add `WarmAlarmVolumeFadeStep` class to platform interface
+- [x] **A1b** Add `fadeSteps: List<WarmAlarmVolumeFadeStep>?` and `volumeEnforced: bool` to `WarmAlarmAudio`
+- [x] **A1c** Add `WarmAlarmVolumeFadeStepWire` and fields to Android `WarmAlarmAudioWire`
+- [x] **A1d** Add to iOS/macOS Pigeon schemas
+- [x] **A1e** `melos run generate`
+- [x] **A1f** Implement staircase fade in Android Kotlin (`WarmAlarmForegroundService` audio player)
+- [x] **A1g** Implement in iOS/macOS Swift (`WarmAlarmDelegate` AVAudioPlayer + volume ramp timer)
+- [x] **A1h** Implement `volumeEnforced` in Android (volume listener on `AudioManager`)
+- [x] **A1i** Map in Dart wrappers
+- [x] **A1j** Add tests
 
 ### Group N1: Notification customization
 
-- [ ] **N1a** Add `androidIcon: String?`, `androidIconColor: int?`, `keepNotificationAfterAlarmEnds: bool` to `WarmAlarmNotification`
-- [ ] **N1b** Add to Android `WarmAlarmNotificationWire`
-- [ ] **N1c** Add to iOS/macOS Pigeon schemas (fields present but ignored on iOS/macOS for `androidIcon`/`androidIconColor`)
-- [ ] **N1d** `melos run generate`
-- [ ] **N1e** Apply `androidIcon` and `androidIconColor` in Android notification builder
-- [ ] **N1f** Implement `keepNotificationAfterAlarmEnds` in iOS (`WarmAlarmDelegate`: don't remove UNNotification on audio end if flag is set)
-- [ ] **N1g** Map in Dart wrappers
-- [ ] **N1h** Add tests
+- [x] **N1a** Add `androidIcon: String?`, `androidIconColor: int?`, `keepNotificationAfterAlarmEnds: bool` to `WarmAlarmNotification`
+- [x] **N1b** Add to Android `WarmAlarmNotificationWire`
+- [x] **N1c** Add to iOS/macOS Pigeon schemas (fields present but ignored on iOS/macOS for `androidIcon`/`androidIconColor`)
+- [x] **N1d** `melos run generate`
+- [x] **N1e** Apply `androidIcon` and `androidIconColor` in Android notification builder
+- [x] **N1f** Implement `keepNotificationAfterAlarmEnds` in iOS (`WarmAlarmDelegate`: don't remove UNNotification on audio end if flag is set)
+- [x] **N1g** Map in Dart wrappers
+- [x] **N1h** Add tests
 
 ### Group W1: App-kill warning notification
 
-- [ ] **W1a** Add `setKillWarning(title, body)` and `clearKillWarning()` to `WarmAlarmPlatform` and `WarmAlarm` facade
-- [ ] **W1b** Add `setKillWarning` / `clearKillWarning` to Android Pigeon `WarmAlarmApi`
-- [ ] **W1c** Add to iOS/macOS Pigeon schemas
-- [ ] **W1d** `melos run generate`
-- [ ] **W1e** Implement in Android Kotlin: store title/body in `SharedPreferences`; schedule a local notification in `onTaskRemoved` of `WarmAlarmForegroundService` if alarm active
-- [ ] **W1f** Implement in iOS Swift: subscribe to `UIApplication.willResignActiveNotification`; schedule a `UNNotificationRequest` with a 1-second delay if alarm active; cancel on foreground
-- [ ] **W1g** Implement in macOS Swift: equivalent lifecycle hook
-- [ ] **W1h** Map in Dart wrappers
-- [ ] **W1i** Add tests
+- [x] **W1a** Add `setKillWarning(title, body)` and `clearKillWarning()` to `WarmAlarmPlatform` and `WarmAlarm` facade
+- [x] **W1b** Add `setKillWarning` / `clearKillWarning` to Android Pigeon `WarmAlarmApi`
+- [x] **W1c** Add to iOS/macOS Pigeon schemas
+- [x] **W1d** `melos run generate`
+- [x] **W1e** Implement in Android Kotlin: store title/body in `SharedPreferences`; schedule a local notification in `onTaskRemoved` of `WarmAlarmForegroundService` if alarm active
+- [x] **W1f** Implement in iOS Swift: subscribe to `UIScene.willDeactivateNotification` / `UIApplication.willResignActiveNotification`; schedule a `UNNotificationRequest` with a 1-second delay if alarm active; cancel on foreground
+- [x] **W1g** Implement in macOS Swift: `NSApplication.willResignActiveNotification` lifecycle hook
+- [x] **W1h** Map in Dart wrappers
+- [x] **W1i** Add tests
 
 ---
 
 ## Definition of Done
 
-□ WarmAlarmPlatform exposes isRinging({int? id}) and setKillWarning/clearKillWarning
-□ WarmAlarmSchedule, WarmAlarmSnapshot, and relevant WarmAlarmEvent subtypes carry payload
-□ WarmAlarmSnapshot returns full schedule data (reconstructable from getScheduledAlarms())
-□ WarmAlarmAudio supports fadeSteps (staircase) and volumeEnforced
-□ WarmAlarmNotification supports androidIcon, androidIconColor, keepNotificationAfterAlarmEnds
-□ All new Pigeon fields regenerated for all 3 platforms
-□ All new fields mapped in Android/iOS/macOS Dart wrappers
-□ melos run test passes (all 5 packages)
-□ flutter build apk --debug passes
+☑ WarmAlarmPlatform exposes isRinging({int? id}) and setKillWarning/clearKillWarning
+☑ WarmAlarmSchedule, WarmAlarmSnapshot, and relevant WarmAlarmEvent subtypes carry payload
+☑ WarmAlarmSnapshot returns full schedule data (reconstructable from getScheduledAlarms())
+☑ WarmAlarmAudio supports fadeSteps (staircase) and volumeEnforced
+☑ WarmAlarmNotification supports androidIcon, androidIconColor, keepNotificationAfterAlarmEnds
+☑ All new Pigeon fields regenerated for all 3 platforms
+☑ All new fields mapped in Android/iOS/macOS Dart wrappers
+☑ melos run test passes (all 5 packages)
+☑ flutter build apk --debug passes
 □ flutter build ios --no-codesign passes
 □ flutter build macos passes
