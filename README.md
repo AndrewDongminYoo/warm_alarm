@@ -195,6 +195,39 @@ Public-facing model classes are hand-written in `warm_alarm_platform_interface/l
 
 ---
 
+## Implementation Status
+
+| Phase | Scope                                                                                                                      | Status     |
+| ----- | -------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| 1A    | Core Dart API, platform interface, Android AlarmManager + ForegroundService                                                | ✅ Done    |
+| 1B    | Android audio (MediaPlayer), snooze, recurrence, notification actions                                                      | ✅ Done    |
+| 1C    | iOS + macOS (UNUserNotificationCenter + AVAudioPlayer), kill-warning lifecycle                                             | ✅ Done    |
+| 2     | Android wake-check: retrigger flow, `WarmAlarmWakeCheck`, `WarmAlarmBootReceiver` stub                                     | ✅ Done    |
+| 3     | Parity with `alarm`: `isRinging`, `payload`, enriched snapshot, staircase volume fade, notification icon, kill-warning API | ✅ Done    |
+| 4     | App-start recovery (`init()`), convenience query (`hasAlarm`, `getAlarm`), `androidFullScreenIntent` toggle                | 🔲 Planned |
+
+See `docs/plans/` for full task lists per phase.
+
+---
+
+## Comparison with `alarm`
+
+`warm_alarm` started as a replacement for the [`alarm`][alarm_package_link] pub.dev package.
+The table below shows the key design differences; for an API-level migration guide see
+[`warm_alarm/README.md § Migrating from alarm`](warm_alarm/README.md#migrating-from-alarm).
+
+| Concern                    | `alarm`                               | `warm_alarm`                                                              |
+| -------------------------- | ------------------------------------- | ------------------------------------------------------------------------- |
+| Platform coverage          | Android + iOS                         | Android + iOS + **macOS**                                                 |
+| Pre-schedule diagnosis     | None                                  | `getCapabilities` + `getPermissionState` + `getReadiness`                 |
+| Wake verification          | None                                  | `WarmAlarmWakeCheck` — retriggers if user is not awake (Android)          |
+| Event model                | `ringStream` / `updateStream`         | `Stream<WarmAlarmEvent>` — 9 typed sealed events                          |
+| Schedule store             | Dart-side `SharedPreferences`         | Native store — survives Flutter engine restarts                           |
+| Pigeon schema              | Single schema shared across platforms | Per-platform schema — Android and Apple can diverge independently         |
+| Public/wire model boundary | Pigeon types leak into public API     | Strict boundary: Pigeon types are private; public models are hand-written |
+
+---
+
 ## Development
 
 **Resolve dependencies across all packages:**
@@ -248,3 +281,4 @@ BSD-3-Clause — Copyright (c) 2026, Dongmin Yu. See [LICENSE](LICENSE) for deta
 [pigeon_link]: https://pub.dev/packages/pigeon
 [fluttium_install]: https://fluttium.dev/docs/getting-started/installing-cli
 [conventional_commits_link]: https://www.conventionalcommits.org/
+[alarm_package_link]: https://pub.dev/packages/alarm

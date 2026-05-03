@@ -141,19 +141,20 @@ corrective action (grant permissions, disable battery optimization, etc.).
 
 ### Key data classes
 
-| Class                      | Purpose                                                                                                    |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `WarmAlarmSchedule`        | Full alarm configuration: timing, notification, audio, snooze, recurrence, payload, wake-check             |
-| `WarmAlarmCapabilities`    | `WarmAlarmSupportStatus` per feature: exact scheduling, background audio, full-screen, wake-check          |
-| `WarmAlarmReadiness`       | `level` (`ready \| limited \| blocked \| unsupported`) + `List<WarmAlarmReadinessReason>`                  |
-| `WarmAlarmPermissionState` | Boolean flags: `notificationsGranted`, `exactAlarmGranted`, `fullScreenIntentGranted`                      |
-| `WarmAlarmScheduleResult`  | `alarmId`, `readiness`, optional `WarmAlarmWarning`                                                        |
-| `WarmAlarmAudio`           | `filePath?`, `assetPath?`, `loop`, `volume?`, `fadeInDuration?`, `fadeSteps?`, `vibrate`, `volumeEnforced` |
-| `WarmAlarmNotification`    | `title`, `body`, `stopActionTitle?`, `snoozeActionTitle?`, `androidIcon?`, `androidIconColor?`             |
-| `WarmAlarmSnooze`          | `duration`                                                                                                 |
-| `WarmAlarmRecurrence`      | `weekdays` bitmask (Mon = 1, Tue = 2, … Sun = 64)                                                          |
-| `WarmAlarmWakeCheck`       | `checkDelay`, `retriggerDelay?`, `maxRetriggers` (Android only)                                            |
-| `WarmAlarmSnapshot`        | Lightweight scheduled-alarm record: `id`, `scheduledAt`, notification, audio, recurrence, snooze           |
+| Class                      | Purpose                                                                                                                          |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `WarmAlarmSchedule`        | Full alarm configuration: timing, notification, audio, snooze, recurrence, payload, wake-check                                   |
+| `WarmAlarmCapabilities`    | `WarmAlarmSupportStatus` per feature: exact scheduling, background audio, full-screen, wake-check                                |
+| `WarmAlarmReadiness`       | `level` (`ready \| limited \| blocked \| unsupported`) + `List<WarmAlarmReadinessReason>`                                        |
+| `WarmAlarmPermissionState` | Boolean flags: `notificationsGranted`, `exactAlarmGranted`, `fullScreenIntentGranted`                                            |
+| `WarmAlarmScheduleResult`  | `alarmId`, `readiness`, optional `WarmAlarmWarning`                                                                              |
+| `WarmAlarmAudio`           | `filePath?`, `assetPath?`, `loop`, `volume?`, `fadeInDuration?`, `fadeSteps?`, `volumeEnforced`, `vibrate`                       |
+| `WarmAlarmNotification`    | `title`, `body`, `stopActionTitle?`, `snoozeActionTitle?`, `androidIcon?`, `androidIconColor?`, `keepNotificationAfterAlarmEnds` |
+| `WarmAlarmSnooze`          | `duration`                                                                                                                       |
+| `WarmAlarmRecurrence`      | `weekdays` — list of ISO weekday numbers (1 = Monday … 7 = Sunday)                                                               |
+| `WarmAlarmWakeCheck`       | `checkDelay`, `retriggerDelay?`, `maxRetriggers` (Android only)                                                                  |
+| `WarmAlarmVolumeFadeStep`  | `time` (offset from alarm start), `volume` (0.0–1.0) — element of `WarmAlarmAudio.fadeSteps`                                     |
+| `WarmAlarmSnapshot`        | Full scheduled-alarm record returned by `getScheduledAlarms()` — mirrors `WarmAlarmSchedule` fields                              |
 
 ### `WarmAlarmEvent` — sealed event types
 
@@ -171,6 +172,54 @@ corrective action (grant permissions, disable battery optimization, etc.).
 
 ---
 
+## Migrating from `alarm`
+
+`warm_alarm` is a drop-in design replacement for the [`alarm`][alarm_package_link] package,
+with a richer capability model, macOS support, and a cleaner public/wire boundary.
+
+### Why switch?
+
+| Concern                | `alarm`                                    | `warm_alarm`                                                                                 |
+| ---------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| Platform coverage      | Android + iOS                              | Android + iOS + **macOS**                                                                    |
+| Pre-schedule diagnosis | None — silent failures                     | `getCapabilities()` + `getPermissionState()` + `getReadiness()` with actionable reason codes |
+| Schedule result        | `bool` success flag                        | `WarmAlarmScheduleResult` — includes readiness level and optional warning message            |
+| Wake verification      | None                                       | `WarmAlarmWakeCheck` — detects if the user actually woke up; retriggers the alarm if not     |
+| Snooze                 | App-layer only                             | Built-in `WarmAlarmSnooze`; notification action handled natively                             |
+| Event model            | `ringStream` / `updateStream` (deprecated) | `Stream<WarmAlarmEvent>` — 9 typed events in a sealed class hierarchy                        |
+| Store location         | Dart-side `SharedPreferences`              | Native (`SharedPreferences` / `UserDefaults`) — survives Flutter engine restarts             |
+| Snapshot richness      | Full `AlarmSettings` from Dart store       | Full `WarmAlarmSnapshot` reconstructed from native store via `getScheduledAlarms()`          |
+| Pigeon boundary        | Single shared schema for all platforms     | Per-platform schema — iOS and Android can diverge safely                                     |
+
+### API mapping
+
+| `alarm`                              | `warm_alarm`                                                                 | Notes                                                     |
+| ------------------------------------ | ---------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `Alarm.set(alarmSettings:)`          | `WarmAlarm.scheduleAlarm(schedule)`                                          | Returns `WarmAlarmScheduleResult` instead of `bool`       |
+| `Alarm.stop(id)`                     | `WarmAlarm.cancelAlarm(id)`                                                  |                                                           |
+| `Alarm.stopAll()`                    | `WarmAlarm.cancelAllAlarms()`                                                |                                                           |
+| `Alarm.getAlarms()`                  | `WarmAlarm.getScheduledAlarms()`                                             | Returns full `WarmAlarmSnapshot` list                     |
+| `Alarm.isRinging([id])`              | `WarmAlarm.isRinging(id: id)`                                                |                                                           |
+| `Alarm.setWarningNotificationOnKill` | `WarmAlarm.setKillWarning(title:body:)`                                      | Paired with `clearKillWarning()`                          |
+| `Alarm.scheduled` / `Alarm.ringing`  | `WarmAlarm.events`                                                           | Build a `StateNotifier`/`Bloc` on top of the event stream |
+| `AlarmSettings.volumeSettings`       | `WarmAlarmAudio` (`volume`, `fadeInDuration`, `fadeSteps`, `volumeEnforced`) |                                                           |
+| `NotificationSettings.icon`          | `WarmAlarmNotification.androidIcon`                                          | Android only                                              |
+| `NotificationSettings.iconColor`     | `WarmAlarmNotification.androidIconColor`                                     | Android only — ARGB int instead of `Color`                |
+| `AlarmSettings.payload`              | `WarmAlarmSchedule.payload`                                                  | Propagated to every event type                            |
+
+### What is not yet in `warm_alarm`
+
+The following `alarm` features are planned for Phase 4 and not yet available:
+
+- **`Alarm.init()` / `Alarm.checkAlarm()`** — app-start recovery that reschedules alarms
+  surviving a process restart. Tracked in Phase 4 (R1 task group).
+- **`Alarm.hasAlarm()` / `Alarm.getAlarm(id)`** — convenience query methods.
+  Tracked in Phase 4 (C1 task group).
+- **`androidFullScreenIntent` per-schedule toggle** — warm_alarm always enables full-screen
+  intent when the capability is available; per-alarm opt-out is Phase 4 (F1 task group).
+
+---
+
 ## License
 
 BSD-3-Clause — Copyright (c) 2026, Dongmin Yu. See [LICENSE](LICENSE) for details.
@@ -183,3 +232,4 @@ BSD-3-Clause — Copyright (c) 2026, Dongmin Yu. See [LICENSE](LICENSE) for deta
 [license_link]: https://opensource.org/licenses/BSD-3-Clause
 [very_good_analysis_badge]: https://img.shields.io/badge/style-very_good_analysis-B22C89.svg
 [very_good_analysis_link]: https://pub.dev/packages/very_good_analysis
+[alarm_package_link]: https://pub.dev/packages/alarm
