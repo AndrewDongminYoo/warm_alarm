@@ -159,13 +159,13 @@ void main() {
       verify(warmAlarmPlatform.init).called(1);
     });
 
-    test('hasAlarm returns true when alarms exist', () async {
-      final at = DateTime(2026, 5, 3, 8);
+    test('hasAlarm returns true when future alarms exist', () async {
+      final future = DateTime.now().add(const Duration(hours: 1));
       when(warmAlarmPlatform.getScheduledAlarms).thenAnswer(
         (_) async => <WarmAlarmSnapshot>[
           WarmAlarmSnapshot(
             id: 1,
-            scheduledAt: at,
+            scheduledAt: future,
             notification: const WarmAlarmNotification(title: 'T', body: 'B'),
             audio: const WarmAlarmAudio(),
           ),
@@ -181,11 +181,29 @@ void main() {
       expect(await WarmAlarm.hasAlarm(), isFalse);
     });
 
-    test('getAlarm returns matching snapshot', () async {
-      final at = DateTime(2026, 5, 3, 8);
+    test(
+      'hasAlarm returns false when only expired alarms remain in store',
+      () async {
+        final past = DateTime.now().subtract(const Duration(hours: 1));
+        when(warmAlarmPlatform.getScheduledAlarms).thenAnswer(
+          (_) async => <WarmAlarmSnapshot>[
+            WarmAlarmSnapshot(
+              id: 1,
+              scheduledAt: past,
+              notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+              audio: const WarmAlarmAudio(),
+            ),
+          ],
+        );
+        expect(await WarmAlarm.hasAlarm(), isFalse);
+      },
+    );
+
+    test('getAlarm returns matching future snapshot', () async {
+      final future = DateTime.now().add(const Duration(hours: 1));
       final snap = WarmAlarmSnapshot(
         id: 42,
-        scheduledAt: at,
+        scheduledAt: future,
         notification: const WarmAlarmNotification(title: 'T', body: 'B'),
         audio: const WarmAlarmAudio(),
       );
@@ -200,6 +218,21 @@ void main() {
         warmAlarmPlatform.getScheduledAlarms,
       ).thenAnswer((_) async => const <WarmAlarmSnapshot>[]);
       expect(await WarmAlarm.getAlarm(99), isNull);
+    });
+
+    test('getAlarm returns null when matching alarm is expired', () async {
+      final past = DateTime.now().subtract(const Duration(hours: 1));
+      when(warmAlarmPlatform.getScheduledAlarms).thenAnswer(
+        (_) async => <WarmAlarmSnapshot>[
+          WarmAlarmSnapshot(
+            id: 42,
+            scheduledAt: past,
+            notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+            audio: const WarmAlarmAudio(),
+          ),
+        ],
+      );
+      expect(await WarmAlarm.getAlarm(42), isNull);
     });
   });
 }

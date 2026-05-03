@@ -37,13 +37,16 @@ class WarmAlarm {
 
   static Future<void> clearKillWarning() => _platform.clearKillWarning();
 
-  static Future<bool> hasAlarm() async =>
-      (await getScheduledAlarms()).isNotEmpty;
+  static Future<bool> hasAlarm() async {
+    final now = DateTime.now();
+    return (await getScheduledAlarms()).any((a) => a.scheduledAt.isAfter(now));
+  }
 
   static Future<WarmAlarmSnapshot?> getAlarm(int id) async {
+    final now = DateTime.now();
     final alarms = await getScheduledAlarms();
     for (final alarm in alarms) {
-      if (alarm.id == id) return alarm;
+      if (alarm.id == id && alarm.scheduledAt.isAfter(now)) return alarm;
     }
     return null;
   }

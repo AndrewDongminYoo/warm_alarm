@@ -1,6 +1,7 @@
 package com.andrew.alarm
 
 import android.content.Context
+import android.os.Build
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -67,18 +68,28 @@ internal object WarmAlarmStore {
         }
     }
 
-    fun clear(context: Context) = prefs(context).edit().remove(KEY).apply()
+    fun clear(context: Context) {
+        prefs(context).edit().remove(KEY).apply()
+        dePrefs(context)?.edit()?.remove(KEY)?.apply()
+    }
 
     private fun persist(
         context: Context,
         all: Map<Long, WarmAlarmScheduleWire>,
     ) {
-        val arr = JSONArray()
-        all.values.forEach { arr.put(encode(it)) }
-        prefs(context).edit().putString(KEY, arr.toString()).apply()
+        val json = JSONArray().also { arr -> all.values.forEach { arr.put(encode(it)) } }.toString()
+        prefs(context).edit().putString(KEY, json).apply()
+        dePrefs(context)?.edit()?.putString(KEY, json)?.apply()
     }
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    private fun dePrefs(context: Context) =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            context.createDeviceProtectedStorageContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        } else {
+            null
+        }
 
     private fun encode(s: WarmAlarmScheduleWire): JSONObject =
         JSONObject().apply {

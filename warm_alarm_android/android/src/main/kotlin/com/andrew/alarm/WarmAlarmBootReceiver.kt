@@ -21,8 +21,18 @@ class WarmAlarmBootReceiver : BroadcastReceiver() {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val now = System.currentTimeMillis()
 
+        // Use device-protected storage during Direct Boot (before first unlock).
+        val storeContext =
+            if (intent.action == "android.intent.action.LOCKED_BOOT_COMPLETED" &&
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
+            ) {
+                context.createDeviceProtectedStorageContext()
+            } else {
+                context
+            }
+
         WarmAlarmStore
-            .loadAll(context)
+            .loadAll(storeContext)
             .values
             .filter { it.scheduledAtMillis > now }
             .forEach { schedule ->
