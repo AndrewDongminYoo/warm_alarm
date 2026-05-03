@@ -24,6 +24,7 @@ void main() {
           vibrate: true,
           volumeEnforced: false,
         ),
+        androidFullScreenIntent: true,
       ),
     );
   });
@@ -212,6 +213,7 @@ void main() {
               vibrate: false,
               volumeEnforced: false,
             ),
+            androidFullScreenIntent: true,
           ),
         ],
       );
@@ -635,6 +637,7 @@ void main() {
             snooze: WarmAlarmSnoozeWire(durationMillis: 300000),
             wakeCheck: WarmAlarmWakeCheckWire(checkDelayMillis: 60000),
             payload: '{"key":"val"}',
+            androidFullScreenIntent: true,
           ),
         ],
       );
@@ -804,6 +807,7 @@ void main() {
                 WarmAlarmVolumeFadeStepWire(timeMillis: 5000, volume: 1),
               ],
             ),
+            androidFullScreenIntent: false,
           ),
         ],
       );
@@ -865,6 +869,7 @@ void main() {
                 retriggerDelayMillis: 120000,
                 maxRetriggers: 3,
               ),
+              androidFullScreenIntent: true,
             ),
           ],
         );
@@ -874,6 +879,100 @@ void main() {
           const Duration(minutes: 2),
         );
         expect(snapshots.single.wakeCheck!.maxRetriggers, 3);
+      },
+    );
+  });
+
+  group('WarmAlarmAndroid Phase 4 features', () {
+    test('init delegates to api', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      when(api.init).thenAnswer((_) async {});
+      await platform.init();
+      verify(api.init).called(1);
+    });
+
+    test('scheduleAlarm passes androidFullScreenIntent=true to wire', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      final captured = <WarmAlarmScheduleWire>[];
+      when(() => api.scheduleAlarm(any())).thenAnswer((inv) async {
+        captured.add(inv.positionalArguments[0] as WarmAlarmScheduleWire);
+        return WarmAlarmScheduleResultWire(
+          alarmId: 1,
+          readiness: WarmAlarmReadinessWire(
+            level: WarmAlarmReadinessLevelWire.ready,
+            reasons: <WarmAlarmReadinessReasonWire>[],
+          ),
+        );
+      });
+      await platform.scheduleAlarm(
+        WarmAlarmSchedule(
+          id: 1,
+          scheduledAt: DateTime(2026, 5, 3, 8),
+          notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+          audio: const WarmAlarmAudio(),
+        ),
+      );
+      expect(captured.single.androidFullScreenIntent, isTrue);
+    });
+
+    test(
+      'scheduleAlarm passes androidFullScreenIntent=false to wire',
+      () async {
+        final api = _MockWarmAlarmApi();
+        final platform = WarmAlarmAndroid(api: api);
+        final captured = <WarmAlarmScheduleWire>[];
+        when(() => api.scheduleAlarm(any())).thenAnswer((inv) async {
+          captured.add(inv.positionalArguments[0] as WarmAlarmScheduleWire);
+          return WarmAlarmScheduleResultWire(
+            alarmId: 2,
+            readiness: WarmAlarmReadinessWire(
+              level: WarmAlarmReadinessLevelWire.ready,
+              reasons: <WarmAlarmReadinessReasonWire>[],
+            ),
+          );
+        });
+        await platform.scheduleAlarm(
+          WarmAlarmSchedule(
+            id: 2,
+            scheduledAt: DateTime(2026, 5, 3, 8),
+            notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+            audio: const WarmAlarmAudio(),
+            androidFullScreenIntent: false,
+          ),
+        );
+        expect(captured.single.androidFullScreenIntent, isFalse);
+      },
+    );
+
+    test(
+      'getScheduledAlarms maps androidFullScreenIntent from wire',
+      () async {
+        final api = _MockWarmAlarmApi();
+        final platform = WarmAlarmAndroid(api: api);
+        final now = DateTime.now().millisecondsSinceEpoch;
+        when(api.getScheduledAlarms).thenAnswer(
+          (_) async => <WarmAlarmSnapshotWire>[
+            WarmAlarmSnapshotWire(
+              id: 50,
+              scheduledAtMillis: now,
+              notification: WarmAlarmNotificationWire(
+                title: 'T',
+                body: 'B',
+                keepNotificationAfterAlarmEnds: false,
+              ),
+              audio: WarmAlarmAudioWire(
+                loop: false,
+                vibrate: false,
+                volumeEnforced: false,
+              ),
+              androidFullScreenIntent: false,
+            ),
+          ],
+        );
+        final snapshots = await platform.getScheduledAlarms();
+        expect(snapshots.single.androidFullScreenIntent, isFalse);
       },
     );
   });

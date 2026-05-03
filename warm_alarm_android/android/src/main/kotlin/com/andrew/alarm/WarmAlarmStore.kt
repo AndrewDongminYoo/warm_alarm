@@ -135,6 +135,7 @@ internal object WarmAlarmStore {
                 )
             }
             s.payload?.let { put("payload", it) }
+            put("androidFullScreenIntent", s.androidFullScreenIntent)
         }
 
     private fun decode(obj: JSONObject): WarmAlarmScheduleWire {
@@ -194,6 +195,7 @@ internal object WarmAlarmStore {
                     null
                 },
             payload = obj.optString("payload").takeIf { it.isNotEmpty() },
+            androidFullScreenIntent = obj.optBoolean("androidFullScreenIntent", true),
         )
     }
 }

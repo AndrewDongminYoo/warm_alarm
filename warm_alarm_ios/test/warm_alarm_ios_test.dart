@@ -780,4 +780,14 @@ void main() {
       },
     );
   });
+
+  group('WarmAlarmIOS Phase 4 features', () {
+    test('init delegates to api', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmIOS(api: api);
+      when(api.init).thenAnswer((_) async {});
+      await platform.init();
+      verify(api.init).called(1);
+    });
+  });
 }

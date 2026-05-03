@@ -48,6 +48,33 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         registrar.publish(instance)
     }
 
+    func `init`(completion: @escaping (Result<Void, Error>) -> Void) {
+        let now = Date()
+        let stored = WarmAlarmStore.shared.loadAll()
+        let futureAlarms = stored.values.filter { data in
+            Date(timeIntervalSince1970: Double(data.scheduledAtMillis) / 1000.0) > now
+        }
+        guard !futureAlarms.isEmpty else {
+            completion(.success(()))
+            return
+        }
+        UNUserNotificationCenter.current().getPendingNotificationRequests { pending in
+            let pendingIds = Set(pending.map { $0.identifier })
+            for data in futureAlarms {
+                let idStr = String(data.id)
+                guard !pendingIds.contains(idStr) else { continue }
+                let content = self.delegate.makeContent(from: data)
+                let fireDate = Date(timeIntervalSince1970: Double(data.scheduledAtMillis) / 1000.0)
+                let components = Calendar.current.dateComponents(
+                    [.year, .month, .day, .hour, .minute, .second], from: fireDate)
+                let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+                let request = UNNotificationRequest(identifier: idStr, content: content, trigger: trigger)
+                UNUserNotificationCenter.current().add(request) { _ in }
+            }
+            completion(.success(()))
+        }
+    }
+
     func getCapabilities(completion: @escaping (Result<WarmAlarmCapabilitiesWire, Error>) -> Void) {
         completion(.success(WarmAlarmCapabilitiesWire(
             exactScheduling: .limited,

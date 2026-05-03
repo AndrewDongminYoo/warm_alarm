@@ -16,7 +16,8 @@ class WarmAlarmAndroid extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   /// The API used to interact with the native platform.
   final WarmAlarmApi api;
 
-  final StreamController<WarmAlarmEvent> _events = StreamController<WarmAlarmEvent>.broadcast();
+  final StreamController<WarmAlarmEvent> _events =
+      StreamController<WarmAlarmEvent>.broadcast();
 
   bool _eventsApiSetUp = false;
 
@@ -24,6 +25,9 @@ class WarmAlarmAndroid extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   static void registerWith() {
     WarmAlarmPlatform.instance = WarmAlarmAndroid();
   }
+
+  @override
+  Future<void> init() => api.init();
 
   @override
   Future<void> cancelAlarm(int id) => api.cancelAlarm(id);
@@ -44,24 +48,29 @@ class WarmAlarmAndroid extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   }
 
   @override
-  Future<WarmAlarmCapabilities> getCapabilities() async => _capabilitiesFromWire(await api.getCapabilities());
+  Future<WarmAlarmCapabilities> getCapabilities() async =>
+      _capabilitiesFromWire(await api.getCapabilities());
 
   @override
   Future<WarmAlarmPermissionState> getPermissionState() async =>
       _permissionStateFromWire(await api.getPermissionState());
 
   @override
-  Future<WarmAlarmReadiness> getReadiness() async => _readinessFromWire(await api.getReadiness());
+  Future<WarmAlarmReadiness> getReadiness() async =>
+      _readinessFromWire(await api.getReadiness());
 
   @override
   Future<List<WarmAlarmSnapshot>> getScheduledAlarms() async =>
-      (await api.getScheduledAlarms()).map(_snapshotFromWire).toList(growable: false);
+      (await api.getScheduledAlarms())
+          .map(_snapshotFromWire)
+          .toList(growable: false);
 
   @override
   Future<bool> isRinging({int? id}) => api.isRinging(id);
 
   @override
-  Future<void> setKillWarning({required String title, required String body}) => api.setKillWarning(title, body);
+  Future<void> setKillWarning({required String title, required String body}) =>
+      api.setKillWarning(title, body);
 
   @override
   Future<void> clearKillWarning() => api.clearKillWarning();
@@ -98,7 +107,9 @@ WarmAlarmAudio _audioFromWire(WarmAlarmAudioWire wire) {
     assetPath: wire.assetPath,
     loop: wire.loop,
     volume: wire.volume,
-    fadeInDuration: wire.fadeInDurationMillis == null ? null : Duration(milliseconds: wire.fadeInDurationMillis!),
+    fadeInDuration: wire.fadeInDurationMillis == null
+        ? null
+        : Duration(milliseconds: wire.fadeInDurationMillis!),
     vibrate: wire.vibrate,
     volumeEnforced: wire.volumeEnforced,
     fadeSteps: wire.fadeSteps?.map(_fadeStepFromWire).toList(growable: false),
@@ -254,7 +265,9 @@ WarmAlarmScheduleResult _scheduleResultFromWire(
   return WarmAlarmScheduleResult(
     alarmId: wire.alarmId,
     readiness: _readinessFromWire(wire.readiness),
-    warning: wire.warning == null ? null : WarmAlarmWarning(message: wire.warning!.message),
+    warning: wire.warning == null
+        ? null
+        : WarmAlarmWarning(message: wire.warning!.message),
   );
 }
 
@@ -268,6 +281,7 @@ WarmAlarmScheduleWire _scheduleToWire(WarmAlarmSchedule schedule) {
     snooze: _snoozeToWire(schedule.snooze),
     wakeCheck: _wakeCheckToWire(schedule.wakeCheck),
     payload: schedule.payload,
+    androidFullScreenIntent: schedule.androidFullScreenIntent,
   );
 }
 
@@ -277,7 +291,9 @@ WarmAlarmSnapshot _snapshotFromWire(WarmAlarmSnapshotWire wire) {
     scheduledAt: DateTime.fromMillisecondsSinceEpoch(wire.scheduledAtMillis),
     notification: _notificationFromWire(wire.notification),
     audio: _audioFromWire(wire.audio),
-    recurrence: wire.recurrence == null ? null : WarmAlarmRecurrence(weekdays: wire.recurrence!.weekdays),
+    recurrence: wire.recurrence == null
+        ? null
+        : WarmAlarmRecurrence(weekdays: wire.recurrence!.weekdays),
     snooze: wire.snooze == null
         ? null
         : WarmAlarmSnooze(
@@ -295,6 +311,7 @@ WarmAlarmSnapshot _snapshotFromWire(WarmAlarmSnapshotWire wire) {
             maxRetriggers: wire.wakeCheck!.maxRetriggers,
           ),
     payload: wire.payload,
+    androidFullScreenIntent: wire.androidFullScreenIntent,
   );
 }
 
@@ -339,7 +356,8 @@ WarmAlarmFailureWire _requireFailure(WarmAlarmFailureWire? failure) {
     'WarmAlarmEventsApi: failed event received without failure payload (Kotlin contract violation)',
   );
   // coverage:ignore-start
-  return failure ?? WarmAlarmFailureWire(code: WarmAlarmFailureCodeWire.unknown);
+  return failure ??
+      WarmAlarmFailureWire(code: WarmAlarmFailureCodeWire.unknown);
   // coverage:ignore-end
 }
 

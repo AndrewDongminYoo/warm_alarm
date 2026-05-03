@@ -214,6 +214,7 @@ class WarmAlarmScheduleWire {
     required this.scheduledAtMillis,
     required this.notification,
     required this.audio,
+    required this.androidFullScreenIntent,
     this.recurrence,
     this.snooze,
     this.wakeCheck,
@@ -228,6 +229,7 @@ class WarmAlarmScheduleWire {
   final WarmAlarmSnoozeWire? snooze;
   final WarmAlarmWakeCheckWire? wakeCheck;
   final String? payload;
+  final bool androidFullScreenIntent;
 }
 
 class WarmAlarmSnapshotWire {
@@ -236,6 +238,7 @@ class WarmAlarmSnapshotWire {
     required this.scheduledAtMillis,
     required this.notification,
     required this.audio,
+    required this.androidFullScreenIntent,
     this.recurrence,
     this.snooze,
     this.wakeCheck,
@@ -250,6 +253,7 @@ class WarmAlarmSnapshotWire {
   final WarmAlarmSnoozeWire? snooze;
   final WarmAlarmWakeCheckWire? wakeCheck;
   final String? payload;
+  final bool androidFullScreenIntent;
 }
 
 class WarmAlarmEventWire {
@@ -272,6 +276,9 @@ class WarmAlarmEventWire {
 
 @HostApi()
 abstract class WarmAlarmApi {
+  @async
+  void init();
+
   @async
   WarmAlarmCapabilitiesWire getCapabilities();
 

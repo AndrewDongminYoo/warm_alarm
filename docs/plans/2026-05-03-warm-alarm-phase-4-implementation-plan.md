@@ -1,6 +1,6 @@
 # Phase 4: App-Start Recovery, Convenience API, and Per-Schedule Platform Flags
 
-> **Status:** DRAFT — pending approval before implementation begins.
+> **Status:** APPROVED — implementation in progress on branch `feat/phase-4`.
 
 **Goal:** Close the remaining feature gaps between `alarm` and `warm_alarm` identified in
 `docs/notes/2026-05-02-alarm-to-warm-alarm-migration-analysis.md`. Phase 3 shipped parity
@@ -8,9 +8,10 @@ features (isRinging, payload, staircase fade, notification customization, kill-w
 Phase 4 addresses the harder structural gaps: app-start alarm recovery, convenience query
 methods, and optional per-schedule Android platform flags.
 
-**Architecture note:** Phase 4 introduces no new Pigeon wire types for Groups C1 and F1.
-Group R1 (recovery) requires a new `WarmAlarm.init()` API that drives an existing
-`getScheduledAlarms()` → reschedule loop entirely from Dart.
+**Architecture note:** Phase 4 adds `init()` to the Pigeon `WarmAlarmApi` `@HostApi` on all
+three platforms. The native implementations silently re-register future alarms with the OS
+scheduler without emitting any `WarmAlarmScheduled` events. Groups C1 and F1 require no new
+Pigeon wire types (C1 is facade-only; F1 adds a field to the existing `WarmAlarmScheduleWire`).
 
 ---
 
@@ -46,30 +47,42 @@ class WarmAlarm {
   /// Call once during app startup (e.g. in `main()` before `runApp()`).
   ///
   /// Behavior:
-  /// - Fetches [getScheduledAlarms()] from the native store.
-  /// - For alarms whose [WarmAlarmSnapshot.scheduledAt] is still in the future,
-  ///   re-schedules them via [scheduleAlarm] to ensure the native scheduler has
-  ///   not been cleared (relevant on Android after a device reboot with no
-  ///   RECEIVE_BOOT_COMPLETED receiver, or on iOS after an app update).
-  /// - Emits no events for already-past alarms; callers must handle the
-  ///   missed-alarm case by checking [isRinging] or listening to [events].
+  /// - Calls into the native layer, which silently re-registers future alarms
+  ///   with the OS scheduler (AlarmManager on Android; cross-checks
+  ///   UNNotificationCenter pending requests on iOS/macOS).
+  /// - Emits no WarmAlarmScheduled events — this is a silent recovery, not a
+  ///   new scheduling action.
+  /// - Past alarms are skipped; callers handle the missed-alarm case by
+  ///   checking [isRinging] or listening to [events].
   static Future<void> init() => _platform.init();
 }
 ```
+
+**Why native (not Dart-layer `scheduleAlarm()` calls):**
+
+Two flaws ruled out the simpler Dart-loop approach:
+
+1. Calling `scheduleAlarm()` from `init()` would emit a spurious `WarmAlarmScheduled`
+   event for every recovered alarm on every app start, breaking any listener that treats
+   that event as user intent.
+2. Android's force-stop clears `AlarmManager` entries but preserves the `WarmAlarmStore`.
+   A Dart loop calling back through `scheduleAlarm()` still requires the Flutter engine —
+   it does not help the `WarmAlarmBootReceiver` path (no engine on boot).
 
 **Android notes:**
 
 - `AlarmManager.setExactAndAllowWhileIdle` alarms survive process death but are
   cleared on device reboot unless `RECEIVE_BOOT_COMPLETED` is declared. Phase 4
-  adds a `BootReceiver` that iterates the `WarmAlarmStore` and reschedules.
-- `init()` on Android checks which store entries have a `scheduledAtMillis` in the
-  future and calls `setExactAndAllowWhileIdle` for each.
+  adds a `WarmAlarmBootReceiver` that iterates the `WarmAlarmStore` and calls
+  `AlarmManager.setExactAndAllowWhileIdle` for each future alarm — no Flutter engine.
+- The Pigeon `init()` call (from the running app) does the same re-registration silently.
 
 **iOS/macOS notes:**
 
-- Pending `UNNotificationRequest`s survive app restarts natively; `init()` can be
-  a no-op or a cross-check (verify store entries against pending notification IDs
-  and re-add any that are missing).
+- `UNNotificationRequest`s survive app restarts natively. The native `init()`
+  cross-checks the store entries against pending notification IDs and re-schedules
+  any store entry whose notification request is missing (e.g. after an app update
+  that cleared pending notifications).
 
 ### Group C1: Convenience methods (facade-only, no Pigeon changes)
 
@@ -119,22 +132,24 @@ iOS/macOS ignore this field (no native concept).
 
 ### Group R1: App-start alarm recovery
 
-- [ ] **R1a** Add `Future<void> init()` to `WarmAlarmPlatform` abstract class
-- [ ] **R1b** Add a default implementation to `WarmAlarmPlatform.init()` that:
-  - fetches `getScheduledAlarms()`
-  - filters to entries with `scheduledAt.isAfter(DateTime.now())`
-  - calls `scheduleAlarm(WarmAlarmSchedule.fromSnapshot(s))` for each
-
-  > `WarmAlarmSchedule.fromSnapshot` is a factory constructor to add in this group.
-
-- [ ] **R1c** Add `WarmAlarm.init()` to the facade
-- [ ] **R1d** Add `WarmAlarmSchedule.fromSnapshot(WarmAlarmSnapshot)` factory constructor
-- [ ] **R1e** Override `init()` in Android Dart wrapper to no-op (default base impl handles it via `scheduleAlarm`)
-- [ ] **R1f** Override `init()` in iOS/macOS Dart wrapper — same default impl is sufficient; add override only if iOS needs a cross-check with pending notification IDs
-- [ ] **R1g** Add `RECEIVE_BOOT_COMPLETED` permission to Android `AndroidManifest.xml`
-- [ ] **R1h** Add `WarmAlarmBootReceiver` Kotlin class: on boot, load store and reschedule all future alarms
-- [ ] **R1i** Register `WarmAlarmBootReceiver` in `AndroidManifest.xml`
-- [ ] **R1j** Add tests
+- [ ] **R1a** Add `@async void init()` to the Pigeon `WarmAlarmApi` `@HostApi` in all three
+      platform `pigeons/messages.dart` files (Android, iOS, macOS)
+- [ ] **R1b** `melos run generate` — regenerate Pigeon bindings for all three platforms
+- [ ] **R1c** Add `Future<void> init()` to `WarmAlarmPlatform` abstract class (delegates to Pigeon)
+- [ ] **R1d** Add `WarmAlarm.init()` to the facade (delegates to `_platform.init()`)
+- [ ] **R1e** Implement `init()` in Android `WarmAlarmPlugin.kt`:
+  - iterate `WarmAlarmStore`, skip past alarms, call `AlarmManager.setExactAndAllowWhileIdle`
+    for each future alarm — no events emitted
+- [ ] **R1f** Implement `init()` in iOS `WarmAlarmPlugin.swift`:
+  - fetch pending `UNNotificationRequest` IDs; for each store entry missing a pending request,
+    call `UNUserNotificationCenter.add(request:)` silently
+- [ ] **R1g** Implement `init()` in macOS `WarmAlarmPlugin.swift` (same as iOS)
+- [ ] **R1h** Map `init()` in each platform's Dart wrapper (delegate to the Pigeon API)
+- [ ] **R1i** Add `RECEIVE_BOOT_COMPLETED` permission to Android `AndroidManifest.xml`
+- [ ] **R1j** Add `WarmAlarmBootReceiver` Kotlin class: on boot, load store and reschedule all future alarms
+      directly via `AlarmManager` (no Flutter engine, no events)
+- [ ] **R1k** Register `WarmAlarmBootReceiver` in `AndroidManifest.xml`
+- [ ] **R1l** Add tests
 
 ### Group C1: Convenience query methods
 
@@ -176,11 +191,10 @@ After Phase 4, migrating from `alarm` requires only these steps:
 
 ## Definition of Done
 
-□ `WarmAlarm.init()` reschedules future alarms recovered from native store
-□ `WarmAlarmBootReceiver` handles Android reboot recovery
+□ `WarmAlarm.init()` silently re-registers future alarms on all three platforms (no events emitted)
+□ `WarmAlarmBootReceiver` handles Android reboot recovery (no Flutter engine required)
 □ `WarmAlarm.hasAlarm()` and `WarmAlarm.getAlarm(id)` are available on the facade
 □ `WarmAlarmSchedule.androidFullScreenIntent` controls full-screen notification on Android
-□ `WarmAlarmSchedule.fromSnapshot(WarmAlarmSnapshot)` factory constructor available
 □ All Pigeon schemas updated and regenerated for all 3 platforms
 □ All new fields mapped in Android/iOS/macOS Dart wrappers
 □ melos run test passes (all 5 packages)

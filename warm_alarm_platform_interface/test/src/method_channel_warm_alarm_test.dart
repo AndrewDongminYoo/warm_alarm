@@ -12,21 +12,22 @@ void main() {
 
     setUp(() {
       methodChannelWarmAlarm = MethodChannelWarmAlarm();
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
-        methodChannelWarmAlarm.methodChannel,
-        (methodCall) async {
-          log.add(methodCall);
-          switch (methodCall.method) {
-            case 'getReadiness':
-              return <String, Object?>{
-                'level': 'unsupported',
-                'reasons': <String>['platformUnsupported'],
-              };
-            default:
-              return null;
-          }
-        },
-      );
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+            methodChannelWarmAlarm.methodChannel,
+            (methodCall) async {
+              log.add(methodCall);
+              switch (methodCall.method) {
+                case 'getReadiness':
+                  return <String, Object?>{
+                    'level': 'unsupported',
+                    'reasons': <String>['platformUnsupported'],
+                  };
+                default:
+                  return null;
+              }
+            },
+          );
     });
 
     tearDown(log.clear);
@@ -95,6 +96,11 @@ void main() {
 
     test('clearKillWarning completes without error', () async {
       await expectLater(methodChannelWarmAlarm.clearKillWarning(), completes);
+    });
+
+    test('init completes without channel traffic', () async {
+      await expectLater(methodChannelWarmAlarm.init(), completes);
+      expect(log, isEmpty);
     });
 
     test(

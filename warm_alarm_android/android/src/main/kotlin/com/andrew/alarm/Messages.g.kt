@@ -877,6 +877,7 @@ data class WarmAlarmScheduleWire(
     val snooze: WarmAlarmSnoozeWire? = null,
     val wakeCheck: WarmAlarmWakeCheckWire? = null,
     val payload: String? = null,
+    val androidFullScreenIntent: Boolean,
 ) {
     companion object {
         fun fromList(pigeonVar_list: List<Any?>): WarmAlarmScheduleWire {
@@ -888,7 +889,18 @@ data class WarmAlarmScheduleWire(
             val snooze = pigeonVar_list[5] as WarmAlarmSnoozeWire?
             val wakeCheck = pigeonVar_list[6] as WarmAlarmWakeCheckWire?
             val payload = pigeonVar_list[7] as String?
-            return WarmAlarmScheduleWire(id, scheduledAtMillis, notification, audio, recurrence, snooze, wakeCheck, payload)
+            val androidFullScreenIntent = pigeonVar_list[8] as Boolean
+            return WarmAlarmScheduleWire(
+                id,
+                scheduledAtMillis,
+                notification,
+                audio,
+                recurrence,
+                snooze,
+                wakeCheck,
+                payload,
+                androidFullScreenIntent,
+            )
         }
     }
 
@@ -902,6 +914,7 @@ data class WarmAlarmScheduleWire(
             snooze,
             wakeCheck,
             payload,
+            androidFullScreenIntent,
         )
 
     override fun equals(other: Any?): Boolean {
@@ -919,7 +932,8 @@ data class WarmAlarmScheduleWire(
             MessagesPigeonUtils.deepEquals(this.recurrence, other.recurrence) &&
             MessagesPigeonUtils.deepEquals(this.snooze, other.snooze) &&
             MessagesPigeonUtils.deepEquals(this.wakeCheck, other.wakeCheck) &&
-            MessagesPigeonUtils.deepEquals(this.payload, other.payload)
+            MessagesPigeonUtils.deepEquals(this.payload, other.payload) &&
+            MessagesPigeonUtils.deepEquals(this.androidFullScreenIntent, other.androidFullScreenIntent)
     }
 
     override fun hashCode(): Int {
@@ -932,6 +946,7 @@ data class WarmAlarmScheduleWire(
         result = 31 * result + MessagesPigeonUtils.deepHash(this.snooze)
         result = 31 * result + MessagesPigeonUtils.deepHash(this.wakeCheck)
         result = 31 * result + MessagesPigeonUtils.deepHash(this.payload)
+        result = 31 * result + MessagesPigeonUtils.deepHash(this.androidFullScreenIntent)
         return result
     }
 }
@@ -946,6 +961,7 @@ data class WarmAlarmSnapshotWire(
     val snooze: WarmAlarmSnoozeWire? = null,
     val wakeCheck: WarmAlarmWakeCheckWire? = null,
     val payload: String? = null,
+    val androidFullScreenIntent: Boolean,
 ) {
     companion object {
         fun fromList(pigeonVar_list: List<Any?>): WarmAlarmSnapshotWire {
@@ -957,7 +973,18 @@ data class WarmAlarmSnapshotWire(
             val snooze = pigeonVar_list[5] as WarmAlarmSnoozeWire?
             val wakeCheck = pigeonVar_list[6] as WarmAlarmWakeCheckWire?
             val payload = pigeonVar_list[7] as String?
-            return WarmAlarmSnapshotWire(id, scheduledAtMillis, notification, audio, recurrence, snooze, wakeCheck, payload)
+            val androidFullScreenIntent = pigeonVar_list[8] as Boolean
+            return WarmAlarmSnapshotWire(
+                id,
+                scheduledAtMillis,
+                notification,
+                audio,
+                recurrence,
+                snooze,
+                wakeCheck,
+                payload,
+                androidFullScreenIntent,
+            )
         }
     }
 
@@ -971,6 +998,7 @@ data class WarmAlarmSnapshotWire(
             snooze,
             wakeCheck,
             payload,
+            androidFullScreenIntent,
         )
 
     override fun equals(other: Any?): Boolean {
@@ -988,7 +1016,8 @@ data class WarmAlarmSnapshotWire(
             MessagesPigeonUtils.deepEquals(this.recurrence, other.recurrence) &&
             MessagesPigeonUtils.deepEquals(this.snooze, other.snooze) &&
             MessagesPigeonUtils.deepEquals(this.wakeCheck, other.wakeCheck) &&
-            MessagesPigeonUtils.deepEquals(this.payload, other.payload)
+            MessagesPigeonUtils.deepEquals(this.payload, other.payload) &&
+            MessagesPigeonUtils.deepEquals(this.androidFullScreenIntent, other.androidFullScreenIntent)
     }
 
     override fun hashCode(): Int {
@@ -1001,6 +1030,7 @@ data class WarmAlarmSnapshotWire(
         result = 31 * result + MessagesPigeonUtils.deepHash(this.snooze)
         result = 31 * result + MessagesPigeonUtils.deepHash(this.wakeCheck)
         result = 31 * result + MessagesPigeonUtils.deepHash(this.payload)
+        result = 31 * result + MessagesPigeonUtils.deepHash(this.androidFullScreenIntent)
         return result
     }
 }
@@ -1309,6 +1339,8 @@ private open class MessagesPigeonCodec : StandardMessageCodec() {
 
 /** Generated interface from Pigeon that represents a handler of messages from Flutter. */
 interface WarmAlarmApi {
+    fun init(callback: (Result<Unit>) -> Unit)
+
     fun getCapabilities(callback: (Result<WarmAlarmCapabilitiesWire>) -> Unit)
 
     fun getPermissionState(callback: (Result<WarmAlarmPermissionStateWire>) -> Unit)
@@ -1356,6 +1388,28 @@ interface WarmAlarmApi {
             messageChannelSuffix: String = "",
         ) {
             val separatedMessageChannelSuffix = if (messageChannelSuffix.isNotEmpty()) ".$messageChannelSuffix" else ""
+            run {
+                val channel =
+                    BasicMessageChannel<Any?>(
+                        binaryMessenger,
+                        "dev.flutter.pigeon.warm_alarm.WarmAlarmApi.init$separatedMessageChannelSuffix",
+                        codec,
+                    )
+                if (api != null) {
+                    channel.setMessageHandler { _, reply ->
+                        api.init { result: Result<Unit> ->
+                            val error = result.exceptionOrNull()
+                            if (error != null) {
+                                reply.reply(MessagesPigeonUtils.wrapError(error))
+                            } else {
+                                reply.reply(MessagesPigeonUtils.wrapResult(null))
+                            }
+                        }
+                    }
+                } else {
+                    channel.setMessageHandler(null)
+                }
+            }
             run {
                 val channel =
                     BasicMessageChannel<Any?>(

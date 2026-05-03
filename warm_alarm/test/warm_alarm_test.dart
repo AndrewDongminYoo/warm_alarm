@@ -5,7 +5,9 @@ import 'package:mocktail/mocktail.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:warm_alarm/warm_alarm.dart';
 
-class MockWarmAlarmPlatform extends Mock with MockPlatformInterfaceMixin implements WarmAlarmPlatform {}
+class MockWarmAlarmPlatform extends Mock
+    with MockPlatformInterfaceMixin
+    implements WarmAlarmPlatform {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -149,6 +151,55 @@ void main() {
       when(warmAlarmPlatform.clearKillWarning).thenAnswer((_) async {});
       await WarmAlarm.clearKillWarning();
       verify(warmAlarmPlatform.clearKillWarning).called(1);
+    });
+
+    test('init delegates to platform', () async {
+      when(warmAlarmPlatform.init).thenAnswer((_) async {});
+      await WarmAlarm.init();
+      verify(warmAlarmPlatform.init).called(1);
+    });
+
+    test('hasAlarm returns true when alarms exist', () async {
+      final at = DateTime(2026, 5, 3, 8);
+      when(warmAlarmPlatform.getScheduledAlarms).thenAnswer(
+        (_) async => <WarmAlarmSnapshot>[
+          WarmAlarmSnapshot(
+            id: 1,
+            scheduledAt: at,
+            notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+            audio: const WarmAlarmAudio(),
+          ),
+        ],
+      );
+      expect(await WarmAlarm.hasAlarm(), isTrue);
+    });
+
+    test('hasAlarm returns false when no alarms exist', () async {
+      when(
+        warmAlarmPlatform.getScheduledAlarms,
+      ).thenAnswer((_) async => const <WarmAlarmSnapshot>[]);
+      expect(await WarmAlarm.hasAlarm(), isFalse);
+    });
+
+    test('getAlarm returns matching snapshot', () async {
+      final at = DateTime(2026, 5, 3, 8);
+      final snap = WarmAlarmSnapshot(
+        id: 42,
+        scheduledAt: at,
+        notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+        audio: const WarmAlarmAudio(),
+      );
+      when(warmAlarmPlatform.getScheduledAlarms).thenAnswer(
+        (_) async => <WarmAlarmSnapshot>[snap],
+      );
+      expect(await WarmAlarm.getAlarm(42), snap);
+    });
+
+    test('getAlarm returns null when id not found', () async {
+      when(
+        warmAlarmPlatform.getScheduledAlarms,
+      ).thenAnswer((_) async => const <WarmAlarmSnapshot>[]);
+      expect(await WarmAlarm.getAlarm(99), isNull);
     });
   });
 }
