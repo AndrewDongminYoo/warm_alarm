@@ -64,6 +64,18 @@ for API stability. Pigeon-generated DTO types stay in `lib/src/` (private) and a
 Each platform package: (1) extends `WarmAlarmPlatform` from the interface package, (2) registers
 via `static void registerWith(Registrar)`, (3) delegates to the Pigeon-generated `WarmAlarmApi`.
 
+## Before committing
+
+Run these commands in order before every commit:
+
+```bash
+melos run generate   # if any pigeons/messages.dart was changed
+melos run format     # dart fix + dart format (120-col) across all packages
+trunk fmt            # format non-Dart files (Kotlin, YAML, Markdown, etc.)
+```
+
+`melos run generate` is only required when a `pigeons/messages.dart` file changed; when in doubt, run it anyway.
+
 ## Key constraints
 
 - Line length: 120 columns (not the Dart default 80); configured in each `analysis_options.yaml`.
