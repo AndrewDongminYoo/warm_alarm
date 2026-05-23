@@ -18,8 +18,8 @@ topics:
   - alarm
 
 dev_dependencies:
-  melos: ^7.5.1
-  very_good_cli: ^1.1.1
+  melos: ^7.7.0
+  very_good_cli: ^1.2.0
 
 melos:
   name: warm_alarm
