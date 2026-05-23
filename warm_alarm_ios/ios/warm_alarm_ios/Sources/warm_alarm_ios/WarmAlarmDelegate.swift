@@ -142,13 +142,23 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
     // MARK: - Audio
 
+    // Flutter assets live in App.framework (not Runner.app directly) in both debug and release builds.
+    private func flutterAssetURL(for asset: String) -> URL? {
+        let appFramework = Bundle.main.bundleURL
+            .appendingPathComponent("Frameworks/App.framework/flutter_assets")
+            .appendingPathComponent(asset)
+        if FileManager.default.fileExists(atPath: appFramework.path) { return appFramework }
+        // Fallback for older / simulator build layouts.
+        return Bundle.main.url(forResource: "flutter_assets/\(asset)", withExtension: nil)
+    }
+
     private func startAudio(alarmId: Int64, for schedule: WarmAlarmScheduleData?) {
         configureAudioSession()
         let player: AVAudioPlayer?
         if let path = schedule?.filePath, !path.isEmpty {
             player = try? AVAudioPlayer(contentsOf: URL(fileURLWithPath: path))
         } else if let asset = schedule?.assetPath, !asset.isEmpty,
-                  let url = Bundle.main.url(forResource: "flutter_assets/\(asset)", withExtension: nil) {
+                  let url = flutterAssetURL(for: asset) {
             player = try? AVAudioPlayer(contentsOf: url)
         } else {
             player = nil
@@ -200,7 +210,8 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
     private func configureAudioSession() {
         #if os(iOS)
-        try? AVAudioSession.sharedInstance().setCategory(.playback, options: [])
+        // .mixWithOthers lets warm_alarm coexist with just_audio playing the voice message.
+        try? AVAudioSession.sharedInstance().setCategory(.playback, options: [.mixWithOthers])
         try? AVAudioSession.sharedInstance().setActive(true)
         #endif
     }
