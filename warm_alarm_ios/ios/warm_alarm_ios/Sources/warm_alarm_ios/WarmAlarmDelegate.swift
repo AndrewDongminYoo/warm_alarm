@@ -95,6 +95,16 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
     // MARK: - Called by WarmAlarmPlugin
 
+    func stopIfPlaying(alarmId: Int64) {
+        guard currentlyPlayingAlarmId == alarmId else { return }
+        stopAudio()
+    }
+
+    func stopAllIfPlaying() {
+        guard currentlyPlayingAlarmId != nil else { return }
+        stopAudio()
+    }
+
     func emitScheduled(alarmId: Int64) {
         emitEvent(WarmAlarmEventWire(alarmId: alarmId, type: .scheduled, occurredAtMillis: nowMillis()))
     }

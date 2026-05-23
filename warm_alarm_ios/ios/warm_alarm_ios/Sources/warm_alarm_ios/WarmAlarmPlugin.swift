@@ -146,6 +146,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     }
 
     func cancelAlarm(id: Int64, completion: @escaping (Result<Void, Error>) -> Void) {
+        delegate.stopIfPlaying(alarmId: id)
         WarmAlarmStore.shared.remove(id: id)
         UNUserNotificationCenter.current().removePendingNotificationRequests(
             withIdentifiers: [String(id)])
@@ -153,6 +154,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     }
 
     func cancelAllAlarms(completion: @escaping (Result<Void, Error>) -> Void) {
+        delegate.stopAllIfPlaying()
         WarmAlarmStore.shared.clear()
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
         completion(.success(()))
