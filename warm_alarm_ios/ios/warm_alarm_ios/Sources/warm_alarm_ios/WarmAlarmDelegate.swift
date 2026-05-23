@@ -112,7 +112,13 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         let content = UNMutableNotificationContent()
         content.title = schedule.notificationTitle
         content.body = schedule.notificationBody
-        content.sound = UNNotificationSound.default
+        // Use bundled alarm sound so the notification is audible when device is locked.
+        // Falls back to default if the file is absent (e.g. simulator builds without the bundle).
+        if Bundle.main.url(forResource: "alarm_ring", withExtension: "caf") != nil {
+            content.sound = UNNotificationSound(named: UNNotificationSoundName("alarm_ring.caf"))
+        } else {
+            content.sound = .default
+        }
         content.userInfo = ["alarmId": String(schedule.id)]
         content.categoryIdentifier = Self.categoryIdentifier
         return content
