@@ -23,6 +23,7 @@ class WarmAlarmForegroundService : Service() {
     companion object {
         const val ACTION_STOP = "com.andrew.alarm.ACTION_STOP"
         const val ACTION_SNOOZE = "com.andrew.alarm.ACTION_SNOOZE"
+        const val ACTION_CANCEL_CURRENT = "com.andrew.alarm.ACTION_CANCEL_CURRENT"
         const val EXTRA_ALARM_ID = WarmAlarmReceiver.EXTRA_ALARM_ID
         const val CHANNEL_ID = "warm_alarm_channel"
         private const val NOTIF_ID = 2001
@@ -33,6 +34,19 @@ class WarmAlarmForegroundService : Service() {
         @Volatile var isRinging = false
 
         @Volatile var currentAlarmId: Long? = null
+
+        fun requestCancelCurrentAlarm(
+            context: Context,
+            alarmId: Long,
+        ) {
+            if (!isRinging || currentAlarmId != alarmId) return
+            context.startService(
+                Intent(context, WarmAlarmForegroundService::class.java).apply {
+                    action = ACTION_CANCEL_CURRENT
+                    putExtra(EXTRA_ALARM_ID, alarmId)
+                },
+            )
+        }
     }
 
     private var mediaPlayer: MediaPlayer? = null
@@ -60,6 +74,7 @@ class WarmAlarmForegroundService : Service() {
         when (action) {
             ACTION_STOP -> handleStop(alarmId)
             ACTION_SNOOZE -> handleSnooze(alarmId)
+            ACTION_CANCEL_CURRENT -> handleCancelCurrentAlarm(alarmId)
             else -> handleFire(alarmId)
         }
         return START_NOT_STICKY
@@ -102,6 +117,17 @@ class WarmAlarmForegroundService : Service() {
         val keepNotif = schedule?.notification?.keepNotificationAfterAlarmEnds == true
         @Suppress("DEPRECATION")
         stopForeground(!keepNotif)
+        stopSelf()
+    }
+
+    private fun handleCancelCurrentAlarm(alarmId: Long) {
+        if (alarmId == -1L || currentAlarmId != alarmId) return
+        isRinging = false
+        currentAlarmId = null
+        currentSchedule = null
+        stopAudio()
+        @Suppress("DEPRECATION")
+        stopForeground(true)
         stopSelf()
     }
 

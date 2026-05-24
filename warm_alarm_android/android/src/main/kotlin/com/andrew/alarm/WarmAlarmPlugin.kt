@@ -127,6 +127,7 @@ class WarmAlarmPlugin :
         WarmAlarmStore.remove(context, id)
         val pending = alarmPendingIntent(id, PendingIntent.FLAG_NO_CREATE)
         pending?.let { alarmManager.cancel(it) }
+        WarmAlarmForegroundService.requestCancelCurrentAlarm(context, id)
         callback(Result.success(Unit))
     }
 
@@ -136,6 +137,9 @@ class WarmAlarmPlugin :
             pending?.let { alarmManager.cancel(it) }
         }
         WarmAlarmStore.clear(context)
+        WarmAlarmForegroundService.currentAlarmId?.let { id ->
+            WarmAlarmForegroundService.requestCancelCurrentAlarm(context, id)
+        }
         callback(Result.success(Unit))
     }
 
