@@ -80,23 +80,23 @@ class WarmAlarmPlugin :
         schedule: WarmAlarmScheduleWire,
         callback: (Result<WarmAlarmScheduleResultWire>) -> Unit,
     ) {
-        WarmAlarmStore.save(context, schedule)
         // A recurring alarm fires at the next matching weekday (AlarmManager is
         // single-shot; the fire receiver re-arms the following occurrence).
         val weekdays = schedule.recurrence?.weekdays
         val fireAtMillis =
             if (!weekdays.isNullOrEmpty()) {
-                val next =
-                    WarmAlarmRecurrence.nextOccurrence(
-                        schedule.scheduledAtMillis,
-                        weekdays,
-                        System.currentTimeMillis(),
-                    ) ?: schedule.scheduledAtMillis
-                WarmAlarmStore.reschedule(context, schedule.id, next)
-                next
+                WarmAlarmRecurrence.nextOccurrence(
+                    schedule.scheduledAtMillis,
+                    weekdays,
+                    System.currentTimeMillis(),
+                ) ?: schedule.scheduledAtMillis
             } else {
                 schedule.scheduledAtMillis
             }
+        // Persist the actual fire time in one write so boot recovery and the
+        // receiver's re-arm math read the scheduled occurrence, not the raw
+        // request time.
+        WarmAlarmStore.save(context, schedule.copy(scheduledAtMillis = fireAtMillis))
         val pending = alarmPendingIntent(schedule.id, PendingIntent.FLAG_UPDATE_CURRENT)!!
         val inexact = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()
         val readiness =

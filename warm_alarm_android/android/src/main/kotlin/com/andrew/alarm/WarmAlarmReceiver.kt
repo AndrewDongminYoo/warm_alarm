@@ -37,7 +37,8 @@ class WarmAlarmReceiver : BroadcastReceiver() {
         val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
         if (alarmId == -1L) return
         val isRetrigger = intent.getBooleanExtra(EXTRA_IS_RETRIGGER, false)
-        val payload = WarmAlarmStore.load(context, alarmId)?.payload
+        val schedule = WarmAlarmStore.load(context, alarmId)
+        val payload = schedule?.payload
 
         if (isRetrigger) {
             WarmAlarmStore.incrementRetriggerCount(context, alarmId)
@@ -69,7 +70,6 @@ class WarmAlarmReceiver : BroadcastReceiver() {
             // Re-arm the next occurrence for a recurring alarm. This runs in the
             // receiver (no Flutter engine required), so the series survives even
             // when the app process has been killed.
-            val schedule = WarmAlarmStore.load(context, alarmId)
             val weekdays = schedule?.recurrence?.weekdays
             if (schedule != null && !weekdays.isNullOrEmpty()) {
                 WarmAlarmRecurrence
