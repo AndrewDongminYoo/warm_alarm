@@ -17,7 +17,7 @@ deliver before you commit to a schedule.
 - **Reactive event stream** — sealed `WarmAlarmEvent` types covering every alarm lifecycle transition
 - **Custom audio** — local file, asset, or platform default with optional fade-in, looping, and vibration
 - **Wake-check flow** (Android only) — verifies the user is awake after dismissal and retriggers if not
-- **Snooze and recurrence** — built-in snooze duration and weekly recurrence by weekday bitmask
+- **Snooze and recurrence** — built-in snooze duration and weekly recurrence by weekday
 - **Federated plugin** — independent implementations for Android, iOS, and macOS
 
 ---

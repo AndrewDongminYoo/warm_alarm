@@ -47,11 +47,12 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         guard let alarmIdString = response.notification.request.content.userInfo["alarmId"] as? String,
               let alarmId = Int64(alarmIdString) else { return }
 
+        let deliveredIdentifier = response.notification.request.identifier
         switch response.actionIdentifier {
         case Self.stopActionIdentifier:
-            handleStop(alarmId: alarmId)
+            handleStop(alarmId: alarmId, deliveredIdentifier: deliveredIdentifier)
         case Self.snoozeActionIdentifier:
-            handleSnooze(alarmId: alarmId)
+            handleSnooze(alarmId: alarmId, deliveredIdentifier: deliveredIdentifier)
         case UNNotificationDefaultActionIdentifier:
             let schedule = WarmAlarmStore.shared.load(id: alarmId)
             startAudio(alarmId: alarmId, for: schedule)
@@ -64,22 +65,30 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
     // MARK: - Actions
 
-    func handleStop(alarmId: Int64) {
+    func handleStop(alarmId: Int64, deliveredIdentifier: String? = nil) {
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
         stopAudio()
-        WarmAlarmStore.shared.remove(id: alarmId)
+        // Dismiss ends only this occurrence for a recurring alarm; the repeating
+        // triggers stay armed, so keep the stored schedule. cancelAlarm tears down
+        // the series.
+        let isRecurring = !(schedule?.recurrenceWeekdays?.isEmpty ?? true)
+        if !isRecurring {
+            WarmAlarmStore.shared.remove(id: alarmId)
+        }
         if schedule?.keepNotificationAfterAlarmEnds != true {
-            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [String(alarmId)])
+            UNUserNotificationCenter.current().removeDeliveredNotifications(
+                withIdentifiers: [deliveredIdentifier ?? String(alarmId)])
         }
         emitEvent(WarmAlarmEventWire(
             alarmId: alarmId, type: .stopped, occurredAtMillis: nowMillis(), payload: schedule?.payload))
     }
 
-    func handleSnooze(alarmId: Int64) {
+    func handleSnooze(alarmId: Int64, deliveredIdentifier: String? = nil) {
         stopAudio()
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
         if schedule?.keepNotificationAfterAlarmEnds != true {
-            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [String(alarmId)])
+            UNUserNotificationCenter.current().removeDeliveredNotifications(
+                withIdentifiers: [deliveredIdentifier ?? String(alarmId)])
         }
         let snoozeDurationMillis = schedule?.snoozeDurationMillis ?? (5 * 60 * 1000)
         let fireAt = nowMillis() + snoozeDurationMillis

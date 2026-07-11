@@ -48,6 +48,15 @@ primary alarm fires. If `ACTION_WAKE_CHECK_FIRE` arrives without the user having
 primary alarm, the alarm retriggers (up to `maxRetriggers` times at `retriggerDelay` intervals).
 `ACTION_WAKE_CHECK_DISMISS` cancels the follow-up chain.
 
+### Recurrence
+
+Weekly recurrence is re-armed on fire: `AlarmManager` is single-shot, so when a recurring alarm
+fires, `WarmAlarmReceiver` computes the next matching weekday occurrence
+(`WarmAlarmRecurrence.nextOccurrence`, same time-of-day, strictly after now) and re-arms it, updating
+the stored `scheduledAtMillis`. The re-arm runs in the receiver without a Flutter engine, so the
+series survives even when the app process is dead. Dismissing an alarm ends only the current
+occurrence; `cancelAlarm(id)` tears down the series.
+
 ### Boot persistence
 
 `WarmAlarmBootReceiver` handles `BOOT_COMPLETED` and `LOCKED_BOOT_COMPLETED` broadcasts (via

@@ -109,9 +109,12 @@ class WarmAlarmForegroundService : Service() {
         val wakeCheckDelay = schedule?.wakeCheck?.checkDelayMillis
         val maxRetriggers = (schedule?.wakeCheck?.maxRetriggers ?: 1L).toInt()
         val retriggerCount = WarmAlarmStore.getRetriggerCount(this, alarmId)
+        // A recurring alarm keeps its stored schedule: the next occurrence was
+        // re-armed when it fired, and only cancelAlarm() tears down the series.
+        val isRecurring = schedule?.recurrence?.weekdays.isNullOrEmpty() == false
         if (wakeCheckDelay != null && retriggerCount < maxRetriggers) {
             scheduleWakeCheck(alarmId, System.currentTimeMillis() + wakeCheckDelay)
-        } else {
+        } else if (!isRecurring) {
             WarmAlarmStore.remove(this, alarmId)
         }
         val keepNotif = schedule?.notification?.keepNotificationAfterAlarmEnds == true

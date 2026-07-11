@@ -65,6 +65,20 @@ class WarmAlarmReceiver : BroadcastReceiver() {
                     payload = payload,
                 ),
             )
+
+            // Re-arm the next occurrence for a recurring alarm. This runs in the
+            // receiver (no Flutter engine required), so the series survives even
+            // when the app process has been killed.
+            val schedule = WarmAlarmStore.load(context, alarmId)
+            val weekdays = schedule?.recurrence?.weekdays
+            if (schedule != null && !weekdays.isNullOrEmpty()) {
+                WarmAlarmRecurrence
+                    .nextOccurrence(schedule.scheduledAtMillis, weekdays, System.currentTimeMillis())
+                    ?.let { next ->
+                        WarmAlarmStore.reschedule(context, alarmId, next)
+                        WarmAlarmPlugin.rescheduleAlarm(context, alarmId, next)
+                    }
+            }
         }
 
         val serviceIntent =

@@ -43,9 +43,12 @@ fade-in is applied by scheduling discrete volume steps as `DispatchWorkItem`s (v
 
 ### Recurrence
 
-Weekly recurrence weekdays are persisted but not re-armed after an alarm fires — only snooze
-triggers a follow-up notification. macOS does not support arbitrary weekday-masked repeating
-`UNNotificationRequest` triggers natively.
+Weekly recurrence is delivered natively: one `UNCalendarNotificationTrigger(repeats: true)` is
+registered per selected weekday, matching `DateComponents(weekday, hour, minute)`, keyed
+`"{id}#{isoWeekday}"`. The series recurs without any re-arm and survives app termination. ISO
+weekdays (1 = Mon … 7 = Sun) are mapped to Apple's Calendar weekdays (1 = Sun … 7 = Sat).
+Dismissing an alarm ends only the current occurrence; `cancelAlarm(id)` removes every per-weekday
+request and tears down the series.
 
 ### Kill warning
 

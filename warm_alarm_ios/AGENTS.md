@@ -42,7 +42,7 @@ test/
 - Don't edit `Messages.g.swift` or `lib/src/messages.g.dart`. Edit `pigeons/messages.dart` and run `melos run generate`.
 - Don't introduce app-side `Info.plist`/entitlements changes from inside the plugin — document them in the README instead and let consumers add them.
 - Don't change `AVAudioSession` category to anything other than `.playback`; `.ambient` and friends will be silenced by the device's mute switch.
-- `WarmAlarmDelegate` reschedules only for **snooze**, not recurrence: weekday-masked recurrence is persisted but not re-armed after fire (iOS has no native arbitrary weekday-masked recurring `UNNotificationRequest` trigger). If you implement recurrence-on-fire, keep it snooze-independent.
+- Recurrence is handled by per-weekday repeating triggers built in `WarmAlarmPlugin.makeRequests` (`UNCalendarNotificationTrigger(repeats: true)`, keyed `"{id}#{isoWeekday}"`), **not** by `WarmAlarmDelegate` — the delegate's `reschedule` stays snooze-only. Don't add a re-arm-on-fire path for recurrence: the fire callback can't run when the app is killed, which is exactly when an alarm fires.
 
 ## NOTES
 

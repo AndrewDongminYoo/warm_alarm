@@ -46,9 +46,13 @@ timer.
 
 ### Recurrence
 
-Weekly recurrence weekdays are accepted and persisted, but the iOS implementation does not yet
-reschedule the next occurrence after an alarm fires — only snooze triggers a follow-up notification.
-iOS does not natively support arbitrary weekday-masked recurring `UNNotificationRequest` triggers.
+Weekly recurrence is delivered natively: one `UNCalendarNotificationTrigger(repeats: true)` is
+registered per selected weekday, matching `DateComponents(weekday, hour, minute)`, keyed
+`"{id}#{isoWeekday}"`. The series recurs without any re-arm and survives app termination. ISO
+weekdays (1 = Mon … 7 = Sun) are mapped to Apple's Calendar weekdays (1 = Sun … 7 = Sat).
+Dismissing an alarm ends only the current occurrence; `cancelAlarm(id)` removes every per-weekday
+request and tears down the series. **Note:** each recurring alarm consumes up to 7 of iOS's 64
+pending-notification slots.
 
 ### Kill warning
 
