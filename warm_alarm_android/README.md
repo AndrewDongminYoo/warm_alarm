@@ -72,6 +72,7 @@ SCHEDULE_EXACT_ALARM       — exact alarm scheduling (user-granted on Android 1
 USE_EXACT_ALARM            — exact alarm scheduling (system-granted for alarm-category apps)
 RECEIVE_BOOT_COMPLETED     — reschedule alarms after device reboot
 POST_NOTIFICATIONS         — show alarm and kill-warning notifications (Android 13+)
+USE_FULL_SCREEN_INTENT     — launch the full-screen alarm UI over the lock screen (Android 14+)
 VIBRATE                    — haptic feedback during alarm
 FOREGROUND_SERVICE         — run WarmAlarmForegroundService
 FOREGROUND_SERVICE_MEDIA_PLAYBACK — declare mediaPlayback foreground service type
