@@ -120,32 +120,36 @@ Call `getReadiness()` at runtime and surface the reasons to your users so they c
 
 ### `WarmAlarm` — static entry point
 
-| Method                    | Returns                    | Description                                                 |
-| ------------------------- | -------------------------- | ----------------------------------------------------------- |
-| `getCapabilities()`       | `WarmAlarmCapabilities`    | Per-feature support status for the current platform         |
-| `getPermissionState()`    | `WarmAlarmPermissionState` | Current notification and exact-alarm permission grants      |
-| `getReadiness()`          | `WarmAlarmReadiness`       | Overall system readiness with actionable reason codes       |
-| `scheduleAlarm(schedule)` | `WarmAlarmScheduleResult`  | Schedule an alarm; returns the assigned ID and any warnings |
-| `cancelAlarm(id)`         | `Future<void>`             | Cancel a specific alarm by ID                               |
-| `cancelAllAlarms()`       | `Future<void>`             | Cancel all scheduled alarms                                 |
-| `getScheduledAlarms()`    | `List<WarmAlarmSnapshot>`  | List all currently scheduled alarms                         |
-| `events`                  | `Stream<WarmAlarmEvent>`   | Real-time alarm lifecycle event stream                      |
+| Method                          | Returns                    | Description                                                 |
+| ------------------------------- | -------------------------- | ----------------------------------------------------------- |
+| `getCapabilities()`             | `WarmAlarmCapabilities`    | Per-feature support status for the current platform         |
+| `getPermissionState()`          | `WarmAlarmPermissionState` | Current notification and exact-alarm permission grants      |
+| `getReadiness()`                | `WarmAlarmReadiness`       | Overall system readiness with actionable reason codes       |
+| `scheduleAlarm(schedule)`       | `WarmAlarmScheduleResult`  | Schedule an alarm; returns the assigned ID and any warnings |
+| `cancelAlarm(id)`               | `Future<void>`             | Cancel a specific alarm by ID                               |
+| `cancelAllAlarms()`             | `Future<void>`             | Cancel all scheduled alarms                                 |
+| `getScheduledAlarms()`          | `List<WarmAlarmSnapshot>`  | List all currently scheduled alarms                         |
+| `events`                        | `Stream<WarmAlarmEvent>`   | Real-time alarm lifecycle event stream                      |
+| `isRinging({id})`               | `Future<bool>`             | Whether any alarm — or a specific alarm by ID — is ringing  |
+| `setKillWarning({title, body})` | `Future<void>`             | Set the notification shown if the app is force-killed       |
+| `clearKillWarning()`            | `Future<void>`             | Clear the app-kill warning notification                     |
 
 ### Key data classes
 
-| Class                      | Purpose                                                                                           |
-| -------------------------- | ------------------------------------------------------------------------------------------------- |
-| `WarmAlarmSchedule`        | Full alarm configuration: timing, notification, audio, snooze, recurrence, wake-check             |
-| `WarmAlarmCapabilities`    | `WarmAlarmSupportStatus` per feature: exact scheduling, background audio, full-screen, wake-check |
-| `WarmAlarmReadiness`       | `level` (`ready \| limited \| blocked \| unsupported`) + `List<WarmAlarmReadinessReason>`         |
-| `WarmAlarmPermissionState` | Boolean flags: `notificationsGranted`, `exactAlarmGranted`, `fullScreenIntentGranted`             |
-| `WarmAlarmScheduleResult`  | `alarmId`, `readiness`, optional `WarmAlarmWarning`                                               |
-| `WarmAlarmAudio`           | `filePath?`, `assetPath?`, `loop`, `volume?`, `fadeInDuration?`, `vibrate`                        |
-| `WarmAlarmNotification`    | `title`, `body`, `stopActionTitle?`, `snoozeActionTitle?`                                         |
-| `WarmAlarmSnooze`          | `duration`                                                                                        |
-| `WarmAlarmRecurrence`      | `weekdays` bitmask                                                                                |
-| `WarmAlarmWakeCheck`       | `checkDelay`, `retriggerDelay?`, `maxRetriggers`                                                  |
-| `WarmAlarmSnapshot`        | Lightweight scheduled-alarm record: `id`, `scheduledAt`                                           |
+| Class                      | Purpose                                                                                                                                             |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WarmAlarmSchedule`        | Full alarm configuration: timing, notification, audio, snooze, recurrence, wake-check                                                               |
+| `WarmAlarmCapabilities`    | `WarmAlarmSupportStatus` per feature: exact scheduling, background audio, full-screen, wake-check                                                   |
+| `WarmAlarmReadiness`       | `level` (`ready \| limited \| blocked \| unsupported`) + `List<WarmAlarmReadinessReason>`                                                           |
+| `WarmAlarmPermissionState` | Boolean flags: `notificationsGranted`, `exactAlarmGranted`, `fullScreenIntentGranted`                                                               |
+| `WarmAlarmScheduleResult`  | `alarmId`, `readiness`, optional `WarmAlarmWarning`                                                                                                 |
+| `WarmAlarmAudio`           | `filePath?`, `assetPath?`, `loop`, `volume?`, `fadeInDuration?`, `fadeSteps?`, `volumeEnforced`, `vibrate`                                          |
+| `WarmAlarmVolumeFadeStep`  | One staircase volume-fade keyframe: `time`, `volume`                                                                                                |
+| `WarmAlarmNotification`    | `title`, `body`, `stopActionTitle?`, `snoozeActionTitle?`                                                                                           |
+| `WarmAlarmSnooze`          | `duration`                                                                                                                                          |
+| `WarmAlarmRecurrence`      | `weekdays` bitmask                                                                                                                                  |
+| `WarmAlarmWakeCheck`       | `checkDelay`, `retriggerDelay?`, `maxRetriggers?`                                                                                                   |
+| `WarmAlarmSnapshot`        | Scheduled-alarm record: `id`, `scheduledAt`, `notification`, `audio`, `recurrence?`, `snooze?`, `wakeCheck?`, `payload?`, `androidFullScreenIntent` |
 
 ### `WarmAlarmEvent` — sealed event types
 
