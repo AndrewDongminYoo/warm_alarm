@@ -14,20 +14,20 @@ macos/
     Package.swift                                          # SwiftPM manifest (PrivacyInfo.xcprivacy is a TODO placeholder)
     Sources/warm_alarm_macos/
       WarmAlarmPlugin.swift                                # plugin entry; AppKit lifecycle hooks; kill-warning
-      WarmAlarmDelegate.swift                              # UNUserNotificationCenter delegate; AVAudioPlayer; fade; recurrence reschedule
+      WarmAlarmDelegate.swift                              # UNUserNotificationCenter delegate; AVAudioPlayer; fade; snooze reschedule
       WarmAlarmStore.swift                                 # UserDefaults-backed Codable schedule store
       Messages.g.swift                                     # GENERATED Pigeon Swift bindings
 ```
 
 ## WHERE TO LOOK
 
-| Task                         | Location                                                                      |
-| ---------------------------- | ----------------------------------------------------------------------------- |
-| Notification scheduling      | `WarmAlarmPlugin.swift` + `WarmAlarmDelegate.swift`                           |
-| Audio playback / fade-in     | `WarmAlarmDelegate.swift` (no `AVAudioSession`; timer-driven volume schedule) |
-| App-lifecycle (kill-warning) | `WarmAlarmPlugin.swift` (`NSApplication` notifications)                       |
-| Persistence                  | `WarmAlarmStore.swift`                                                        |
-| Wire-to-public mapping       | `lib/warm_alarm_macos.dart`                                                   |
+| Task                         | Location                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------------ |
+| Notification scheduling      | `WarmAlarmPlugin.swift` + `WarmAlarmDelegate.swift`                            |
+| Audio playback / fade-in     | `WarmAlarmDelegate.swift` (no `AVAudioSession`; `DispatchWorkItem` fade steps) |
+| App-lifecycle (kill-warning) | `WarmAlarmPlugin.swift` (`NSApplication` notifications)                        |
+| Persistence                  | `WarmAlarmStore.swift`                                                         |
+| Wire-to-public mapping       | `lib/warm_alarm_macos.dart`                                                    |
 
 ## CONVENTIONS
 

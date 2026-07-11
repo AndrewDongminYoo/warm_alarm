@@ -14,7 +14,7 @@ ios/
     Package.swift                                        # SwiftPM manifest (PrivacyInfo.xcprivacy is a TODO placeholder)
     Sources/warm_alarm_ios/
       WarmAlarmPlugin.swift                              # plugin entry; lifecycle observers; startup reschedule
-      WarmAlarmDelegate.swift                            # UNUserNotificationCenter delegate; Stop/Snooze; AVAudioPlayer; fade; recurrence reschedule
+      WarmAlarmDelegate.swift                            # UNUserNotificationCenter delegate; Stop/Snooze; AVAudioPlayer; fade; snooze reschedule
       WarmAlarmStore.swift                               # UserDefaults-backed Codable schedule store
       Messages.g.swift                                   # GENERATED Pigeon Swift bindings
     Tests/warm_alarm_ios_tests/
@@ -23,13 +23,13 @@ test/
 
 ## WHERE TO LOOK
 
-| Task                                          | Location                                                                         |
-| --------------------------------------------- | -------------------------------------------------------------------------------- |
-| Notification scheduling / categories          | `WarmAlarmPlugin.swift` + `WarmAlarmDelegate.swift`                              |
-| Audio playback / fade-in / Silent-mode bypass | `WarmAlarmDelegate.swift` (`AVAudioSession`, `AVAudioPlayer`, timer-driven fade) |
-| Persistence                                   | `WarmAlarmStore.swift`                                                           |
-| Wire-to-public mapping                        | `lib/warm_alarm_ios.dart`                                                        |
-| Pigeon channel registration                   | `WarmAlarmPlugin.swift` (calls `WarmAlarmApi.setUp(...)`)                        |
+| Task                                          | Location                                                                                     |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Notification scheduling / categories          | `WarmAlarmPlugin.swift` + `WarmAlarmDelegate.swift`                                          |
+| Audio playback / fade-in / Silent-mode bypass | `WarmAlarmDelegate.swift` (`AVAudioSession`, `AVAudioPlayer`, `DispatchWorkItem` fade steps) |
+| Persistence                                   | `WarmAlarmStore.swift`                                                                       |
+| Wire-to-public mapping                        | `lib/warm_alarm_ios.dart`                                                                    |
+| Pigeon channel registration                   | `WarmAlarmPlugin.swift` (calls `WarmAlarmApiSetup.setUp(...)`)                               |
 
 ## CONVENTIONS
 
@@ -42,7 +42,7 @@ test/
 - Don't edit `Messages.g.swift` or `lib/src/messages.g.dart`. Edit `pigeons/messages.dart` and run `melos run generate`.
 - Don't introduce app-side `Info.plist`/entitlements changes from inside the plugin — document them in the README instead and let consumers add them.
 - Don't change `AVAudioSession` category to anything other than `.playback`; `.ambient` and friends will be silenced by the device's mute switch.
-- Don't drop the recurrence reschedule logic in `WarmAlarmDelegate`; iOS does not support arbitrary weekday-masked recurring `UNNotificationRequest` triggers natively.
+- `WarmAlarmDelegate` reschedules only for **snooze**, not recurrence: weekday-masked recurrence is persisted but not re-armed after fire (iOS has no native arbitrary weekday-masked recurring `UNNotificationRequest` trigger). If you implement recurrence-on-fire, keep it snooze-independent.
 
 ## NOTES
 

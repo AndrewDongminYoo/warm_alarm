@@ -105,7 +105,7 @@ await WarmAlarm.cancelAlarm(1);
 | Feature                   | Android | iOS            | macOS          |
 | ------------------------- | ------- | -------------- | -------------- |
 | Notification scheduling   | ✅ Full | ✅ Full        | ✅ Full        |
-| Exact alarm scheduling    | ✅ Full | ⚠️ Limited     | ⚠️ Limited     |
+| Exact alarm scheduling    | ✅ Full | ⚠️ Limited     | ❌ Unsupported |
 | Background audio playback | ✅ Full | ⚠️ Limited     | ⚠️ Limited     |
 | Full-screen presentation  | ✅ Full | ⚠️ Limited     | ❌ Unsupported |
 | Wake-check                | ✅ Full | ❌ Unsupported | ❌ Unsupported |
@@ -139,7 +139,7 @@ Call `getReadiness()` at runtime and surface the reasons to your users so they c
 | Class                      | Purpose                                                                                                                                             |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `WarmAlarmSchedule`        | Full alarm configuration: timing, notification, audio, snooze, recurrence, wake-check                                                               |
-| `WarmAlarmCapabilities`    | `WarmAlarmSupportStatus` per feature: exact scheduling, background audio, full-screen, wake-check                                                   |
+| `WarmAlarmCapabilities`    | `WarmAlarmSupportStatus` per feature: notification & exact scheduling, background audio, full-screen, wake-check, Live Activity                     |
 | `WarmAlarmReadiness`       | `level` (`ready \| limited \| blocked \| unsupported`) + `List<WarmAlarmReadinessReason>`                                                           |
 | `WarmAlarmPermissionState` | Boolean flags: `notificationsGranted`, `exactAlarmGranted`, `fullScreenIntentGranted`                                                               |
 | `WarmAlarmScheduleResult`  | `alarmId`, `readiness`, optional `WarmAlarmWarning`                                                                                                 |
@@ -147,7 +147,7 @@ Call `getReadiness()` at runtime and surface the reasons to your users so they c
 | `WarmAlarmVolumeFadeStep`  | One staircase volume-fade keyframe: `time`, `volume`                                                                                                |
 | `WarmAlarmNotification`    | `title`, `body`, `stopActionTitle?`, `snoozeActionTitle?`                                                                                           |
 | `WarmAlarmSnooze`          | `duration`                                                                                                                                          |
-| `WarmAlarmRecurrence`      | `weekdays` bitmask                                                                                                                                  |
+| `WarmAlarmRecurrence`      | `weekdays` — list of ISO weekday numbers (1 = Monday … 7 = Sunday)                                                                                  |
 | `WarmAlarmWakeCheck`       | `checkDelay`, `retriggerDelay?`, `maxRetriggers?`                                                                                                   |
 | `WarmAlarmSnapshot`        | Scheduled-alarm record: `id`, `scheduledAt`, `notification`, `audio`, `recurrence?`, `snooze?`, `wakeCheck?`, `payload?`, `androidFullScreenIntent` |
 

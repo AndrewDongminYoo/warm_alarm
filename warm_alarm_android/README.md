@@ -12,13 +12,13 @@ This package is [endorsed][endorsed_link], which means you do **not** add it dir
 
 ## Platform capabilities
 
-| Feature                   | Support | Notes                                        |
-| ------------------------- | ------- | -------------------------------------------- |
-| Notification scheduling   | ✅ Full | `POST_NOTIFICATIONS` permission required     |
-| Exact alarm scheduling    | ✅ Full | `SCHEDULE_EXACT_ALARM` / `USE_EXACT_ALARM`   |
-| Background audio playback | ✅ Full | Foreground service with `mediaPlayback` type |
-| Full-screen presentation  | ✅ Full | `USE_FULL_SCREEN_INTENT` on Android 14+      |
-| Wake-check                | ✅ Full | Follow-up alarm verifies user is awake       |
+| Feature                   | Support | Notes                                                                                                           |
+| ------------------------- | ------- | --------------------------------------------------------------------------------------------------------------- |
+| Notification scheduling   | ✅ Full | `POST_NOTIFICATIONS` permission required                                                                        |
+| Exact alarm scheduling    | ✅ Full | `SCHEDULE_EXACT_ALARM` / `USE_EXACT_ALARM`                                                                      |
+| Background audio playback | ✅ Full | Foreground service with `mediaPlayback` type                                                                    |
+| Full-screen presentation  | ✅ Full | `setFullScreenIntent`; per-alarm via `androidFullScreenIntent`; runtime-checked with `canUseFullScreenIntent()` |
+| Wake-check                | ✅ Full | Follow-up alarm verifies user is awake                                                                          |
 
 ---
 
@@ -50,8 +50,10 @@ primary alarm, the alarm retriggers (up to `maxRetriggers` times at `retriggerDe
 
 ### Boot persistence
 
-`WarmAlarmReceiver` also handles `BOOT_COMPLETED` broadcasts (via `RECEIVE_BOOT_COMPLETED`
-permission) to reschedule any alarms that were lost when the device restarted.
+`WarmAlarmBootReceiver` handles `BOOT_COMPLETED` and `LOCKED_BOOT_COMPLETED` broadcasts (via
+`RECEIVE_BOOT_COMPLETED` permission) to reschedule any alarms that were lost when the device
+restarted. It is `directBootAware`, so alarms scheduled before first unlock are restored from
+device-protected storage.
 
 ### Kill warning
 

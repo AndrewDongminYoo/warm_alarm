@@ -37,20 +37,25 @@ system's throttling policy for background notification delivery).
 ### Audio
 
 When the notification action is handled, `WarmAlarmDelegate` starts `AVAudioPlayer` with the
-configured audio source (local file path, Flutter asset, or the system default alarm sound). The
-`AVAudioSession` category is set to `.playback` so the audio continues even when the device is in
-Silent mode. An optional fade-in is applied via a periodic timer-driven volume schedule.
+configured audio source (a local file path or a Flutter asset). If neither is provided, no in-app
+audio is played — the notification itself still plays the bundled `alarm_ring.caf` (or the system
+default) sound. The `AVAudioSession` category is set to `.playback` (with `.mixWithOthers`) so the
+audio continues even when the device is in Silent mode. An optional fade-in is applied by scheduling
+discrete volume steps as `DispatchWorkItem`s (via `DispatchQueue.main.asyncAfter`), not a periodic
+timer.
 
 ### Recurrence
 
-Weekly recurrence is implemented by scheduling the next occurrence immediately after each alarm
-fires — iOS does not natively support recurring `UNNotificationRequest` triggers with arbitrary
-weekday masks, so the plugin manages this in Dart/Swift.
+Weekly recurrence weekdays are accepted and persisted, but the iOS implementation does not yet
+reschedule the next occurrence after an alarm fires — only snooze triggers a follow-up notification.
+iOS does not natively support arbitrary weekday-masked recurring `UNNotificationRequest` triggers.
 
 ### Kill warning
 
-`setKillWarning(title, body)` schedules a persistent, non-actionable notification that warns users
-not to force-quit the app before an alarm fires. It is cancelled by `clearKillWarning()`.
+`setKillWarning(title, body)` stores a warning message. If the app is backgrounded while an alarm is
+ringing, the plugin posts a non-actionable notification warning the user not to force-quit the app.
+`clearKillWarning()` removes the stored message; the pending notification is auto-dismissed when the
+app returns to the foreground.
 
 ### Events emitted
 

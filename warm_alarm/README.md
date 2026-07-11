@@ -125,26 +125,29 @@ corrective action (grant permissions, disable battery optimization, etc.).
 
 ### `WarmAlarm` — static entry point
 
-| Method                    | Returns                    | Description                                                 |
-| ------------------------- | -------------------------- | ----------------------------------------------------------- |
-| `getCapabilities()`       | `WarmAlarmCapabilities`    | Per-feature support status for the current platform         |
-| `getPermissionState()`    | `WarmAlarmPermissionState` | Current notification and exact-alarm permission grants      |
-| `getReadiness()`          | `WarmAlarmReadiness`       | Overall system readiness with actionable reason codes       |
-| `scheduleAlarm(schedule)` | `WarmAlarmScheduleResult`  | Schedule an alarm; returns the assigned ID and any warnings |
-| `cancelAlarm(id)`         | `Future<void>`             | Cancel a specific alarm by ID                               |
-| `cancelAllAlarms()`       | `Future<void>`             | Cancel all scheduled alarms                                 |
-| `getScheduledAlarms()`    | `List<WarmAlarmSnapshot>`  | List all currently scheduled alarms                         |
-| `isRinging({id})`         | `Future<bool>`             | Whether an alarm (or any alarm) is currently ringing        |
-| `setKillWarning(...)`     | `Future<void>`             | Post a persistent notification warning against force-quit   |
-| `clearKillWarning()`      | `Future<void>`             | Remove the kill-warning notification                        |
-| `events`                  | `Stream<WarmAlarmEvent>`   | Real-time alarm lifecycle event stream                      |
+| Method                    | Returns                      | Description                                                 |
+| ------------------------- | ---------------------------- | ----------------------------------------------------------- |
+| `init()`                  | `Future<void>`               | Rehydrate native alarm state after a process restart        |
+| `getCapabilities()`       | `WarmAlarmCapabilities`      | Per-feature support status for the current platform         |
+| `getPermissionState()`    | `WarmAlarmPermissionState`   | Current notification and exact-alarm permission grants      |
+| `getReadiness()`          | `WarmAlarmReadiness`         | Overall system readiness with actionable reason codes       |
+| `scheduleAlarm(schedule)` | `WarmAlarmScheduleResult`    | Schedule an alarm; returns the assigned ID and any warnings |
+| `cancelAlarm(id)`         | `Future<void>`               | Cancel a specific alarm by ID                               |
+| `cancelAllAlarms()`       | `Future<void>`               | Cancel all scheduled alarms                                 |
+| `getScheduledAlarms()`    | `List<WarmAlarmSnapshot>`    | List all currently scheduled alarms                         |
+| `hasAlarm()`              | `Future<bool>`               | Whether any future alarm is currently scheduled             |
+| `getAlarm(id)`            | `Future<WarmAlarmSnapshot?>` | Fetch a single future scheduled alarm by ID                 |
+| `isRinging({id})`         | `Future<bool>`               | Whether an alarm (or any alarm) is currently ringing        |
+| `setKillWarning(...)`     | `Future<void>`               | Post a persistent notification warning against force-quit   |
+| `clearKillWarning()`      | `Future<void>`               | Remove the kill-warning notification                        |
+| `events`                  | `Stream<WarmAlarmEvent>`     | Real-time alarm lifecycle event stream                      |
 
 ### Key data classes
 
 | Class                      | Purpose                                                                                                                          |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `WarmAlarmSchedule`        | Full alarm configuration: timing, notification, audio, snooze, recurrence, payload, wake-check                                   |
-| `WarmAlarmCapabilities`    | `WarmAlarmSupportStatus` per feature: exact scheduling, background audio, full-screen, wake-check                                |
+| `WarmAlarmCapabilities`    | `WarmAlarmSupportStatus` per feature: notification & exact scheduling, background audio, full-screen, wake-check, Live Activity  |
 | `WarmAlarmReadiness`       | `level` (`ready \| limited \| blocked \| unsupported`) + `List<WarmAlarmReadinessReason>`                                        |
 | `WarmAlarmPermissionState` | Boolean flags: `notificationsGranted`, `exactAlarmGranted`, `fullScreenIntentGranted`                                            |
 | `WarmAlarmScheduleResult`  | `alarmId`, `readiness`, optional `WarmAlarmWarning`                                                                              |
@@ -206,17 +209,6 @@ with a richer capability model, macOS support, and a cleaner public/wire boundar
 | `NotificationSettings.icon`          | `WarmAlarmNotification.androidIcon`                                          | Android only                                              |
 | `NotificationSettings.iconColor`     | `WarmAlarmNotification.androidIconColor`                                     | Android only — ARGB int instead of `Color`                |
 | `AlarmSettings.payload`              | `WarmAlarmSchedule.payload`                                                  | Propagated to every event type                            |
-
-### What is not yet in `warm_alarm`
-
-The following `alarm` features are planned for Phase 4 and not yet available:
-
-- **`Alarm.init()` / `Alarm.checkAlarm()`** — app-start recovery that reschedules alarms
-  surviving a process restart. Tracked in Phase 4 (R1 task group).
-- **`Alarm.hasAlarm()` / `Alarm.getAlarm(id)`** — convenience query methods.
-  Tracked in Phase 4 (C1 task group).
-- **`androidFullScreenIntent` per-schedule toggle** — warm_alarm always enables full-screen
-  intent when the capability is available; per-alarm opt-out is Phase 4 (F1 task group).
 
 ---
 

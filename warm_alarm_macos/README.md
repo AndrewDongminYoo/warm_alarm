@@ -15,7 +15,7 @@ This package is [endorsed][endorsed_link], which means you do **not** add it dir
 | Feature                   | Support    | Notes                                                      |
 | ------------------------- | ---------- | ---------------------------------------------------------- |
 | Notification scheduling   | ✅ Full    | `UNUserNotificationCenter`                                 |
-| Exact alarm scheduling    | ⚠️ Limited | Notification-based; subject to system throttling policy    |
+| Exact alarm scheduling    | ❌ None    | Not supported; scheduling is notification-based only       |
 | Background audio playback | ⚠️ Limited | `AVAudioPlayer` only; no `AVAudioSession` on macOS         |
 | Full-screen presentation  | ❌ None    | macOS does not support full-screen intent notifications    |
 | Wake-check                | ❌ None    | macOS cannot self-trigger background wakes after dismissal |
@@ -38,12 +38,14 @@ Alarms are scheduled as `UNNotificationRequest` objects via `UNUserNotificationC
 
 `WarmAlarmDelegate` plays audio with `AVAudioPlayer`. Because macOS does not expose `AVAudioSession`,
 the plugin cannot guarantee audio playback when the system or app volume is muted. An optional
-fade-in is applied via a periodic timer-driven volume schedule.
+fade-in is applied by scheduling discrete volume steps as `DispatchWorkItem`s (via
+`DispatchQueue.main.asyncAfter`), not a periodic timer.
 
 ### Recurrence
 
-Weekly recurrence is managed by re-scheduling the next occurrence each time an alarm fires, since
-macOS does not support arbitrary weekday-masked repeating triggers natively.
+Weekly recurrence weekdays are persisted but not re-armed after an alarm fires — only snooze
+triggers a follow-up notification. macOS does not support arbitrary weekday-masked repeating
+`UNNotificationRequest` triggers natively.
 
 ### Kill warning
 

@@ -15,13 +15,15 @@ public model classes shared across platforms.
 
 The abstract class that every platform implementation extends. Platform plugins call
 `WarmAlarmPlatform.instance = MyPlatformImpl()` in their `registerWith()` to install themselves.
-The default instance is `MethodChannelWarmAlarm`, which throws `UnimplementedError` for all methods
-and serves as a build-time guard.
+The default instance is `MethodChannelWarmAlarm`, which returns empty / `unknown` values for all
+methods (it never throws) and serves as a no-op fallback for apps that have not registered a real
+platform implementation.
 
 **Contract methods:**
 
 | Method                       | Returns                    | Description                                            |
 | ---------------------------- | -------------------------- | ------------------------------------------------------ |
+| `init()`                     | `Future<void>`             | Rehydrate native alarm state after a process restart   |
 | `getCapabilities()`          | `WarmAlarmCapabilities`    | Per-feature support status for this platform           |
 | `getPermissionState()`       | `WarmAlarmPermissionState` | Current notification and exact-alarm permission grants |
 | `getReadiness()`             | `WarmAlarmReadiness`       | Aggregated readiness level with reason codes           |
@@ -40,21 +42,21 @@ All public-facing model classes live in `lib/src/models/` and are stable across 
 implementations. Pigeon-generated wire DTOs (in `lib/src/messages.g.dart` of each platform package)
 are never exposed here.
 
-| Model                      | Purpose                                                                                           |
-| -------------------------- | ------------------------------------------------------------------------------------------------- |
-| `WarmAlarmSchedule`        | Full alarm configuration passed to `scheduleAlarm()`                                              |
-| `WarmAlarmAudio`           | Audio source, looping, volume, fade-in curve, and vibration settings                              |
-| `WarmAlarmNotification`    | Notification title, body, action button labels, and Android-specific icon/color                   |
-| `WarmAlarmSnooze`          | Snooze duration                                                                                   |
-| `WarmAlarmRecurrence`      | Weekly recurrence via a weekday bitmask (Mon = 1, Tue = 2, … Sun = 64)                            |
-| `WarmAlarmWakeCheck`       | Wake-check configuration: check delay, optional retrigger delay, and max retrigger count          |
-| `WarmAlarmSnapshot`        | Lightweight read-back of a scheduled alarm                                                        |
-| `WarmAlarmCapabilities`    | Per-feature `WarmAlarmSupportStatus`: exact scheduling, background audio, full-screen, wake-check |
-| `WarmAlarmPermissionState` | Runtime permission grant flags                                                                    |
-| `WarmAlarmReadiness`       | Aggregated readiness level plus a list of actionable `WarmAlarmReadinessReason` codes             |
-| `WarmAlarmScheduleResult`  | Schedule outcome: `alarmId`, `readiness` snapshot, optional `WarmAlarmWarning`                    |
-| `WarmAlarmEvent`           | Sealed class hierarchy covering every alarm lifecycle transition                                  |
-| `WarmAlarmVolumeFadeStep`  | A single (time, volume) breakpoint in a custom fade curve                                         |
+| Model                      | Purpose                                                                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `WarmAlarmSchedule`        | Full alarm configuration passed to `scheduleAlarm()`                                                                            |
+| `WarmAlarmAudio`           | Audio source, looping, volume, fade-in curve, and vibration settings                                                            |
+| `WarmAlarmNotification`    | Notification title, body, action button labels, and Android-specific icon/color                                                 |
+| `WarmAlarmSnooze`          | Snooze duration                                                                                                                 |
+| `WarmAlarmRecurrence`      | Weekly recurrence via a list of ISO weekday numbers (`weekdays`, 1 = Monday … 7 = Sunday)                                       |
+| `WarmAlarmWakeCheck`       | Wake-check configuration: check delay, optional retrigger delay, and max retrigger count                                        |
+| `WarmAlarmSnapshot`        | Full read-back of a scheduled alarm (mirrors `WarmAlarmSchedule` fields)                                                        |
+| `WarmAlarmCapabilities`    | Per-feature `WarmAlarmSupportStatus`: notification & exact scheduling, background audio, full-screen, wake-check, Live Activity |
+| `WarmAlarmPermissionState` | Runtime permission grant flags                                                                                                  |
+| `WarmAlarmReadiness`       | Aggregated readiness level plus a list of actionable `WarmAlarmReadinessReason` codes                                           |
+| `WarmAlarmScheduleResult`  | Schedule outcome: `alarmId`, `readiness` snapshot, optional `WarmAlarmWarning`                                                  |
+| `WarmAlarmEvent`           | Sealed class hierarchy covering every alarm lifecycle transition                                                                |
+| `WarmAlarmVolumeFadeStep`  | A single (time, volume) breakpoint in a custom fade curve                                                                       |
 
 ---
 
