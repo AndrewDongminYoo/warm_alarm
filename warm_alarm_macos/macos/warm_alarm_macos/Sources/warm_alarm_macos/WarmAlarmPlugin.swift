@@ -34,6 +34,13 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         NotificationCenter.default.addObserver(
             self, selector: #selector(appDidBecomeActive),
             name: NSApplication.didBecomeActiveNotification, object: nil)
+        // Real termination (Cmd-Q / system quit): warn for any scheduled-or-ringing
+        // alarm. The resign-active observer above stays ringing-gated because it fires
+        // on every focus loss; willTerminate fires only on an actual quit, so
+        // broadening its guard is safe and spam-free.
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(appWillTerminate),
+            name: NSApplication.willTerminateNotification, object: nil)
     }
 
     @objc private func appWillResignActive() {
@@ -55,6 +62,32 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     @objc private func appDidBecomeActive() {
         UNUserNotificationCenter.current().removePendingNotificationRequests(
             withIdentifiers: [WarmAlarmPlugin.killWarningNotifId])
+    }
+
+    /// Posts the kill warning on genuine termination (`willTerminate`), for any
+    /// alarm scheduled in the future or currently ringing. Shares the notification
+    /// id with `appWillResignActive` so the two paths coalesce into one notification.
+    @objc private func appWillTerminate() {
+        let now = Date()
+        let hasFutureAlarm = WarmAlarmStore.shared.loadAll().values.contains { data in
+            Date(timeIntervalSince1970: Double(data.scheduledAtMillis) / 1000.0) > now
+        }
+        guard hasFutureAlarm || delegate.currentlyPlayingAlarmId != nil,
+              let dict = UserDefaults.standard.dictionary(forKey: "warm_alarm_kill_warning"),
+              let title = dict["title"] as? String,
+              let body = dict["body"] as? String
+        else { return }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        // Deliver immediately and block briefly so the request is enqueued before the
+        // process exits. The add completion runs off the main queue, so no deadlock.
+        let request = UNNotificationRequest(
+            identifier: WarmAlarmPlugin.killWarningNotifId, content: content, trigger: nil)
+        let semaphore = DispatchSemaphore(value: 0)
+        UNUserNotificationCenter.current().add(request) { _ in semaphore.signal() }
+        _ = semaphore.wait(timeout: .now() + 2.0)
     }
 
     func initialize(completion: @escaping (Result<Void, Error>) -> Void) {
