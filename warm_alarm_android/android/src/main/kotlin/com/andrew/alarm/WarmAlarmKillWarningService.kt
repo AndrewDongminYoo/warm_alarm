@@ -75,11 +75,13 @@ class WarmAlarmKillWarningService : Service() {
     }
 
     companion object {
-        // Must match WarmAlarmForegroundService's kill-warning constants so the
-        // two services' notifications dedupe on the same channel and id.
-        private const val KILL_WARNING_CHANNEL_ID = "warm_alarm_kill_warning_channel"
-        private const val KILL_WARNING_NOTIF_ID = 2002
+        // Shared with WarmAlarmForegroundService (single source of truth) so the two
+        // services' notifications dedupe on the same channel and id.
+        private const val KILL_WARNING_CHANNEL_ID = WarmAlarmForegroundService.KILL_WARNING_CHANNEL_ID
+        private const val KILL_WARNING_NOTIF_ID = WarmAlarmForegroundService.KILL_WARNING_NOTIF_ID
 
+        /** Caller must be in a foreground context — Android 8+ forbids
+         * `startService` from the background (e.g. a background isolate). */
         fun start(context: Context) {
             context.startService(Intent(context, WarmAlarmKillWarningService::class.java))
         }

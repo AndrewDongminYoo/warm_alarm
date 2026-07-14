@@ -28,8 +28,11 @@ class WarmAlarmForegroundService : Service() {
         const val CHANNEL_ID = "warm_alarm_channel"
         private const val NOTIF_ID = 2001
         private const val WAKE_CHECK_PENDING_OFFSET = 30_000
-        private const val KILL_WARNING_CHANNEL_ID = "warm_alarm_kill_warning_channel"
-        private const val KILL_WARNING_NOTIF_ID = 2002
+
+        // internal so WarmAlarmKillWarningService reuses the exact same channel/id
+        // — a swipe observed by both services then dedupes to one notification.
+        internal const val KILL_WARNING_CHANNEL_ID = "warm_alarm_kill_warning_channel"
+        internal const val KILL_WARNING_NOTIF_ID = 2002
 
         @Volatile var isRinging = false
 
