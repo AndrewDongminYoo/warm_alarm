@@ -41,6 +41,13 @@
             android:name=".WarmAlarmForegroundService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+
+        <!-- stopWithTask=false so the OS delivers onTaskRemoved (swipe-away)
+             instead of silently killing the service with the task. -->
+        <service
+            android:name=".WarmAlarmKillWarningService"
+            android:exported="false"
+            android:stopWithTask="false" />
     </application>
 
 </manifest>

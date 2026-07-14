@@ -38,10 +38,11 @@ class WarmAlarmPlugin :
 
     override fun initialize(callback: (Result<Unit>) -> Unit) {
         val now = System.currentTimeMillis()
-        WarmAlarmStore
-            .loadAll(context)
-            .values
-            .filter { it.scheduledAtMillis > now }
+        val futureAlarms = WarmAlarmStore.loadAll(context).values.filter { it.scheduledAtMillis > now }
+        if (futureAlarms.isNotEmpty()) {
+            WarmAlarmKillWarningService.start(context)
+        }
+        futureAlarms
             .forEach { schedule ->
                 val pending = alarmPendingIntent(schedule.id, PendingIntent.FLAG_UPDATE_CURRENT)!!
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
@@ -97,6 +98,10 @@ class WarmAlarmPlugin :
         // receiver's re-arm math read the scheduled occurrence, not the raw
         // request time.
         WarmAlarmStore.save(context, schedule.copy(scheduledAtMillis = fireAtMillis))
+        // Keep a bare service alive while an alarm is scheduled so its
+        // onTaskRemoved can post the kill warning if the app is swiped away
+        // before the alarm rings.
+        WarmAlarmKillWarningService.start(context)
         val pending = alarmPendingIntent(schedule.id, PendingIntent.FLAG_UPDATE_CURRENT)!!
         val inexact = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()
         val readiness =
@@ -144,6 +149,9 @@ class WarmAlarmPlugin :
         val pending = alarmPendingIntent(id, PendingIntent.FLAG_NO_CREATE)
         pending?.let { alarmManager.cancel(it) }
         WarmAlarmForegroundService.requestCancelCurrentAlarm(context, id)
+        if (WarmAlarmStore.loadAll(context).isEmpty()) {
+            WarmAlarmKillWarningService.stop(context)
+        }
         callback(Result.success(Unit))
     }
 
@@ -153,6 +161,7 @@ class WarmAlarmPlugin :
             pending?.let { alarmManager.cancel(it) }
         }
         WarmAlarmStore.clear(context)
+        WarmAlarmKillWarningService.stop(context)
         WarmAlarmForegroundService.currentAlarmId?.let { id ->
             WarmAlarmForegroundService.requestCancelCurrentAlarm(context, id)
         }
