@@ -13,6 +13,49 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 
+internal interface AlarmSchedulingBackend {
+    fun canScheduleExactAlarms(): Boolean
+
+    fun scheduleLegacy(fireAtMillis: Long)
+
+    fun scheduleExact(fireAtMillis: Long)
+
+    fun scheduleInexact(fireAtMillis: Long)
+}
+
+private class AndroidAlarmSchedulingBackend(
+    context: Context,
+    alarmId: Long,
+    isRetrigger: Boolean,
+) : AlarmSchedulingBackend {
+    private val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    private val pendingIntent =
+        PendingIntent.getBroadcast(
+            context,
+            alarmId.toInt(),
+            Intent(context, WarmAlarmReceiver::class.java).apply {
+                action = WarmAlarmReceiver.ACTION_FIRE
+                putExtra(WarmAlarmReceiver.EXTRA_ALARM_ID, alarmId)
+                putExtra(WarmAlarmReceiver.EXTRA_IS_RETRIGGER, isRetrigger)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+    override fun canScheduleExactAlarms(): Boolean = alarmManager.canScheduleExactAlarms()
+
+    override fun scheduleLegacy(fireAtMillis: Long) {
+        alarmManager.setExact(AlarmManager.RTC_WAKEUP, fireAtMillis, pendingIntent)
+    }
+
+    override fun scheduleExact(fireAtMillis: Long) {
+        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAtMillis, pendingIntent)
+    }
+
+    override fun scheduleInexact(fireAtMillis: Long) {
+        alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAtMillis, pendingIntent)
+    }
+}
+
 class WarmAlarmPlugin :
     FlutterPlugin,
     WarmAlarmApi {
@@ -20,6 +63,7 @@ class WarmAlarmPlugin :
     private lateinit var alarmManager: AlarmManager
     private lateinit var notificationManager: NotificationManager
     private lateinit var eventsApi: WarmAlarmEventsApi
+    private lateinit var pendingSnoozeReplay: PendingSnoozeEventReplay
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -27,6 +71,10 @@ class WarmAlarmPlugin :
         alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         eventsApi = WarmAlarmEventsApi(binding.binaryMessenger)
+        pendingSnoozeReplay =
+            PendingSnoozeEventReplay(PendingSnoozeEventStore.create(context)) { event, callback ->
+                mainHandler.post { eventsApi.emitEvent(event, callback) }
+            }
         WarmAlarmApi.setUp(binding.binaryMessenger, this)
         pluginInstance = this
     }
@@ -51,6 +99,7 @@ class WarmAlarmPlugin :
                     alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, schedule.scheduledAtMillis, pending)
                 }
             }
+        pendingSnoozeReplay.drain()
         callback(Result.success(Unit))
     }
 
@@ -292,25 +341,45 @@ class WarmAlarmPlugin :
             }
         }
 
-        fun rescheduleAlarm(
+        fun emitSnoozedEventFromBackground(
+            context: Context,
+            event: WarmAlarmEventWire,
+        ) {
+            val queued = PendingSnoozeEventStore.create(context).enqueue(event)
+            val plugin = pluginInstance ?: return
+            plugin.mainHandler.post {
+                if (queued) {
+                    plugin.pendingSnoozeReplay.drain()
+                } else {
+                    plugin.eventsApi.emitEvent(event) { _ -> }
+                }
+            }
+        }
+
+        internal fun rescheduleAlarm(
             context: Context,
             alarmId: Long,
             fireAtMillis: Long,
             isRetrigger: Boolean = false,
         ) {
-            val plugin = pluginInstance ?: return
-            val intent =
-                Intent(context, WarmAlarmReceiver::class.java).apply {
-                    action = WarmAlarmReceiver.ACTION_FIRE
-                    putExtra(WarmAlarmReceiver.EXTRA_ALARM_ID, alarmId)
-                    putExtra(WarmAlarmReceiver.EXTRA_IS_RETRIGGER, isRetrigger)
-                }
-            val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            val pending = PendingIntent.getBroadcast(context, alarmId.toInt(), intent, flags)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !plugin.alarmManager.canScheduleExactAlarms()) {
-                plugin.alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAtMillis, pending)
+            scheduleAlarm(
+                backend = AndroidAlarmSchedulingBackend(context, alarmId, isRetrigger),
+                fireAtMillis = fireAtMillis,
+                sdkInt = Build.VERSION.SDK_INT,
+            )
+        }
+
+        internal fun scheduleAlarm(
+            backend: AlarmSchedulingBackend,
+            fireAtMillis: Long,
+            sdkInt: Int,
+        ) {
+            if (sdkInt < Build.VERSION_CODES.M) {
+                backend.scheduleLegacy(fireAtMillis)
+            } else if (sdkInt >= Build.VERSION_CODES.S && !backend.canScheduleExactAlarms()) {
+                backend.scheduleInexact(fireAtMillis)
             } else {
-                plugin.alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAtMillis, pending)
+                backend.scheduleExact(fireAtMillis)
             }
         }
     }
