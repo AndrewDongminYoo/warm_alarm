@@ -20,6 +20,7 @@ class WarmAlarmPlugin :
     private lateinit var alarmManager: AlarmManager
     private lateinit var notificationManager: NotificationManager
     private lateinit var eventsApi: WarmAlarmEventsApi
+    private lateinit var pendingSnoozeReplay: PendingSnoozeEventReplay
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -27,6 +28,10 @@ class WarmAlarmPlugin :
         alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         eventsApi = WarmAlarmEventsApi(binding.binaryMessenger)
+        pendingSnoozeReplay =
+            PendingSnoozeEventReplay(PendingSnoozeEventStore.create(context)) { event, callback ->
+                mainHandler.post { eventsApi.emitEvent(event, callback) }
+            }
         WarmAlarmApi.setUp(binding.binaryMessenger, this)
         pluginInstance = this
     }
@@ -51,6 +56,7 @@ class WarmAlarmPlugin :
                     alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, schedule.scheduledAtMillis, pending)
                 }
             }
+        pendingSnoozeReplay.drain()
         callback(Result.success(Unit))
     }
 
@@ -289,6 +295,21 @@ class WarmAlarmPlugin :
             val plugin = pluginInstance ?: return
             plugin.mainHandler.post {
                 plugin.eventsApi.emitEvent(event) { /* ignore result */ }
+            }
+        }
+
+        fun emitSnoozedEventFromBackground(
+            context: Context,
+            event: WarmAlarmEventWire,
+        ) {
+            val queued = PendingSnoozeEventStore.create(context).enqueue(event)
+            val plugin = pluginInstance ?: return
+            plugin.mainHandler.post {
+                if (queued) {
+                    plugin.pendingSnoozeReplay.drain()
+                } else {
+                    plugin.eventsApi.emitEvent(event) { _ -> }
+                }
             }
         }
 

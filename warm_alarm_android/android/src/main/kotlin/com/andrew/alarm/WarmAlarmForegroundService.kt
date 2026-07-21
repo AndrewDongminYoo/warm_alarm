@@ -170,7 +170,8 @@ class WarmAlarmForegroundService : Service() {
         }
         WarmAlarmPlugin.rescheduleAlarm(this, alarmId, fireAt)
 
-        WarmAlarmPlugin.emitEventFromBackground(
+        WarmAlarmPlugin.emitSnoozedEventFromBackground(
+            this,
             WarmAlarmEventWire(
                 alarmId = alarmId,
                 type = WarmAlarmEventTypeWire.SNOOZED,

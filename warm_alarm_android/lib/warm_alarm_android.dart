@@ -4,6 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:warm_alarm_android/src/messages.g.dart';
 import 'package:warm_alarm_platform_interface/warm_alarm_platform_interface.dart';
 
+typedef _PendingWarmAlarmEvent = ({
+  WarmAlarmEvent event,
+  Completer<void> delivered,
+});
+
 /// {@template warm_alarm_android}
 /// The Android implementation of [WarmAlarmPlatform].
 /// {@endtemplate}
@@ -16,7 +21,11 @@ class WarmAlarmAndroid extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   /// The API used to interact with the native platform.
   final WarmAlarmApi api;
 
-  final StreamController<WarmAlarmEvent> _events = StreamController<WarmAlarmEvent>.broadcast();
+  late final StreamController<WarmAlarmEvent> _events = StreamController<WarmAlarmEvent>.broadcast(
+    onListen: _handleFirstEventsListener,
+  );
+
+  final List<_PendingWarmAlarmEvent> _pendingEvents = [];
 
   bool _eventsApiSetUp = false;
 
@@ -26,7 +35,10 @@ class WarmAlarmAndroid extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   }
 
   @override
-  Future<void> init() => api.initialize();
+  Future<void> init() async {
+    _ensureEventsApiSetUp();
+    await api.initialize();
+  }
 
   @override
   Future<void> cancelAlarm(int id) => api.cancelAlarm(id);
@@ -38,6 +50,15 @@ class WarmAlarmAndroid extends WarmAlarmPlatform implements WarmAlarmEventsApi {
     if (_eventsApiSetUp) return;
     WarmAlarmEventsApi.setUp(this);
     _eventsApiSetUp = true;
+  }
+
+  void _handleFirstEventsListener() {
+    final pendingEvents = List<_PendingWarmAlarmEvent>.of(_pendingEvents);
+    _pendingEvents.clear();
+    for (final pending in pendingEvents) {
+      _events.add(pending.event);
+      pending.delivered.complete();
+    }
   }
 
   @override
@@ -78,7 +99,14 @@ class WarmAlarmAndroid extends WarmAlarmPlatform implements WarmAlarmEventsApi {
 
   @override
   Future<void> emitEvent(WarmAlarmEventWire event) async {
-    _events.add(_eventFromWire(event));
+    final mappedEvent = _eventFromWire(event);
+    if (!_events.hasListener && event.type == WarmAlarmEventTypeWire.snoozed) {
+      final delivered = Completer<void>();
+      _pendingEvents.add((event: mappedEvent, delivered: delivered));
+      await delivered.future;
+      return;
+    }
+    _events.add(mappedEvent);
   }
 }
 

@@ -281,6 +281,87 @@ void main() {
       await sub.cancel();
     });
 
+    test(
+      'emitEvent waits for the first event listener before acknowledging delivery',
+      () async {
+        final api = _MockWarmAlarmApi();
+        final platform = WarmAlarmAndroid(api: api);
+        final eventWire = WarmAlarmEventWire(
+          alarmId: 7,
+          type: WarmAlarmEventTypeWire.snoozed,
+          occurredAtMillis: 1_000,
+          snoozeDurationMillis: 300_000,
+        );
+        var deliveryCompleted = false;
+
+        final delivery = platform.emitEvent(eventWire).then((_) => deliveryCompleted = true);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(deliveryCompleted, isFalse);
+        final emitted = <WarmAlarmEvent>[];
+        final sub = platform.events.listen(emitted.add);
+        await delivery;
+        await Future<void>.delayed(Duration.zero);
+
+        expect(emitted.single, isA<WarmAlarmSnoozed>());
+        await sub.cancel();
+      },
+    );
+
+    test(
+      'emitEvent waits for a replacement listener after the previous listener cancels',
+      () async {
+        final api = _MockWarmAlarmApi();
+        final platform = WarmAlarmAndroid(api: api);
+        final firstSub = platform.events.listen((_) {});
+        await firstSub.cancel();
+        var deliveryCompleted = false;
+
+        final delivery = platform
+            .emitEvent(
+              WarmAlarmEventWire(
+                alarmId: 7,
+                type: WarmAlarmEventTypeWire.snoozed,
+                occurredAtMillis: 1_000,
+                snoozeDurationMillis: 300_000,
+              ),
+            )
+            .then((_) => deliveryCompleted = true);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(deliveryCompleted, isFalse);
+        final emitted = <WarmAlarmEvent>[];
+        final secondSub = platform.events.listen(emitted.add);
+        await delivery;
+        await Future<void>.delayed(Duration.zero);
+
+        expect(emitted.single, isA<WarmAlarmSnoozed>());
+        await secondSub.cancel();
+      },
+    );
+
+    test(
+      'emitEvent does not buffer non-snooze events without a listener',
+      () async {
+        final api = _MockWarmAlarmApi();
+        final platform = WarmAlarmAndroid(api: api);
+
+        await platform.emitEvent(
+          WarmAlarmEventWire(
+            alarmId: 7,
+            type: WarmAlarmEventTypeWire.stopped,
+            occurredAtMillis: 1_000,
+          ),
+        );
+        final emitted = <WarmAlarmEvent>[];
+        final sub = platform.events.listen(emitted.add);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(emitted, isEmpty);
+        await sub.cancel();
+      },
+    );
+
     test('emitEvent maps scheduled event', () async {
       final api = _MockWarmAlarmApi();
       final platform = WarmAlarmAndroid(api: api);
