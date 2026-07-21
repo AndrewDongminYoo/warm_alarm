@@ -16,6 +16,8 @@ import io.flutter.embedding.engine.plugins.FlutterPlugin
 internal interface AlarmSchedulingBackend {
     fun canScheduleExactAlarms(): Boolean
 
+    fun scheduleLegacy(fireAtMillis: Long)
+
     fun scheduleExact(fireAtMillis: Long)
 
     fun scheduleInexact(fireAtMillis: Long)
@@ -40,6 +42,10 @@ private class AndroidAlarmSchedulingBackend(
         )
 
     override fun canScheduleExactAlarms(): Boolean = alarmManager.canScheduleExactAlarms()
+
+    override fun scheduleLegacy(fireAtMillis: Long) {
+        alarmManager.setExact(AlarmManager.RTC_WAKEUP, fireAtMillis, pendingIntent)
+    }
 
     override fun scheduleExact(fireAtMillis: Long) {
         alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAtMillis, pendingIntent)
@@ -368,7 +374,9 @@ class WarmAlarmPlugin :
             fireAtMillis: Long,
             sdkInt: Int,
         ) {
-            if (sdkInt >= Build.VERSION_CODES.S && !backend.canScheduleExactAlarms()) {
+            if (sdkInt < Build.VERSION_CODES.M) {
+                backend.scheduleLegacy(fireAtMillis)
+            } else if (sdkInt >= Build.VERSION_CODES.S && !backend.canScheduleExactAlarms()) {
                 backend.scheduleInexact(fireAtMillis)
             } else {
                 backend.scheduleExact(fireAtMillis)
