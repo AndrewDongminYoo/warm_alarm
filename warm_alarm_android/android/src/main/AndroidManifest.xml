@@ -13,6 +13,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <application>
+        <!-- Never add a BOOT_COMPLETED filter here: this receiver starts
+             WarmAlarmForegroundService (mediaPlayback), and Android 15+ forbids
+             starting a restricted foreground service type from a boot receiver.
+             Boot rescheduling belongs to WarmAlarmBootReceiver below. -->
         <receiver
             android:name=".WarmAlarmReceiver"
             android:exported="false">
