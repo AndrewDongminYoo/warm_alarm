@@ -43,7 +43,9 @@ jobs:
       working_directory: warm_alarm
 
   android:
-    runs-on: macos-latest
+    # Linux runners are 1x-billed and the only place this action gets hardware
+    # acceleration: macos-latest is arm64, where the default x86 image never boots.
+    runs-on: ubuntu-latest
 
     defaults:
       run:
@@ -54,12 +56,19 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: "11"
+          # Gradle 9.0 requires a JVM between 17 and 24 to execute.
+          java-version: "17"
 
       - uses: subosito/flutter-action@v2
 
       - name: Install Fluttium
         run: flutter pub global activate fluttium_cli
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
 
       - name: AVD Cache
         uses: actions/cache@v6
@@ -68,7 +77,7 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-29
+          key: avd-29-${{ runner.os }}
 
       - name: Cache AVD Snapshot
         if: steps.avd-cache.outputs.cache-hit != 'true'
