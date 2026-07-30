@@ -7,6 +7,7 @@ concurrency:
   cancel-in-progress: true
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - .github/workflows/warm_alarm.yaml
@@ -14,6 +15,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - v*
     paths:
       - .github/workflows/warm_alarm.yaml
       - warm_alarm/**
@@ -43,6 +46,10 @@ jobs:
       working_directory: warm_alarm
 
   android:
+    # The three E2E jobs are red on every runner. Until they are green they run
+    # on demand or on a release tag only, instead of billing every push and PR.
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+
     # Linux runners are 1x-billed and the only place this action gets hardware
     # acceleration: macos-latest is arm64, where the default x86 image never boots.
     runs-on: ubuntu-latest
@@ -97,6 +104,7 @@ jobs:
           working-directory: warm_alarm/example
 
   ios:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     runs-on: macos-latest
 
     defaults:
@@ -122,6 +130,7 @@ jobs:
         run: fluttium test flows/test_readiness.yaml -d iPhone
 
   macos:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     runs-on: macos-15
 
     defaults:
