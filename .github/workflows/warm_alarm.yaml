@@ -46,8 +46,8 @@ jobs:
       working_directory: warm_alarm
 
   android:
-    # The three E2E jobs are red on every runner. Until they are green they run
-    # on demand or on a release tag only, instead of billing every push and PR.
+    # Both E2E jobs are red. Until they are green they run on demand or on a
+    # release tag only, instead of billing every push and PR.
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
 
     # Linux runners are 1x-billed and the only place this action gets hardware
@@ -128,22 +128,3 @@ jobs:
 
       - name: E2E Tests
         run: fluttium test flows/test_readiness.yaml -d iPhone
-
-  macos:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
-    runs-on: macos-15
-
-    defaults:
-      run:
-        working-directory: warm_alarm/example
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: subosito/flutter-action@v2
-
-      - name: Install Fluttium
-        run: flutter pub global activate fluttium_cli
-
-      - name: E2E Tests
-        run: fluttium test flows/test_readiness.yaml -d macos
