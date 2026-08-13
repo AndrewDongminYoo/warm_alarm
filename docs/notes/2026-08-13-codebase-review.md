@@ -7,30 +7,33 @@
 
 ## 요약
 
-현재 Phase 4 API까지 코드는 들어와 있지만, 저장소 문서는 여전히 Phase 4를 계획 상태로 표시한다. 더 중요한 문제는
-Android 주간 반복 정보가 영속화 과정에서 사라지는 것과 Apple `init()`이 반복 알람을 단발성 알람으로 중복 복구하는
-것이다. 두 문제 모두 프로세스 재시작/재부팅이라는 알람 플러그인의 핵심 경계에서 발생하므로 출시 전에 먼저 해결해야 한다.
+현재 Phase 4 API까지 코드는 들어와 있지만, 저장소 문서는 여전히 Phase 4를 계획 상태로 표시한다.
+검토에서 확인한 두 출시 차단 결함인 Android 주간 반복 정보 손실과 Apple `init()` 중복 복구는 이 변경에서 해결했다.
+아래 항목은 발견 당시의 근거와 남은 검증 범위를 함께 보존한다.
 
 우선순위별 결과는 다음과 같다.
 
-- **P0 (출시 차단): 2개** — Android 반복 알람 영속화, Apple 반복 알람 초기화 복구
+- **P0 (출시 차단): 남은 항목 0개, 해결 2개** — Android 반복 알람 영속화, Apple 반복 알람 초기화 복구
 - **P1 (높음): 5개** — capability 오보고 2건, Apple 부분 성공, 입력 검증/오류 의미론, 네이티브 회귀 테스트 부재
 - **P2 (중간): 7개** — 이벤트 내구성, 저장소 방어성, 권한 UX, 오디오 의미론, CI/E2E, 문서 드리프트, Apple 테스트 격차
 - **P3 (낮음/배포 준비): 3개** — Privacy Manifest 판단, 예제 릴리스 설정, 패키지 공개 준비
 
-## P0 — 출시 차단 결함
+## P0 — 이 변경에서 해결한 출시 차단 결함
 
 ### 1. Android 주간 반복 정보가 저장 직후 소실됨
+
+**상태:** 이 변경에서 해결.
 
 `WarmAlarmPlugin.scheduleAlarm()`은 `schedule.recurrence`로 첫 발생 시각을 계산한 뒤 전체 스케줄을 저장한다. 그러나
 `WarmAlarmStore.encode()`는 `snooze`, `wakeCheck`, `payload` 등은 직렬화하면서 `recurrence`를 기록하지 않고,
 `decode()`도 이를 복원하지 않는다. 이후 receiver가 저장소에서 다시 읽으면 `recurrence == null`이므로 다음 주 발생을
 재등록하지 않는다. `getScheduledAlarms()`의 snapshot과 재부팅 복구에도 같은 손실이 전파된다.
 
-**미구현 항목**
+**해결 내용 및 남은 검증**
 
-- `recurrence.weekdays` JSON encode/decode 및 기존 데이터 마이그레이션/기본값 처리
-- `WarmAlarmStore` 왕복 테스트(반복, wake-check, fade, nullable payload를 한 필드씩 추가)
+- `recurrence.weekdays` JSON encode/decode와 `WarmAlarmStore` 반복 왕복 테스트를 추가했다.
+- 구버전 레코드에 저장되지 않은 weekday는 저장 데이터만으로 추론할 수 없으므로 자동 마이그레이션 대상이 아니다.
+- wake-check, fade, nullable payload 왕복 테스트는 남아 있다.
 - 프로세스 재시작 및 재부팅 뒤 다음 주 발생을 검증하는 Android 통합 테스트
 
 **TDD 순서**
@@ -41,15 +44,24 @@ Android 주간 반복 정보가 영속화 과정에서 사라지는 것과 Apple
 
 ### 2. iOS/macOS `init()`이 반복 알람을 단발성 알람으로 중복 등록함
 
+**상태:** 이 변경에서 해결.
+
 반복 알람의 실제 pending identifier는 `"{id}#{weekday}"`인데 `initialize()`는 `"{id}"`만 조회한다. 따라서 정상적으로
 반복 요청들이 남아 있어도 항상 누락으로 판단하고 저장된 최초 시각에 단발성 요청을 하나 더 등록한다. 또한 복구 경로는
 `makeRequests()`를 사용하지 않아 반복 규칙을 복원하지 못한다. 동일한 구현이 iOS와 macOS에 복제되어 있다.
 
-**미구현 항목**
+**해결 내용 및 남은 검증**
 
-- 저장된 recurrence의 모든 예상 identifier를 계산하고 실제 pending set과 비교하는 복구 로직
-- 누락된 weekday 요청만 다시 만드는 idempotent `init()`
-- iOS/macOS 공통 시나리오 테스트: 전부 존재, 일부 누락, 전부 누락, 단발성, 반복성
+- 저장된 recurrence의 예상 identifier와 실제 pending set을 비교해 누락된 weekday 요청만 복구하도록 수정했다.
+- iOS pure Swift 테스트가 반복 identifier, 누락 요청, snooze 분리, 만료 처리를 검증한다.
+- macOS native `Tests/` 디렉터리는 프로젝트 규칙상 두지 않으며, 복제 소스 diff와 macOS host build로 검증한다.
+
+### 리뷰 후속 수정
+
+- Apple은 반복 schedule anchor와 일시적인 snooze 기한을 별도로 저장하고, iOS/macOS에 동일한 복구 규칙을 적용한다.
+- Android는 active snooze를 credential/device-protected preferences에 별도로 저장해 반복 시각을 보존하면서 재부팅 복구도 유지한다.
+- 세 플랫폼 snapshot은 active snooze 또는 다음 반복 발생 시각을 반환해 `hasAlarm()`/`getAlarm()`의 미래 시각 계약을 지킨다.
+- Android JVM 테스트에는 `org.json` 구현을 test-only dependency로 제공하고, macOS에 잘못 추가된 native test target은 제거했다.
 
 ## P1 — 높은 우선순위
 
@@ -90,17 +102,16 @@ Apple은 일부 native 오류를 `Future` 실패가 아닌 “성공 결과 + li
 **개선:** 플랫폼 공통 validation contract를 문서화하고 public 생성자 또는 facade에서 결정론적 검증을 수행한다. 각 규칙은
 한 번에 하나의 실패 테스트로 추가하고, 구조 정리와 행위 변경 commit을 분리한다.
 
-### 7. 네이티브 저장/복구 경로가 CI에서 검증되지 않음
+### 7. 네이티브 저장/복구 경로가 CI에서 충분히 검증되지 않음
 
-Dart wrapper 테스트는 wire 변환을 잘 덮지만 Android `WarmAlarmStore` 테스트가 없고, 현재 package workflow가 Gradle
-unit test나 Swift test를 명시적으로 실행하지 않는다. iOS에는 일부 Swift 테스트가 있지만 macOS에는 native test target
-자체가 없다. P0 결함들이 Dart 테스트를 모두 통과할 수 있는 이유다.
+Dart wrapper 테스트는 wire 변환을 잘 덮고, 이 변경에서 Android `WarmAlarmStore`/recurrence JVM 테스트와 iOS recurrence/store Swift 테스트를 보강했다.
+그러나 현재 package workflow는 Gradle unit test나 Swift test를 명시적으로 실행하지 않는다.
+macOS native `Tests/` 디렉터리는 프로젝트 규칙상 의도적으로 없으므로 host build 검증을 CI에 명시해야 한다.
 
 **미구현 항목**
 
-- Android: `WarmAlarmStoreTest`, receiver/service 상태 전이 테스트, `./gradlew test`
-- iOS/macOS: store/plugin recovery 테스트와 `swift test` 또는 `xcodebuild test`
-- 각 플랫폼 CI에 네이티브 테스트 job 추가
+- Android receiver/service 상태 전이 테스트와 Gradle unit test CI job
+- iOS Swift test와 macOS host build CI job
 
 ## P2 — 중간 우선순위
 
@@ -154,13 +165,13 @@ workflow 주석상 Android와 iOS E2E가 red이며 수동 실행/태그에서만
 **개선:** 기능을 검증한 뒤 Phase 4를 Done/부분 완료로 정확히 갱신하고, 남은 결함은 별도 issue/checklist로 분리한다.
 완료 표시는 테스트 증거와 함께 변경한다.
 
-### 14. Apple 플랫폼 테스트 대칭성이 부족함
+### 14. Apple 플랫폼 복제 소스의 검증 전략이 명시적이지 않음
 
-iOS에는 recurrence/store Swift tests가 있지만 macOS에는 native Tests 디렉터리가 없고 Package.swift에도 test target이 없다.
-두 구현은 복사본이라 drift가 발생하기 쉽고, 실제로 같은 `init()` 결함이 양쪽에 복제되어 있다.
+iOS에는 recurrence/store Swift tests가 있고 macOS native `Tests/` 디렉터리는 프로젝트 규칙상 의도적으로 없다.
+두 구현은 복사본이라 drift가 발생하기 쉽고, 실제로 같은 `init()` 결함이 양쪽에 복제되어 있었다.
 
-**개선:** 공유 가능한 pure Swift recurrence/recovery logic을 작은 module로 추출하는 structural change를 먼저 검토하거나,
-최소한 동일 contract test suite를 두 package에 둔다. 추출 전후 테스트가 모두 green임을 확인한다.
+**개선:** 현 구조에서는 iOS pure logic 테스트, 두 플랫폼 소스 diff, iOS/macOS host build를 함께 CI 계약으로 둔다.
+공유 모듈 추출은 중복 유지 비용이 실제로 커질 때 별도 structural change로 검토한다.
 
 ## P3 — 배포 준비 및 유지보수
 
@@ -181,8 +192,8 @@ license check, generated-code 재현성, native 최소 버전, 실제 기기 증
 
 ## 권장 실행 순서 (TDD + Tidy First)
 
-1. **행위 수정:** Android recurrence store 왕복 실패 테스트 → 최소 구현 → 전체 테스트.
-2. **행위 수정:** iOS/macOS idempotent recurrence recovery 실패 테스트 → 최소 구현 → 전체 테스트.
+1. ✅ **행위 수정:** Android recurrence store 왕복 실패 테스트 → 최소 구현 → 전체 테스트.
+2. ✅ **행위 수정:** iOS/macOS idempotent recurrence recovery 실패 테스트 → 최소 구현 → 전체 테스트.
 3. **행위 수정:** Android wake-check 및 iOS Live Activity capability contract 테스트 → 보고값 수정.
 4. **구조 수정:** Apple request identifier 계산을 pure helper로 추출하고 양 플랫폼에 동일 테스트 적용.
 5. **행위 수정:** Apple multi-request 부분 실패/rollback 테스트 → 원자적 scheduling.
@@ -197,6 +208,8 @@ Dart test만이 아니라 해당 Gradle/Swift test와 가능한 플랫폼 E2E까
 
 - 워크스페이스 의존성은 `flutter pub get`으로 해석했다.
 - Dart/Flutter package unit tests는 `dart run melos run test:ci`로 실행했다.
+- Android native store/recurrence 테스트는 예제 Gradle host의 `testDebugUnitTest`로 실행했다.
+- iOS/macOS production source는 각 예제 Xcode host build로 검증했다.
 - 정적 형식/공백 오류는 `git diff --check`로 확인했다.
-- Android/iOS/macOS 기기 E2E는 이 Linux 검토 환경에서 실행하지 않았다.
+- Android/iOS/macOS 기기 E2E는 실행하지 않았다.
 - 작업 시작 시 이미 수정되어 있던 7개 `analysis_options.yaml` 파일은 본 리뷰에서 변경하거나 commit하지 않았다.
