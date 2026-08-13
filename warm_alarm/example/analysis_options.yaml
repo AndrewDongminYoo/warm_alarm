@@ -4,3 +4,8 @@ analyzer:
     lines_longer_than_80_chars: ignore
     one_member_abstracts: ignore
     public_member_api_docs: ignore
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
+    - macos/**
