@@ -9,12 +9,14 @@ concurrency:
 on:
   pull_request:
     paths:
+      - .github/workflows/pana.yaml
       - .github/workflows/warm_alarm_android.yaml
       - warm_alarm_android/**
   push:
     branches:
       - main
     paths:
+      - .github/workflows/pana.yaml
       - .github/workflows/warm_alarm_android.yaml
       - warm_alarm_android/**
 
@@ -28,6 +30,6 @@ jobs:
       working_directory: warm_alarm_android
 
   pana:
-    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/pana.yml@v1
+    uses: ./.github/workflows/pana.yaml
     with:
       working_directory: warm_alarm_android
