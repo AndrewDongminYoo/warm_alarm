@@ -209,20 +209,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
     private func reschedule(alarmId: Int64, fireAtMillis: Int64, existing: WarmAlarmScheduleData?) {
         guard let existing = existing else { return }
-        let updated = WarmAlarmScheduleData(
-            id: existing.id, scheduledAtMillis: fireAtMillis,
-            notificationTitle: existing.notificationTitle, notificationBody: existing.notificationBody,
-            stopActionTitle: existing.stopActionTitle, snoozeActionTitle: existing.snoozeActionTitle,
-            filePath: existing.filePath, assetPath: existing.assetPath,
-            loop: existing.loop, volume: existing.volume, vibrate: existing.vibrate,
-            fadeInDurationMillis: existing.fadeInDurationMillis,
-            recurrenceWeekdays: existing.recurrenceWeekdays,
-            snoozeDurationMillis: existing.snoozeDurationMillis,
-            payload: existing.payload,
-            volumeEnforced: existing.volumeEnforced,
-            fadeSteps: existing.fadeSteps,
-            keepNotificationAfterAlarmEnds: existing.keepNotificationAfterAlarmEnds
-        )
+        let updated = existing.withActiveSnooze(untilMillis: fireAtMillis)
         WarmAlarmStore.shared.save(updated)
         let content = makeContent(from: updated)
         let delay = max(1.0, Double(fireAtMillis - nowMillis()) / 1000.0)

@@ -24,6 +24,7 @@ struct WarmAlarmScheduleData: Codable {
     let volumeEnforced: Bool?
     let fadeSteps: [FadeStep]?
     let keepNotificationAfterAlarmEnds: Bool?
+    let activeSnoozeUntilMillis: Int64?
 
     // Explicit CodingKeys lets the synthesized encode(to:) work while we
     // override init(from:) in the extension below to add migration defaults.
@@ -32,11 +33,29 @@ struct WarmAlarmScheduleData: Codable {
         case stopActionTitle, snoozeActionTitle, filePath, assetPath
         case loop, volume, vibrate, fadeInDurationMillis
         case recurrenceWeekdays, snoozeDurationMillis, payload
-        case volumeEnforced, fadeSteps, keepNotificationAfterAlarmEnds
+        case volumeEnforced, fadeSteps, keepNotificationAfterAlarmEnds, activeSnoozeUntilMillis
     }
 }
 
 extension WarmAlarmScheduleData {
+    func snapshotScheduledAtMillis(
+        nowMillis: Int64,
+        calendar: Calendar = .current
+    ) -> Int64 {
+        let nextRecurrence = recurrenceWeekdays.flatMap { weekdays in
+            WarmAlarmRecurrence.nextOccurrenceMillis(
+                scheduledAtMillis: scheduledAtMillis,
+                weekdays: weekdays,
+                afterMillis: nowMillis,
+                calendar: calendar
+            )
+        }
+        if let activeSnoozeUntilMillis, activeSnoozeUntilMillis > nowMillis {
+            return min(activeSnoozeUntilMillis, nextRecurrence ?? activeSnoozeUntilMillis)
+        }
+        return nextRecurrence ?? scheduledAtMillis
+    }
+
     // Custom decoder provides defaults for fields absent in pre-Phase-3 payloads.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -59,6 +78,7 @@ extension WarmAlarmScheduleData {
         fadeSteps = try c.decodeIfPresent([FadeStep].self, forKey: .fadeSteps)
         keepNotificationAfterAlarmEnds = try c.decodeIfPresent(
             Bool.self, forKey: .keepNotificationAfterAlarmEnds)
+        activeSnoozeUntilMillis = try c.decodeIfPresent(Int64.self, forKey: .activeSnoozeUntilMillis)
     }
 
     static func from(wire: WarmAlarmScheduleWire) -> WarmAlarmScheduleData {
@@ -80,7 +100,26 @@ extension WarmAlarmScheduleData {
             payload: wire.payload,
             volumeEnforced: wire.audio.volumeEnforced,
             fadeSteps: wire.audio.fadeSteps?.map { FadeStep(timeMillis: $0.timeMillis, volume: $0.volume) },
-            keepNotificationAfterAlarmEnds: wire.notification.keepNotificationAfterAlarmEnds
+            keepNotificationAfterAlarmEnds: wire.notification.keepNotificationAfterAlarmEnds,
+            activeSnoozeUntilMillis: nil
+        )
+    }
+
+    func withActiveSnooze(untilMillis: Int64) -> WarmAlarmScheduleData {
+        WarmAlarmScheduleData(
+            id: id, scheduledAtMillis: scheduledAtMillis,
+            notificationTitle: notificationTitle, notificationBody: notificationBody,
+            stopActionTitle: stopActionTitle, snoozeActionTitle: snoozeActionTitle,
+            filePath: filePath, assetPath: assetPath,
+            loop: loop, volume: volume, vibrate: vibrate,
+            fadeInDurationMillis: fadeInDurationMillis,
+            recurrenceWeekdays: recurrenceWeekdays,
+            snoozeDurationMillis: snoozeDurationMillis,
+            payload: payload,
+            volumeEnforced: volumeEnforced,
+            fadeSteps: fadeSteps,
+            keepNotificationAfterAlarmEnds: keepNotificationAfterAlarmEnds,
+            activeSnoozeUntilMillis: untilMillis
         )
     }
 }

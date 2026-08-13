@@ -45,7 +45,11 @@ final class WarmAlarmStoreTests: XCTestCase {
             fadeInDurationMillis: 3_000,
             recurrenceWeekdays: [1, 3, 5],
             snoozeDurationMillis: 300_000,
-            payload: "{\"key\":\"value\"}"
+            payload: "{\"key\":\"value\"}",
+            volumeEnforced: nil,
+            fadeSteps: nil,
+            keepNotificationAfterAlarmEnds: nil,
+            activeSnoozeUntilMillis: 9_500
         )
         WarmAlarmStore.shared.save(data)
         let loaded = WarmAlarmStore.shared.load(id: 99)!
@@ -60,6 +64,7 @@ final class WarmAlarmStoreTests: XCTestCase {
         XCTAssertEqual(loaded.recurrenceWeekdays, [1, 3, 5])
         XCTAssertEqual(loaded.snoozeDurationMillis, 300_000)
         XCTAssertEqual(loaded.payload, "{\"key\":\"value\"}")
+        XCTAssertEqual(loaded.activeSnoozeUntilMillis, 9_500)
     }
 
     func testRoundtripNilOptionals() {
@@ -72,17 +77,92 @@ final class WarmAlarmStoreTests: XCTestCase {
         XCTAssertNil(loaded.recurrenceWeekdays)
         XCTAssertNil(loaded.snoozeDurationMillis)
         XCTAssertNil(loaded.payload)
+        XCTAssertNil(loaded.activeSnoozeUntilMillis)
     }
 
-    private func makeData(id: Int64, title: String = "Alarm", scheduledAt: Int64 = 0) -> WarmAlarmScheduleData {
+    func testAddingActiveSnoozePreservesRecurringScheduleTime() {
+        let schedule = makeData(id: 42, scheduledAt: 1_000, recurrenceWeekdays: [1, 3, 5])
+
+        let snoozed = schedule.withActiveSnooze(untilMillis: 3_000)
+
+        XCTAssertEqual(snoozed.scheduledAtMillis, 1_000)
+        XCTAssertEqual(snoozed.recurrenceWeekdays, [1, 3, 5])
+        XCTAssertEqual(snoozed.activeSnoozeUntilMillis, 3_000)
+        XCTAssertEqual(snoozed.snapshotScheduledAtMillis(nowMillis: 2_000), 3_000)
+    }
+
+    func testExpiredActiveSnoozeDoesNotHideRecurringScheduleTime() {
+        let calendar = utcCalendar()
+        let schedule = makeData(
+            id: 42,
+            scheduledAt: millis(2026, 1, 5, 9, 0, calendar: calendar),
+            recurrenceWeekdays: [1]
+        )
+
+        let snoozed = schedule.withActiveSnooze(
+            untilMillis: millis(2026, 1, 5, 9, 30, calendar: calendar))
+
+        XCTAssertEqual(
+            snoozed.snapshotScheduledAtMillis(
+                nowMillis: millis(2026, 1, 5, 10, 0, calendar: calendar),
+                calendar: calendar
+            ),
+            millis(2026, 1, 12, 9, 0, calendar: calendar)
+        )
+    }
+
+    func testRecurringSnapshotAdvancesPastOriginalSchedule() {
+        let calendar = utcCalendar()
+        let schedule = makeData(
+            id: 42,
+            scheduledAt: millis(2026, 1, 5, 9, 0, calendar: calendar),
+            recurrenceWeekdays: [1]
+        )
+
+        let snapshotAt = schedule.snapshotScheduledAtMillis(
+            nowMillis: millis(2026, 1, 5, 10, 0, calendar: calendar),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(snapshotAt, millis(2026, 1, 12, 9, 0, calendar: calendar))
+    }
+
+    private func utcCalendar() -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }
+
+    private func millis(
+        _ year: Int,
+        _ month: Int,
+        _ day: Int,
+        _ hour: Int,
+        _ minute: Int,
+        calendar: Calendar
+    ) -> Int64 {
+        let date = calendar.date(from: DateComponents(
+            year: year, month: month, day: day, hour: hour, minute: minute))!
+        return Int64(date.timeIntervalSince1970 * 1_000)
+    }
+
+    private func makeData(
+        id: Int64,
+        title: String = "Alarm",
+        scheduledAt: Int64 = 0,
+        recurrenceWeekdays: [Int64]? = nil
+    ) -> WarmAlarmScheduleData {
         WarmAlarmScheduleData(
             id: id, scheduledAtMillis: scheduledAt,
             notificationTitle: title, notificationBody: "",
             stopActionTitle: nil, snoozeActionTitle: nil,
             filePath: nil, assetPath: nil,
             loop: true, volume: nil, vibrate: false,
-            fadeInDurationMillis: nil, recurrenceWeekdays: nil,
-            snoozeDurationMillis: nil, payload: nil
+            fadeInDurationMillis: nil, recurrenceWeekdays: recurrenceWeekdays,
+            snoozeDurationMillis: nil, payload: nil,
+            volumeEnforced: nil, fadeSteps: nil,
+            keepNotificationAfterAlarmEnds: nil,
+            activeSnoozeUntilMillis: nil
         )
     }
 }

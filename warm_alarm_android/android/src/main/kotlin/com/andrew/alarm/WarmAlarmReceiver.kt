@@ -58,6 +58,7 @@ class WarmAlarmReceiver : BroadcastReceiver() {
                 ),
             )
         } else {
+            WarmAlarmStore.clearActiveSnooze(context, alarmId)
             WarmAlarmPlugin.emitEventFromBackground(
                 WarmAlarmEventWire(
                     alarmId = alarmId,

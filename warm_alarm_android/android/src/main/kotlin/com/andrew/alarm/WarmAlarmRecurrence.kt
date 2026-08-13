@@ -47,4 +47,35 @@ object WarmAlarmRecurrence {
         }
         return null
     }
+
+    /** Returns the fire time to restore, advancing a stale recurring alarm. */
+    fun recoverableFireAt(
+        scheduledAtMillis: Long,
+        weekdays: List<Long>?,
+        nowMillis: Long,
+        timeZone: TimeZone = TimeZone.getDefault(),
+        activeSnoozeUntilMillis: Long? = null,
+    ): Long? {
+        if (activeSnoozeUntilMillis != null && activeSnoozeUntilMillis > nowMillis) {
+            return activeSnoozeUntilMillis
+        }
+        if (scheduledAtMillis > nowMillis) return scheduledAtMillis
+        if (weekdays.isNullOrEmpty()) return null
+        return nextOccurrence(scheduledAtMillis, weekdays, nowMillis, timeZone)
+    }
+
+    fun snapshotScheduledAtMillis(
+        scheduledAtMillis: Long,
+        weekdays: List<Long>?,
+        activeSnoozeUntilMillis: Long?,
+        nowMillis: Long,
+        timeZone: TimeZone = TimeZone.getDefault(),
+    ): Long =
+        recoverableFireAt(
+            scheduledAtMillis,
+            weekdays,
+            nowMillis,
+            timeZone,
+            activeSnoozeUntilMillis,
+        ) ?: scheduledAtMillis
 }

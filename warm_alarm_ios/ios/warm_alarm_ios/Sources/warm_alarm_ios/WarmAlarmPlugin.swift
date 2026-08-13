@@ -64,6 +64,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             WarmAlarmRecurrence.shouldRecover(
                 scheduledAtMillis: data.scheduledAtMillis,
                 weekdays: data.recurrenceWeekdays,
+                activeSnoozeUntilMillis: data.activeSnoozeUntilMillis,
                 nowMillis: nowMillis)
         }
         guard !recoverableAlarms.isEmpty else {
@@ -77,11 +78,13 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 let missingIds = WarmAlarmRecurrence.missingIdentifiers(
                     alarmId: data.id,
                     weekdays: data.recurrenceWeekdays,
+                    activeSnoozeUntilMillis: data.activeSnoozeUntilMillis,
+                    nowMillis: nowMillis,
                     pendingIdentifiers: pendingIds
                 )
                 for identifier in missingIds {
                     let request = Self.makeRecoveryRequest(
-                        identifier: identifier, schedule: data, content: content)
+                        identifier: identifier, schedule: data, content: content, nowMillis: nowMillis)
                     UNUserNotificationCenter.current().add(request) { _ in }
                 }
             }
@@ -92,9 +95,16 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     private static func makeRecoveryRequest(
         identifier: String,
         schedule: WarmAlarmScheduleData,
-        content: UNNotificationContent
+        content: UNNotificationContent,
+        nowMillis: Int64
     ) -> UNNotificationRequest {
-        let fireDate = Date(timeIntervalSince1970: Double(schedule.scheduledAtMillis) / 1000.0)
+        let fireAtMillis = WarmAlarmRecurrence.recoveryFireAtMillis(
+            identifier: identifier,
+            scheduledAtMillis: schedule.scheduledAtMillis,
+            activeSnoozeUntilMillis: schedule.activeSnoozeUntilMillis,
+            nowMillis: nowMillis
+        )
+        let fireDate = Date(timeIntervalSince1970: Double(fireAtMillis) / 1000.0)
         if let separator = identifier.lastIndex(of: "#"),
            let isoWeekday = Int64(identifier[identifier.index(after: separator)...]) {
             let time = Calendar.current.dateComponents([.hour, .minute], from: fireDate)
@@ -250,10 +260,11 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     }
 
     func getScheduledAlarms(completion: @escaping (Result<[WarmAlarmSnapshotWire], Error>) -> Void) {
+        let nowMillis = Int64(Date().timeIntervalSince1970 * 1000)
         let snapshots = WarmAlarmStore.shared.loadAll().map { _, data in
             WarmAlarmSnapshotWire(
                 id: data.id,
-                scheduledAtMillis: data.scheduledAtMillis,
+                scheduledAtMillis: data.snapshotScheduledAtMillis(nowMillis: nowMillis),
                 notification: WarmAlarmNotificationWire(
                     title: data.notificationTitle,
                     body: data.notificationBody,
@@ -328,9 +339,9 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     /// notification id with `postKillWarningIfNeeded()` so the two paths coalesce
     /// into one notification when both fire during a ring-then-terminate.
     private func postKillWarningOnTerminate() {
-        let now = Date()
+        let nowMillis = Int64(Date().timeIntervalSince1970 * 1000)
         let hasFutureAlarm = WarmAlarmStore.shared.loadAll().values.contains { data in
-            Date(timeIntervalSince1970: Double(data.scheduledAtMillis) / 1000.0) > now
+            data.snapshotScheduledAtMillis(nowMillis: nowMillis) > nowMillis
         }
         guard hasFutureAlarm || delegate.currentlyPlayingAlarmId != nil,
               let dict = UserDefaults.standard.dictionary(forKey: "warm_alarm_kill_warning"),

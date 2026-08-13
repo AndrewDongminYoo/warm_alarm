@@ -86,17 +86,35 @@ class WarmAlarmPlugin :
 
     override fun initialize(callback: (Result<Unit>) -> Unit) {
         val now = System.currentTimeMillis()
-        val futureAlarms = WarmAlarmStore.loadAll(context).values.filter { it.scheduledAtMillis > now }
-        if (futureAlarms.isNotEmpty()) {
+        val recoverableAlarms =
+            WarmAlarmStore.loadAll(context).values.mapNotNull { schedule ->
+                val activeSnoozeUntilMillis = WarmAlarmStore.activeSnoozeUntilMillis(context, schedule.id)
+                if (activeSnoozeUntilMillis != null && activeSnoozeUntilMillis <= now) {
+                    WarmAlarmStore.clearActiveSnooze(context, schedule.id)
+                }
+                val fireAt =
+                    WarmAlarmRecurrence.recoverableFireAt(
+                        schedule.scheduledAtMillis,
+                        schedule.recurrence?.weekdays,
+                        now,
+                        activeSnoozeUntilMillis = activeSnoozeUntilMillis,
+                    ) ?: return@mapNotNull null
+                val recoveringSnooze = activeSnoozeUntilMillis != null && activeSnoozeUntilMillis > now
+                if (!recoveringSnooze && fireAt != schedule.scheduledAtMillis) {
+                    WarmAlarmStore.reschedule(context, schedule.id, fireAt)
+                }
+                schedule.id to fireAt
+            }
+        if (recoverableAlarms.isNotEmpty()) {
             WarmAlarmKillWarningService.start(context)
         }
-        futureAlarms
-            .forEach { schedule ->
-                val pending = alarmPendingIntent(schedule.id, PendingIntent.FLAG_UPDATE_CURRENT)!!
+        recoverableAlarms
+            .forEach { (alarmId, fireAt) ->
+                val pending = alarmPendingIntent(alarmId, PendingIntent.FLAG_UPDATE_CURRENT)!!
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
-                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, schedule.scheduledAtMillis, pending)
+                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pending)
                 } else {
-                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, schedule.scheduledAtMillis, pending)
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pending)
                 }
             }
         pendingSnoozeReplay.drain()
@@ -218,11 +236,18 @@ class WarmAlarmPlugin :
     }
 
     override fun getScheduledAlarms(callback: (Result<List<WarmAlarmSnapshotWire>>) -> Unit) {
+        val now = System.currentTimeMillis()
         val snapshots =
             WarmAlarmStore.loadAll(context).values.map { s ->
                 WarmAlarmSnapshotWire(
                     id = s.id,
-                    scheduledAtMillis = s.scheduledAtMillis,
+                    scheduledAtMillis =
+                        WarmAlarmRecurrence.snapshotScheduledAtMillis(
+                            s.scheduledAtMillis,
+                            s.recurrence?.weekdays,
+                            WarmAlarmStore.activeSnoozeUntilMillis(context, s.id),
+                            now,
+                        ),
                     notification = s.notification,
                     audio = s.audio,
                     recurrence = s.recurrence,
