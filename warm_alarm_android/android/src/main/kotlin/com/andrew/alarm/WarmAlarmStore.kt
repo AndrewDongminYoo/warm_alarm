@@ -91,7 +91,7 @@ internal object WarmAlarmStore {
             null
         }
 
-    private fun encode(s: WarmAlarmScheduleWire): JSONObject =
+    internal fun encode(s: WarmAlarmScheduleWire): JSONObject =
         JSONObject().apply {
             put("id", s.id)
             put("scheduledAtMillis", s.scheduledAtMillis)
@@ -134,6 +134,9 @@ internal object WarmAlarmStore {
                     }
                 },
             )
+            s.recurrence?.let { recurrence ->
+                put("recurrence", JSONArray(recurrence.weekdays))
+            }
             s.snooze?.let { put("snooze", JSONObject().apply { put("durationMillis", it.durationMillis) }) }
             s.wakeCheck?.let {
                 put(
@@ -149,7 +152,7 @@ internal object WarmAlarmStore {
             put("androidFullScreenIntent", s.androidFullScreenIntent)
         }
 
-    private fun decode(obj: JSONObject): WarmAlarmScheduleWire {
+    internal fun decode(obj: JSONObject): WarmAlarmScheduleWire {
         val n = obj.getJSONObject("notification")
         val a = obj.getJSONObject("audio")
         return WarmAlarmScheduleWire(
@@ -188,6 +191,15 @@ internal object WarmAlarmStore {
                             null
                         },
                 ),
+            recurrence =
+                if (obj.has("recurrence")) {
+                    val weekdays = obj.getJSONArray("recurrence")
+                    WarmAlarmRecurrenceWire(
+                        weekdays = (0 until weekdays.length()).map { index -> weekdays.getLong(index) },
+                    )
+                } else {
+                    null
+                },
             snooze =
                 if (obj.has("snooze")) {
                     WarmAlarmSnoozeWire(obj.getJSONObject("snooze").getLong("durationMillis"))

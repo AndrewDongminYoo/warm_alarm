@@ -14,4 +14,22 @@ enum WarmAlarmRecurrence {
     static func appleWeekday(fromIso iso: Int64) -> Int {
         Int((iso % 7) + 1)
     }
+
+    static func missingIdentifiers(
+        alarmId: Int64,
+        weekdays: [Int64]?,
+        pendingIdentifiers: Set<String>
+    ) -> [String] {
+        let expected = weekdays.flatMap { $0.isEmpty ? nil : $0.map { "\(alarmId)#\($0)" } }
+            ?? [String(alarmId)]
+        return expected.filter { !pendingIdentifiers.contains($0) }
+    }
+
+    static func shouldRecover(
+        scheduledAtMillis: Int64,
+        weekdays: [Int64]?,
+        nowMillis: Int64
+    ) -> Bool {
+        weekdays?.isEmpty == false || scheduledAtMillis > nowMillis
+    }
 }
