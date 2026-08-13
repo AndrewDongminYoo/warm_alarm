@@ -10,6 +10,7 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - .github/workflows/pana.yaml
       - .github/workflows/warm_alarm.yaml
       - warm_alarm/**
   push:
@@ -18,6 +19,7 @@ on:
     tags:
       - v*
     paths:
+      - .github/workflows/pana.yaml
       - .github/workflows/warm_alarm.yaml
       - warm_alarm/**
 
@@ -41,7 +43,7 @@ jobs:
       working_directory: warm_alarm
 
   pana:
-    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/pana.yml@v1
+    uses: ./.github/workflows/pana.yaml
     with:
       working_directory: warm_alarm
 
