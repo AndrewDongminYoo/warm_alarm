@@ -8,6 +8,7 @@ import org.json.JSONObject
 internal object WarmAlarmStore {
     private const val PREFS = "warm_alarm_store"
     private const val KEY = "schedules"
+    private const val ACTIVE_SNOOZE_PREFIX = "active_snooze_"
 
     fun save(
         context: Context,
@@ -16,6 +17,7 @@ internal object WarmAlarmStore {
         val all = loadAll(context).toMutableMap()
         all[schedule.id] = schedule
         persist(context, all)
+        clearActiveSnooze(context, schedule.id)
     }
 
     fun load(
@@ -31,6 +33,7 @@ internal object WarmAlarmStore {
         all.remove(id)
         persist(context, all)
         prefs(context).edit().remove("retrigger_$id").apply()
+        clearActiveSnooze(context, id)
     }
 
     fun getRetriggerCount(
@@ -57,6 +60,35 @@ internal object WarmAlarmStore {
         persist(context, existing)
     }
 
+    fun setActiveSnooze(
+        context: Context,
+        id: Long,
+        untilMillis: Long,
+    ) {
+        allPrefs(context).forEach { preferences ->
+            preferences.edit().putLong(activeSnoozeKey(id), untilMillis).apply()
+        }
+    }
+
+    fun activeSnoozeUntilMillis(
+        context: Context,
+        id: Long,
+    ): Long? {
+        val key = activeSnoozeKey(id)
+        return allPrefs(context).firstNotNullOfOrNull { preferences ->
+            if (preferences.contains(key)) preferences.getLong(key, 0L) else null
+        }
+    }
+
+    fun clearActiveSnooze(
+        context: Context,
+        id: Long,
+    ) {
+        allPrefs(context).forEach { preferences ->
+            preferences.edit().remove(activeSnoozeKey(id)).apply()
+        }
+    }
+
     fun loadAll(context: Context): Map<Long, WarmAlarmScheduleWire> {
         val json = prefs(context).getString(KEY, "[]") ?: "[]"
         val arr = JSONArray(json)
@@ -69,8 +101,13 @@ internal object WarmAlarmStore {
     }
 
     fun clear(context: Context) {
-        prefs(context).edit().remove(KEY).apply()
-        dePrefs(context)?.edit()?.remove(KEY)?.apply()
+        allPrefs(context).forEach { preferences ->
+            val editor = preferences.edit().remove(KEY)
+            preferences.all.keys
+                .filter { it.startsWith(ACTIVE_SNOOZE_PREFIX) }
+                .forEach { editor.remove(it) }
+            editor.apply()
+        }
     }
 
     private fun persist(
@@ -84,6 +121,10 @@ internal object WarmAlarmStore {
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+    private fun allPrefs(context: Context) = listOfNotNull(prefs(context), dePrefs(context)).distinct()
+
+    private fun activeSnoozeKey(id: Long) = "$ACTIVE_SNOOZE_PREFIX$id"
+
     private fun dePrefs(context: Context) =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             context.createDeviceProtectedStorageContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -91,7 +132,7 @@ internal object WarmAlarmStore {
             null
         }
 
-    private fun encode(s: WarmAlarmScheduleWire): JSONObject =
+    internal fun encode(s: WarmAlarmScheduleWire): JSONObject =
         JSONObject().apply {
             put("id", s.id)
             put("scheduledAtMillis", s.scheduledAtMillis)
@@ -134,6 +175,9 @@ internal object WarmAlarmStore {
                     }
                 },
             )
+            s.recurrence?.let { recurrence ->
+                put("recurrence", JSONArray(recurrence.weekdays))
+            }
             s.snooze?.let { put("snooze", JSONObject().apply { put("durationMillis", it.durationMillis) }) }
             s.wakeCheck?.let {
                 put(
@@ -149,7 +193,7 @@ internal object WarmAlarmStore {
             put("androidFullScreenIntent", s.androidFullScreenIntent)
         }
 
-    private fun decode(obj: JSONObject): WarmAlarmScheduleWire {
+    internal fun decode(obj: JSONObject): WarmAlarmScheduleWire {
         val n = obj.getJSONObject("notification")
         val a = obj.getJSONObject("audio")
         return WarmAlarmScheduleWire(
@@ -188,6 +232,15 @@ internal object WarmAlarmStore {
                             null
                         },
                 ),
+            recurrence =
+                if (obj.has("recurrence")) {
+                    val weekdays = obj.getJSONArray("recurrence")
+                    WarmAlarmRecurrenceWire(
+                        weekdays = (0 until weekdays.length()).map { index -> weekdays.getLong(index) },
+                    )
+                } else {
+                    null
+                },
             snooze =
                 if (obj.has("snooze")) {
                     WarmAlarmSnoozeWire(obj.getJSONObject("snooze").getLong("durationMillis"))

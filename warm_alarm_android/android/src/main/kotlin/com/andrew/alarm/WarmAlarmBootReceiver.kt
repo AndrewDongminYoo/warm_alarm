@@ -34,20 +34,36 @@ class WarmAlarmBootReceiver : BroadcastReceiver() {
         WarmAlarmStore
             .loadAll(storeContext)
             .values
-            .filter { it.scheduledAtMillis > now }
-            .forEach { schedule ->
+            .mapNotNull { schedule ->
+                val activeSnoozeUntilMillis = WarmAlarmStore.activeSnoozeUntilMillis(storeContext, schedule.id)
+                if (activeSnoozeUntilMillis != null && activeSnoozeUntilMillis <= now) {
+                    WarmAlarmStore.clearActiveSnooze(storeContext, schedule.id)
+                }
+                val fireAt =
+                    WarmAlarmRecurrence.recoverableFireAt(
+                        schedule.scheduledAtMillis,
+                        schedule.recurrence?.weekdays,
+                        now,
+                        activeSnoozeUntilMillis = activeSnoozeUntilMillis,
+                    ) ?: return@mapNotNull null
+                val recoveringSnooze = activeSnoozeUntilMillis != null && activeSnoozeUntilMillis > now
+                if (!recoveringSnooze && fireAt != schedule.scheduledAtMillis) {
+                    WarmAlarmStore.reschedule(storeContext, schedule.id, fireAt)
+                }
+                schedule.id to fireAt
+            }.forEach { (alarmId, fireAt) ->
                 val fireIntent =
                     Intent(context, WarmAlarmReceiver::class.java).apply {
                         action = WarmAlarmReceiver.ACTION_FIRE
-                        putExtra(WarmAlarmReceiver.EXTRA_ALARM_ID, schedule.id)
+                        putExtra(WarmAlarmReceiver.EXTRA_ALARM_ID, alarmId)
                     }
                 val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                val pending = PendingIntent.getBroadcast(context, schedule.id.toInt(), fireIntent, flags)
+                val pending = PendingIntent.getBroadcast(context, alarmId.toInt(), fireIntent, flags)
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
-                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, schedule.scheduledAtMillis, pending)
+                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pending)
                 } else {
-                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, schedule.scheduledAtMillis, pending)
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pending)
                 }
             }
     }

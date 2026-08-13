@@ -14,4 +14,65 @@ enum WarmAlarmRecurrence {
     static func appleWeekday(fromIso iso: Int64) -> Int {
         Int((iso % 7) + 1)
     }
+
+    static func missingIdentifiers(
+        alarmId: Int64,
+        weekdays: [Int64]?,
+        activeSnoozeUntilMillis: Int64?,
+        nowMillis: Int64,
+        pendingIdentifiers: Set<String>
+    ) -> [String] {
+        var expected = weekdays.flatMap { $0.isEmpty ? nil : $0.map { "\(alarmId)#\($0)" } }
+            ?? [String(alarmId)]
+        if weekdays?.isEmpty == false,
+           let activeSnoozeUntilMillis,
+           activeSnoozeUntilMillis > nowMillis {
+            expected.append(String(alarmId))
+        }
+        return expected.filter { !pendingIdentifiers.contains($0) }
+    }
+
+    static func shouldRecover(
+        scheduledAtMillis: Int64,
+        weekdays: [Int64]?,
+        activeSnoozeUntilMillis: Int64?,
+        nowMillis: Int64
+    ) -> Bool {
+        weekdays?.isEmpty == false
+            || activeSnoozeUntilMillis.map { $0 > nowMillis } == true
+            || scheduledAtMillis > nowMillis
+    }
+
+    static func nextOccurrenceMillis(
+        scheduledAtMillis: Int64,
+        weekdays: [Int64],
+        afterMillis: Int64,
+        calendar: Calendar = .current
+    ) -> Int64? {
+        guard !weekdays.isEmpty else { return nil }
+        let scheduledDate = Date(timeIntervalSince1970: Double(scheduledAtMillis) / 1_000)
+        let afterDate = Date(timeIntervalSince1970: Double(afterMillis) / 1_000)
+        let time = calendar.dateComponents([.hour, .minute], from: scheduledDate)
+        return weekdays.compactMap { isoWeekday -> Date? in
+            var components = DateComponents()
+            components.weekday = appleWeekday(fromIso: isoWeekday)
+            components.hour = time.hour
+            components.minute = time.minute
+            return calendar.nextDate(after: afterDate, matching: components, matchingPolicy: .nextTime)
+        }.min().map { Int64($0.timeIntervalSince1970 * 1_000) }
+    }
+
+    static func recoveryFireAtMillis(
+        identifier: String,
+        scheduledAtMillis: Int64,
+        activeSnoozeUntilMillis: Int64?,
+        nowMillis: Int64
+    ) -> Int64 {
+        if !identifier.contains("#"),
+           let activeSnoozeUntilMillis,
+           activeSnoozeUntilMillis > nowMillis {
+            return activeSnoozeUntilMillis
+        }
+        return scheduledAtMillis
+    }
 }

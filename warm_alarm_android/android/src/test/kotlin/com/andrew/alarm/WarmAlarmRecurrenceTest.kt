@@ -59,6 +59,75 @@ class WarmAlarmRecurrenceTest {
     }
 
     @Test
+    fun staleRecurringAlarmRecoversAtNextOccurrence() {
+        val scheduledAt = millis(2026, 1, 5, 9, 0)
+        val now = millis(2026, 1, 5, 10, 0)
+
+        val recoveredAt = WarmAlarmRecurrence.recoverableFireAt(scheduledAt, listOf(1), now, utc)
+
+        assertEquals(millis(2026, 1, 12, 9, 0), recoveredAt)
+    }
+
+    @Test
+    fun staleOneShotAlarmIsNotRecoverable() {
+        val scheduledAt = millis(2026, 1, 5, 9, 0)
+        val now = millis(2026, 1, 5, 10, 0)
+
+        assertNull(WarmAlarmRecurrence.recoverableFireAt(scheduledAt, null, now, utc))
+    }
+
+    @Test
+    fun activeSnoozeIsRecoveredBeforeRecurringSchedule() {
+        val scheduledAt = millis(2026, 1, 12, 9, 0)
+        val now = millis(2026, 1, 5, 9, 0)
+        val snoozeUntil = millis(2026, 1, 5, 9, 5)
+
+        val recoveredAt =
+            WarmAlarmRecurrence.recoverableFireAt(
+                scheduledAt,
+                listOf(1),
+                now,
+                utc,
+                activeSnoozeUntilMillis = snoozeUntil,
+            )
+
+        assertEquals(snoozeUntil, recoveredAt)
+    }
+
+    @Test
+    fun expiredSnoozeFallsBackToRecurringSchedule() {
+        val scheduledAt = millis(2026, 1, 12, 9, 0)
+        val now = millis(2026, 1, 5, 9, 10)
+        val snoozeUntil = millis(2026, 1, 5, 9, 5)
+
+        val recoveredAt =
+            WarmAlarmRecurrence.recoverableFireAt(
+                scheduledAt,
+                listOf(1),
+                now,
+                utc,
+                activeSnoozeUntilMillis = snoozeUntil,
+            )
+
+        assertEquals(scheduledAt, recoveredAt)
+        assertEquals(
+            scheduledAt,
+            WarmAlarmRecurrence.snapshotScheduledAtMillis(scheduledAt, listOf(1), snoozeUntil, now, utc),
+        )
+    }
+
+    @Test
+    fun recurringSnapshotAdvancesPastOriginalSchedule() {
+        val scheduledAt = millis(2026, 1, 5, 9, 0)
+        val now = millis(2026, 1, 5, 10, 0)
+
+        val snapshotAt =
+            WarmAlarmRecurrence.snapshotScheduledAtMillis(scheduledAt, listOf(1), null, now, utc)
+
+        assertEquals(millis(2026, 1, 12, 9, 0), snapshotAt)
+    }
+
+    @Test
     fun sundayWraparoundMapsCorrectly() {
         // ISO 7 = Sunday. 2026-01-05 is Monday; next Sunday is 2026-01-11.
         val base = millis(2026, 1, 5, 6, 30)

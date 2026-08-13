@@ -52,7 +52,15 @@ class WarmAlarmKillWarningService : Service() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         val now = System.currentTimeMillis()
-        val hasFutureAlarm = WarmAlarmStore.loadAll(this).values.any { it.scheduledAtMillis > now }
+        val hasFutureAlarm =
+            WarmAlarmStore.loadAll(this).values.any { schedule ->
+                WarmAlarmRecurrence.snapshotScheduledAtMillis(
+                    schedule.scheduledAtMillis,
+                    schedule.recurrence?.weekdays,
+                    WarmAlarmStore.activeSnoozeUntilMillis(this, schedule.id),
+                    now,
+                ) > now
+            }
         if (hasFutureAlarm || WarmAlarmForegroundService.isRinging) {
             val prefs = getSharedPreferences(WarmAlarmPlugin.KILL_WARNING_PREFS, Context.MODE_PRIVATE)
             val title = prefs.getString("title", null)

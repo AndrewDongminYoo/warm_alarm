@@ -166,7 +166,7 @@ class WarmAlarmForegroundService : Service() {
         val fireAt = System.currentTimeMillis() + snoozeDurationMillis
 
         if (schedule != null) {
-            WarmAlarmStore.reschedule(this, alarmId, fireAt)
+            WarmAlarmStore.setActiveSnooze(this, alarmId, fireAt)
         }
         WarmAlarmPlugin.rescheduleAlarm(this, alarmId, fireAt)
 
