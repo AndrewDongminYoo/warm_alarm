@@ -57,18 +57,89 @@ void main() {
 
       expect(
         store,
-        contains(r'): Int = schedulePrefs(context).getInt("retrigger_$id", 0)'),
+        contains('val retriggerPrefs = schedulePrefs(context)'),
+      );
+      expect(
+        store,
+        contains('migrateLegacyRetriggerCount(context, retriggerPrefs, id)'),
+      );
+      expect(
+        store,
+        contains('return retriggerPrefs.getInt(retriggerKey(id), 0)'),
       );
       expect(
         store,
         contains(
-          r'schedulePrefs(context).edit().putInt("retrigger_$id", current + 1).apply()',
+          'schedulePrefs(context).edit().putInt(retriggerKey(id), current + 1).apply()',
+        ),
+      );
+      expect(store, contains('clearRetriggerCount(context, id)'));
+    },
+  );
+
+  test('Direct Boot retrigger counters migrate the legacy credential value', () {
+    final store = File(
+      'android/src/main/kotlin/com/andrew/alarm/WarmAlarmStore.kt',
+    ).readAsStringSync();
+
+    expect(store, contains('@Synchronized'));
+    expect(store, contains('private fun migrateLegacyRetriggerCount('));
+    expect(
+      store,
+      contains('devicePrefs.getString(retriggerMigrationKey(id), null)'),
+    );
+    expect(
+      store,
+      contains('devicePrefs.getBoolean(retriggerTombstoneKey(id), false)'),
+    );
+    expect(
+      store,
+      contains(
+        'devicePrefs.getInt(retriggerKey(id), 0) + legacyPrefs.getInt(retriggerKey(id), 0)',
+      ),
+    );
+    expect(
+      store,
+      contains(
+        'putString(retriggerMigrationKey(id), RETRIGGER_MIGRATION_IMPORTED)',
+      ),
+    );
+    expect(
+      store,
+      contains(
+        'putString(retriggerMigrationKey(id), RETRIGGER_MIGRATION_COMPLETE)',
+      ),
+    );
+    expect(
+      store,
+      contains('legacyPrefs.edit().remove(retriggerKey(id)).apply()'),
+    );
+  });
+
+  test(
+    'Direct Boot retrigger removal clears the legacy credential value when available',
+    () {
+      final store = File(
+        'android/src/main/kotlin/com/andrew/alarm/WarmAlarmStore.kt',
+      ).readAsStringSync();
+
+      expect(store, contains('private fun clearRetriggerCount('));
+      expect(
+        store,
+        contains(
+          '!WarmAlarmDirectBoot.canReadCredentialProtectedFiles(context)',
         ),
       );
       expect(
         store,
         contains(
-          r'schedulePrefs(context).edit().remove("retrigger_$id").apply()',
+          'putBoolean(retriggerTombstoneKey(id), true)',
+        ),
+      );
+      expect(
+        store,
+        contains(
+          'context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(retriggerKey(id)).apply()',
         ),
       );
     },

@@ -9,6 +9,10 @@ internal object WarmAlarmStore {
     private const val PREFS = "warm_alarm_store"
     private const val KEY = "schedules"
     private const val ACTIVE_SNOOZE_PREFIX = "active_snooze_"
+    private const val RETRIGGER_MIGRATION_PREFIX = "retrigger_migration_"
+    private const val RETRIGGER_TOMBSTONE_PREFIX = "retrigger_tombstone_"
+    private const val RETRIGGER_MIGRATION_IMPORTED = "imported"
+    private const val RETRIGGER_MIGRATION_COMPLETE = "complete"
 
     fun save(
         context: Context,
@@ -32,21 +36,25 @@ internal object WarmAlarmStore {
         val all = loadAll(context).toMutableMap()
         all.remove(id)
         persist(context, all)
-        schedulePrefs(context).edit().remove("retrigger_$id").apply()
+        clearRetriggerCount(context, id)
         clearActiveSnooze(context, id)
     }
 
     fun getRetriggerCount(
         context: Context,
         id: Long,
-    ): Int = schedulePrefs(context).getInt("retrigger_$id", 0)
+    ): Int {
+        val retriggerPrefs = schedulePrefs(context)
+        migrateLegacyRetriggerCount(context, retriggerPrefs, id)
+        return retriggerPrefs.getInt(retriggerKey(id), 0)
+    }
 
     fun incrementRetriggerCount(
         context: Context,
         id: Long,
     ) {
         val current = getRetriggerCount(context, id)
-        schedulePrefs(context).edit().putInt("retrigger_$id", current + 1).apply()
+        schedulePrefs(context).edit().putInt(retriggerKey(id), current + 1).apply()
     }
 
     fun reschedule(
@@ -144,9 +152,76 @@ internal object WarmAlarmStore {
         }
     }
 
+    @Synchronized
+    private fun migrateLegacyRetriggerCount(
+        context: Context,
+        devicePrefs: android.content.SharedPreferences,
+        id: Long,
+    ) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N ||
+            !WarmAlarmDirectBoot.canReadCredentialProtectedFiles(context)
+        ) {
+            return
+        }
+
+        val legacyPrefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        when (devicePrefs.getString(retriggerMigrationKey(id), null)) {
+            RETRIGGER_MIGRATION_COMPLETE -> return
+            RETRIGGER_MIGRATION_IMPORTED -> {
+                legacyPrefs.edit().remove(retriggerKey(id)).apply()
+                devicePrefs.edit().putString(retriggerMigrationKey(id), RETRIGGER_MIGRATION_COMPLETE).apply()
+                return
+            }
+        }
+
+        val mergedCount =
+            if (devicePrefs.getBoolean(retriggerTombstoneKey(id), false)) {
+                devicePrefs.getInt(retriggerKey(id), 0)
+            } else {
+                devicePrefs.getInt(retriggerKey(id), 0) + legacyPrefs.getInt(retriggerKey(id), 0)
+            }
+        devicePrefs.edit()
+            .putInt(retriggerKey(id), mergedCount)
+            .remove(retriggerTombstoneKey(id))
+            .putString(retriggerMigrationKey(id), RETRIGGER_MIGRATION_IMPORTED)
+            .apply()
+        legacyPrefs.edit().remove(retriggerKey(id)).apply()
+        devicePrefs.edit().putString(retriggerMigrationKey(id), RETRIGGER_MIGRATION_COMPLETE).apply()
+    }
+
+    private fun clearRetriggerCount(
+        context: Context,
+        id: Long,
+    ) {
+        val devicePrefs = schedulePrefs(context)
+        val editor = devicePrefs.edit()
+            .remove(retriggerKey(id))
+            .remove(retriggerMigrationKey(id))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
+            !WarmAlarmDirectBoot.canReadCredentialProtectedFiles(context)
+        ) {
+            editor.putBoolean(retriggerTombstoneKey(id), true)
+        } else {
+            editor.remove(retriggerTombstoneKey(id))
+        }
+        editor.apply()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
+            WarmAlarmDirectBoot.canReadCredentialProtectedFiles(context)
+        ) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(retriggerKey(id)).apply()
+        }
+    }
+
     private fun allPrefs(context: Context) = listOfNotNull(prefs(context), dePrefs(context)).distinct()
 
     private fun activeSnoozeKey(id: Long) = "$ACTIVE_SNOOZE_PREFIX$id"
+
+    private fun retriggerKey(id: Long) = "retrigger_$id"
+
+    private fun retriggerMigrationKey(id: Long) = "$RETRIGGER_MIGRATION_PREFIX$id"
+
+    private fun retriggerTombstoneKey(id: Long) = "$RETRIGGER_TOMBSTONE_PREFIX$id"
 
     private fun dePrefs(context: Context) =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
