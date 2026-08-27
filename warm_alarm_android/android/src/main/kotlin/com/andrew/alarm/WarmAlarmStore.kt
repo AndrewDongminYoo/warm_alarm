@@ -119,7 +119,7 @@ internal object WarmAlarmStore {
         dePrefs(context)?.edit()?.putString(KEY, json)?.apply()
     }
 
-    private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private fun prefs(context: Context) = WarmAlarmDirectBoot.storageContext(context).getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     private fun allPrefs(context: Context) = listOfNotNull(prefs(context), dePrefs(context)).distinct()
 
