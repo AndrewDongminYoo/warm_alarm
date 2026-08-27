@@ -201,8 +201,10 @@ class WarmAlarmForegroundService : Service() {
             ).coerceIn(0f, 1f)
         // Voice messages live in credential-protected storage, which is unavailable until the
         // first user unlock after reboot. Keep the asset or system-alarm path available instead.
+        val filePath = audio?.filePath
         val hasFilePath =
-            !audio?.filePath.isNullOrBlank() && WarmAlarmDirectBoot.canReadCredentialProtectedFiles(this)
+            !filePath.isNullOrBlank() &&
+                (WarmAlarmDirectBoot.canReadCredentialProtectedFiles(this) || File(filePath).canRead())
         val hasAssetPath = !audio?.assetPath.isNullOrBlank()
 
         boostAlarmVolume()

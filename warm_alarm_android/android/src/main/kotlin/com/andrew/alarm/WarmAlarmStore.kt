@@ -75,7 +75,7 @@ internal object WarmAlarmStore {
         id: Long,
     ): Long? {
         val key = activeSnoozeKey(id)
-        return allPrefs(context).firstNotNullOfOrNull { preferences ->
+        return (listOf(schedulePrefs(context)) + allPrefs(context)).distinct().firstNotNullOfOrNull { preferences ->
             if (preferences.contains(key)) preferences.getLong(key, 0L) else null
         }
     }
@@ -90,7 +90,9 @@ internal object WarmAlarmStore {
     }
 
     fun loadAll(context: Context): Map<Long, WarmAlarmScheduleWire> {
-        val json = prefs(context).getString(KEY, "[]") ?: "[]"
+        val schedulePrefs = schedulePrefs(context)
+        migrateLegacySchedules(context, schedulePrefs)
+        val json = schedulePrefs.getString(KEY, "[]") ?: "[]"
         val arr = JSONArray(json)
         return buildMap {
             for (i in 0 until arr.length()) {
@@ -102,7 +104,7 @@ internal object WarmAlarmStore {
 
     fun clear(context: Context) {
         allPrefs(context).forEach { preferences ->
-            val editor = preferences.edit().remove(KEY)
+            val editor = preferences.edit().putString(KEY, "[]")
             preferences.all.keys
                 .filter { it.startsWith(ACTIVE_SNOOZE_PREFIX) }
                 .forEach { editor.remove(it) }
@@ -115,11 +117,32 @@ internal object WarmAlarmStore {
         all: Map<Long, WarmAlarmScheduleWire>,
     ) {
         val json = JSONArray().also { arr -> all.values.forEach { arr.put(encode(it)) } }.toString()
-        prefs(context).edit().putString(KEY, json).apply()
-        dePrefs(context)?.edit()?.putString(KEY, json)?.apply()
+        schedulePrefs(context).edit().putString(KEY, json).apply()
+        if (WarmAlarmDirectBoot.canReadCredentialProtectedFiles(context)) {
+            prefs(context).edit().putString(KEY, json).apply()
+        }
     }
 
     private fun prefs(context: Context) = WarmAlarmDirectBoot.storageContext(context).getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    private fun schedulePrefs(context: Context) = dePrefs(context) ?: prefs(context)
+
+    private fun migrateLegacySchedules(
+        context: Context,
+        devicePrefs: android.content.SharedPreferences,
+    ) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N ||
+            devicePrefs.contains(KEY) ||
+            !WarmAlarmDirectBoot.canReadCredentialProtectedFiles(context)
+        ) {
+            return
+        }
+
+        val legacyPrefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        legacyPrefs.getString(KEY, null)?.let { json ->
+            devicePrefs.edit().putString(KEY, json).apply()
+        }
+    }
 
     private fun allPrefs(context: Context) = listOfNotNull(prefs(context), dePrefs(context)).distinct()
 

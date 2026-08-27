@@ -35,6 +35,19 @@ void main() {
     );
   });
 
+  test('Direct Boot schedules keep device-protected storage canonical', () {
+    final store = File(
+      'android/src/main/kotlin/com/andrew/alarm/WarmAlarmStore.kt',
+    ).readAsStringSync();
+
+    expect(
+      store,
+      contains(
+        'private fun schedulePrefs(context: Context) = dePrefs(context) ?: prefs(context)',
+      ),
+    );
+  });
+
   test('Direct Boot alarm skips credential-protected voice files', () {
     final service = File(
       'android/src/main/kotlin/com/andrew/alarm/WarmAlarmForegroundService.kt',
@@ -44,5 +57,6 @@ void main() {
       service,
       contains('WarmAlarmDirectBoot.canReadCredentialProtectedFiles(this)'),
     );
+    expect(service, contains('File(filePath).canRead()'));
   });
 }
