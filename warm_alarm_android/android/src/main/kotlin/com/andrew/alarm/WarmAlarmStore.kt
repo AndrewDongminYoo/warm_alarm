@@ -32,21 +32,21 @@ internal object WarmAlarmStore {
         val all = loadAll(context).toMutableMap()
         all.remove(id)
         persist(context, all)
-        prefs(context).edit().remove("retrigger_$id").apply()
+        schedulePrefs(context).edit().remove("retrigger_$id").apply()
         clearActiveSnooze(context, id)
     }
 
     fun getRetriggerCount(
         context: Context,
         id: Long,
-    ): Int = prefs(context).getInt("retrigger_$id", 0)
+    ): Int = schedulePrefs(context).getInt("retrigger_$id", 0)
 
     fun incrementRetriggerCount(
         context: Context,
         id: Long,
     ) {
         val current = getRetriggerCount(context, id)
-        prefs(context).edit().putInt("retrigger_$id", current + 1).apply()
+        schedulePrefs(context).edit().putInt("retrigger_$id", current + 1).apply()
     }
 
     fun reschedule(

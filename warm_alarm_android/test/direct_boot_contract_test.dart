@@ -48,6 +48,32 @@ void main() {
     );
   });
 
+  test(
+    'Direct Boot retrigger counters keep device-protected storage canonical',
+    () {
+      final store = File(
+        'android/src/main/kotlin/com/andrew/alarm/WarmAlarmStore.kt',
+      ).readAsStringSync();
+
+      expect(
+        store,
+        contains(r'): Int = schedulePrefs(context).getInt("retrigger_$id", 0)'),
+      );
+      expect(
+        store,
+        contains(
+          r'schedulePrefs(context).edit().putInt("retrigger_$id", current + 1).apply()',
+        ),
+      );
+      expect(
+        store,
+        contains(
+          r'schedulePrefs(context).edit().remove("retrigger_$id").apply()',
+        ),
+      );
+    },
+  );
+
   test('Direct Boot alarm skips credential-protected voice files', () {
     final service = File(
       'android/src/main/kotlin/com/andrew/alarm/WarmAlarmForegroundService.kt',
