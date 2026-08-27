@@ -19,6 +19,7 @@
              Boot rescheduling belongs to WarmAlarmBootReceiver below. -->
         <receiver
             android:name=".WarmAlarmReceiver"
+            android:directBootAware="true"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.andrew.alarm.ACTION_FIRE" />
@@ -43,6 +44,7 @@
 
         <service
             android:name=".WarmAlarmForegroundService"
+            android:directBootAware="true"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
