@@ -2,6 +2,35 @@ import Flutter
 import UIKit
 import UserNotifications
 
+enum WarmAlarmRequestRegistration {
+    static func addAtomically<Request>(
+        _ requests: [Request],
+        identifier: @escaping (Request) -> String,
+        add: @escaping (Request, @escaping (Error?) -> Void) -> Void,
+        rollback: @escaping ([String]) -> Void,
+        completion: @escaping (Error?) -> Void
+    ) {
+        let identifiers = requests.map(identifier)
+
+        func addNext(at index: Int) {
+            guard index < requests.count else {
+                completion(nil)
+                return
+            }
+            add(requests[index]) { error in
+                if let error {
+                    rollback(identifiers)
+                    completion(error)
+                    return
+                }
+                addNext(at: index + 1)
+            }
+        }
+
+        addNext(at: 0)
+    }
+}
+
 public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     private let delegate: WarmAlarmDelegate
     private static let killWarningNotifId = "warm_alarm_kill_warning_notif"
@@ -71,24 +100,70 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             completion(.success(()))
             return
         }
-        UNUserNotificationCenter.current().getPendingNotificationRequests { pending in
+        let center = UNUserNotificationCenter.current()
+        center.getPendingNotificationRequests { pending in
             let pendingIds = Set(pending.map { $0.identifier })
-            for data in recoverableAlarms {
-                let content = self.delegate.makeContent(from: data)
-                let missingIds = WarmAlarmRecurrence.missingIdentifiers(
-                    alarmId: data.id,
-                    weekdays: data.recurrenceWeekdays,
-                    activeSnoozeUntilMillis: data.activeSnoozeUntilMillis,
-                    nowMillis: nowMillis,
-                    pendingIdentifiers: pendingIds
-                )
-                for identifier in missingIds {
-                    let request = Self.makeRecoveryRequest(
-                        identifier: identifier, schedule: data, content: content, nowMillis: nowMillis)
-                    UNUserNotificationCenter.current().add(request) { _ in }
-                }
-            }
+            self.recoverAlarms(
+                recoverableAlarms,
+                startingAt: 0,
+                pendingIdentifiers: pendingIds,
+                nowMillis: nowMillis,
+                center: center,
+                completion: completion
+            )
+        }
+    }
+
+    private func recoverAlarms(
+        _ alarms: [WarmAlarmScheduleData],
+        startingAt index: Int,
+        pendingIdentifiers: Set<String>,
+        nowMillis: Int64,
+        center: UNUserNotificationCenter,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        guard index < alarms.count else {
             completion(.success(()))
+            return
+        }
+
+        let schedule = alarms[index]
+        let content = delegate.makeContent(from: schedule)
+        let missingIdentifiers = WarmAlarmRecurrence.missingIdentifiers(
+            alarmId: schedule.id,
+            weekdays: schedule.recurrenceWeekdays,
+            activeSnoozeUntilMillis: schedule.activeSnoozeUntilMillis,
+            nowMillis: nowMillis,
+            pendingIdentifiers: pendingIdentifiers
+        )
+        let requests = missingIdentifiers.map {
+            Self.makeRecoveryRequest(identifier: $0, schedule: schedule, content: content, nowMillis: nowMillis)
+        }
+        guard !requests.isEmpty else {
+            recoverAlarms(
+                alarms,
+                startingAt: index + 1,
+                pendingIdentifiers: pendingIdentifiers,
+                nowMillis: nowMillis,
+                center: center,
+                completion: completion
+            )
+            return
+        }
+
+        Self.addRequestsAtomically(requests, center: center) { error in
+            if let error {
+                completion(.failure(error))
+                return
+            }
+            self.recoverAlarms(
+                alarms,
+                startingAt: index + 1,
+                pendingIdentifiers: pendingIdentifiers,
+                nowMillis: nowMillis,
+                center: center,
+                completion: completion
+            )
         }
     }
 
@@ -124,6 +199,24 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             identifier: identifier,
             content: content,
             trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        )
+    }
+
+    private static func addRequestsAtomically(
+        _ requests: [UNNotificationRequest],
+        center: UNUserNotificationCenter,
+        completion: @escaping (Error?) -> Void
+    ) {
+        WarmAlarmRequestRegistration.addAtomically(
+            requests,
+            identifier: { $0.identifier },
+            add: { request, completion in
+                center.add(request, withCompletionHandler: completion)
+            },
+            rollback: { identifiers in
+                center.removePendingNotificationRequests(withIdentifiers: identifiers)
+            },
+            completion: completion
         )
     }
 
@@ -208,14 +301,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
 
         let content = delegate.makeContent(from: .from(wire: schedule))
         let requests = Self.makeRequests(for: schedule, content: content)
-        // For a recurring alarm we register one repeating trigger per weekday.
-        // Add the extra weekday requests fire-and-forget; the first request drives
-        // the readiness/error callback below.
-        for extra in requests.dropFirst() {
-            center.add(extra) { _ in }
-        }
-
-        center.add(requests[0]) { [weak self] error in
+        Self.addRequestsAtomically(requests, center: center) { [weak self] error in
             guard let self = self else { return }
             if let error = error {
                 WarmAlarmStore.shared.remove(id: schedule.id)
