@@ -28,10 +28,6 @@ let package = Package(
                 // the following instructions to add them:
                 // https://developer.apple.com/documentation/xcode/bundling-resources-with-a-swift-package
             ]
-        ),
-        .testTarget(
-            name: "warm_alarm_macos_tests",
-            dependencies: ["warm_alarm_macos"]
         )
     ]
 )
