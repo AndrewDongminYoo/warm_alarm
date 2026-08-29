@@ -2,9 +2,122 @@ import AppKit
 import FlutterMacOS
 import UserNotifications
 
+enum WarmAlarmRequestRegistration {
+    static func addAtomically<Request>(
+        _ requests: [Request],
+        identifier: @escaping (Request) -> String,
+        add: @escaping (Request, @escaping (Error?) -> Void) -> Void,
+        rollback: @escaping ([String]) -> Void,
+        completion: @escaping (Error?) -> Void
+    ) {
+        let identifiers = requests.map(identifier)
+
+        func addNext(at index: Int) {
+            guard index < requests.count else {
+                completion(nil)
+                return
+            }
+            add(requests[index]) { error in
+                if let error {
+                    rollback(identifiers)
+                    completion(error)
+                    return
+                }
+                addNext(at: index + 1)
+            }
+        }
+
+        addNext(at: 0)
+    }
+}
+
+final class WarmAlarmMutationQueue {
+    typealias Mutation = (@escaping () -> Void) -> Void
+
+    private let queue: DispatchQueue
+    private var mutations = [Mutation]()
+    private var isRunning = false
+
+    init(label: String) {
+        queue = DispatchQueue(label: label)
+    }
+
+    func enqueue(_ mutation: @escaping Mutation) {
+        queue.async(execute: { [weak self] in
+            guard let self else { return }
+            self.mutations.append(mutation)
+            self.startNextMutation()
+        })
+    }
+
+    private func startNextMutation() {
+        guard !isRunning, !mutations.isEmpty else { return }
+        isRunning = true
+        let mutation = mutations.removeFirst()
+        mutation { [weak self] in
+            self?.queue.async(execute: { [weak self] in
+                guard let self else { return }
+                self.isRunning = false
+                self.startNextMutation()
+            })
+        }
+    }
+}
+
+// Pigeon provides non-Sendable callbacks.
+// This immutable envelope invokes each callback once on the main platform thread.
+// Remove @unchecked Sendable when Pigeon provides Sendable callbacks.
+final class WarmAlarmPlatformReply: @unchecked Sendable {
+    private let reply: () -> Void
+
+    private init(reply: @escaping () -> Void) {
+        self.reply = reply
+    }
+
+    static func complete<Value>(
+        _ result: Result<Value, Error>,
+        completion: @escaping (Result<Value, Error>) -> Void,
+        finish: @escaping () -> Void
+    ) {
+        let reply = WarmAlarmPlatformReply {
+            completion(result)
+            finish()
+        }
+        DispatchQueue.main.async {
+            reply.reply()
+        }
+    }
+}
+
+enum WarmAlarmRecovery {
+    static func recoverAll<Alarm>(
+        _ alarms: [Alarm],
+        recover: @escaping (Alarm, @escaping (Error?) -> Void) -> Void,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        func recoverNext(at index: Int, firstError: Error?) {
+            guard index < alarms.count else {
+                if let firstError {
+                    completion(.failure(firstError))
+                } else {
+                    completion(.success(()))
+                }
+                return
+            }
+            recover(alarms[index]) { error in
+                recoverNext(at: index + 1, firstError: firstError ?? error)
+            }
+        }
+
+        recoverNext(at: 0, firstError: nil)
+    }
+}
+
 public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     private let delegate: WarmAlarmDelegate
     private static let killWarningNotifId = "warm_alarm_kill_warning_notif"
+    // ponytail: serializes all Apple notification mutations; split by alarm ID only if contention is measured.
+    private let notificationMutationQueue = WarmAlarmMutationQueue(label: "warm_alarm.notification_mutation")
 
     init(delegate: WarmAlarmDelegate) {
         self.delegate = delegate
@@ -91,38 +204,79 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     }
 
     func initialize(completion: @escaping (Result<Void, Error>) -> Void) {
-        let nowMillis = Int64(Date().timeIntervalSince1970 * 1000)
-        let stored = WarmAlarmStore.shared.loadAll()
-        let recoverableAlarms = stored.values.filter { data in
-            WarmAlarmRecurrence.shouldRecover(
-                scheduledAtMillis: data.scheduledAtMillis,
-                weekdays: data.recurrenceWeekdays,
-                activeSnoozeUntilMillis: data.activeSnoozeUntilMillis,
-                nowMillis: nowMillis)
-        }
-        guard !recoverableAlarms.isEmpty else {
-            completion(.success(()))
-            return
-        }
-        UNUserNotificationCenter.current().getPendingNotificationRequests { pending in
-            let pendingIds = Set(pending.map { $0.identifier })
-            for data in recoverableAlarms {
-                let content = self.delegate.makeContent(from: data)
-                let missingIds = WarmAlarmRecurrence.missingIdentifiers(
-                    alarmId: data.id,
+        notificationMutationQueue.enqueue { [weak self] finish in
+            guard let self else {
+                finish()
+                return
+            }
+            let nowMillis = Int64(Date().timeIntervalSince1970 * 1000)
+            let stored = WarmAlarmStore.shared.loadAll()
+            let recoverableAlarms = stored.values.filter { data in
+                WarmAlarmRecurrence.shouldRecover(
+                    scheduledAtMillis: data.scheduledAtMillis,
                     weekdays: data.recurrenceWeekdays,
                     activeSnoozeUntilMillis: data.activeSnoozeUntilMillis,
+                    nowMillis: nowMillis)
+            }
+            guard !recoverableAlarms.isEmpty else {
+                WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
+                return
+            }
+            let center = UNUserNotificationCenter.current()
+            center.getPendingNotificationRequests { [weak self] pending in
+                guard let self else {
+                    finish()
+                    return
+                }
+                self.recoverAlarms(
+                    recoverableAlarms,
+                    pendingIdentifiers: Set(pending.map { $0.identifier }),
                     nowMillis: nowMillis,
-                    pendingIdentifiers: pendingIds
-                )
-                for identifier in missingIds {
-                    let request = Self.makeRecoveryRequest(
-                        identifier: identifier, schedule: data, content: content, nowMillis: nowMillis)
-                    UNUserNotificationCenter.current().add(request) { _ in }
+                    center: center
+                ) { result in
+                    WarmAlarmPlatformReply.complete(result, completion: completion, finish: finish)
                 }
             }
-            completion(.success(()))
         }
+    }
+
+    private func recoverAlarms(
+        _ alarms: [WarmAlarmScheduleData],
+        pendingIdentifiers: Set<String>,
+        nowMillis: Int64,
+        center: UNUserNotificationCenter,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        WarmAlarmRecovery.recoverAll(
+            alarms,
+            recover: { [weak self] schedule, completion in
+                guard let self else {
+                    completion(nil)
+                    return
+                }
+                let content = self.delegate.makeContent(from: schedule)
+                let missingIdentifiers = WarmAlarmRecurrence.missingIdentifiers(
+                    alarmId: schedule.id,
+                    weekdays: schedule.recurrenceWeekdays,
+                    activeSnoozeUntilMillis: schedule.activeSnoozeUntilMillis,
+                    nowMillis: nowMillis,
+                    pendingIdentifiers: pendingIdentifiers
+                )
+                let requests = missingIdentifiers.map {
+                    Self.makeRecoveryRequest(identifier: $0, schedule: schedule, content: content, nowMillis: nowMillis)
+                }
+                guard !requests.isEmpty else {
+                    completion(nil)
+                    return
+                }
+                Self.addRequestsAtomically(
+                    requests,
+                    center: center,
+                    completion: completion
+                )
+            },
+            completion: completion
+        )
     }
 
     private static func makeRecoveryRequest(
@@ -157,6 +311,24 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             identifier: identifier,
             content: content,
             trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        )
+    }
+
+    private static func addRequestsAtomically(
+        _ requests: [UNNotificationRequest],
+        center: UNUserNotificationCenter,
+        completion: @escaping (Error?) -> Void
+    ) {
+        WarmAlarmRequestRegistration.addAtomically(
+            requests,
+            identifier: { $0.identifier },
+            add: { request, completion in
+                center.add(request, withCompletionHandler: completion)
+            },
+            rollback: { identifiers in
+                center.removePendingNotificationRequests(withIdentifiers: identifiers)
+            },
+            completion: completion
         )
     }
 
@@ -227,67 +399,84 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         schedule: WarmAlarmScheduleWire,
         completion: @escaping (Result<WarmAlarmScheduleResultWire, Error>) -> Void
     ) {
-        // Clear any prior requests for this id (one-shot "{id}" plus per-weekday
-        // "{id}#{weekday}") so re-scheduling with a different weekday set does not
-        // leave orphaned repeating triggers armed.
-        let center = UNUserNotificationCenter.current()
-        var staleIdentifiers = [String(schedule.id)]
-        if let previousWeekdays = WarmAlarmStore.shared.load(id: schedule.id)?.recurrenceWeekdays {
-            staleIdentifiers += previousWeekdays.map { "\(schedule.id)#\($0)" }
-        }
-        center.removePendingNotificationRequests(withIdentifiers: staleIdentifiers)
-
-        WarmAlarmStore.shared.save(.from(wire: schedule))
-
-        let content = delegate.makeContent(from: .from(wire: schedule))
-        let requests = Self.makeRequests(for: schedule, content: content)
-        // For a recurring alarm we register one repeating trigger per weekday.
-        // Add the extra weekday requests fire-and-forget; the first request drives
-        // the readiness/error callback below.
-        for extra in requests.dropFirst() {
-            center.add(extra) { _ in }
-        }
-
-        center.add(requests[0]) { [weak self] error in
-            guard let self = self else { return }
-            if let error = error {
-                WarmAlarmStore.shared.remove(id: schedule.id)
-                self.delegate.emitFailure(alarmId: schedule.id, message: error.localizedDescription)
-                completion(.success(WarmAlarmScheduleResultWire(
-                    alarmId: schedule.id,
-                    readiness: WarmAlarmReadinessWire(level: .limited, reasons: [.backgroundExecutionLimited]),
-                    warning: WarmAlarmWarningWire(message: "Scheduling failed: \(error.localizedDescription)")
-                )))
+        notificationMutationQueue.enqueue { [weak self] finish in
+            guard let self else {
+                finish()
                 return
             }
-            self.delegate.emitScheduled(alarmId: schedule.id)
-            self.getReadiness { result in
-                let readiness = (try? result.get())
-                    ?? WarmAlarmReadinessWire(level: .limited, reasons: [.backgroundExecutionLimited])
-                completion(.success(WarmAlarmScheduleResultWire(
-                    alarmId: schedule.id, readiness: readiness, warning: nil)))
+            // Clear any prior requests for this id (one-shot "{id}" plus per-weekday
+            // "{id}#{weekday}") so re-scheduling with a different weekday set does not
+            // leave orphaned repeating triggers armed.
+            let center = UNUserNotificationCenter.current()
+            var staleIdentifiers = [String(schedule.id)]
+            if let previousWeekdays = WarmAlarmStore.shared.load(id: schedule.id)?.recurrenceWeekdays {
+                staleIdentifiers += previousWeekdays.map { "\(schedule.id)#\($0)" }
+            }
+            center.removePendingNotificationRequests(withIdentifiers: staleIdentifiers)
+
+            WarmAlarmStore.shared.save(.from(wire: schedule))
+
+            let content = self.delegate.makeContent(from: .from(wire: schedule))
+            let requests = Self.makeRequests(for: schedule, content: content)
+            Self.addRequestsAtomically(
+                requests,
+                center: center
+            ) { [weak self] error in
+                guard let self else {
+                    finish()
+                    return
+                }
+                if let error {
+                    WarmAlarmStore.shared.remove(id: schedule.id)
+                    self.delegate.emitFailure(alarmId: schedule.id, message: error.localizedDescription)
+                    WarmAlarmPlatformReply.complete(.success(WarmAlarmScheduleResultWire(
+                        alarmId: schedule.id,
+                        readiness: WarmAlarmReadinessWire(level: .limited, reasons: [.backgroundExecutionLimited]),
+                        warning: WarmAlarmWarningWire(message: "Scheduling failed: \(error.localizedDescription)")
+                    )), completion: completion, finish: finish)
+                    return
+                }
+                self.delegate.emitScheduled(alarmId: schedule.id)
+                self.getReadiness { result in
+                    let readiness = (try? result.get())
+                        ?? WarmAlarmReadinessWire(level: .limited, reasons: [.backgroundExecutionLimited])
+                    WarmAlarmPlatformReply.complete(.success(WarmAlarmScheduleResultWire(
+                        alarmId: schedule.id, readiness: readiness, warning: nil)), completion: completion, finish: finish)
+                }
             }
         }
     }
 
     func cancelAlarm(id: Int64, completion: @escaping (Result<Void, Error>) -> Void) {
-        // Cancelling tears down the whole series: the one-shot id plus every
-        // per-weekday repeating request ("{id}#{isoWeekday}").
-        var identifiers = [String(id)]
-        if let weekdays = WarmAlarmStore.shared.load(id: id)?.recurrenceWeekdays {
-            identifiers += weekdays.map { "\(id)#\($0)" }
+        notificationMutationQueue.enqueue { [weak self] finish in
+            guard let self else {
+                finish()
+                return
+            }
+            // Cancelling tears down the whole series: the one-shot id plus every
+            // per-weekday repeating request ("{id}#{isoWeekday}").
+            var identifiers = [String(id)]
+            if let weekdays = WarmAlarmStore.shared.load(id: id)?.recurrenceWeekdays {
+                identifiers += weekdays.map { "\(id)#\($0)" }
+            }
+            WarmAlarmStore.shared.remove(id: id)
+            let center = UNUserNotificationCenter.current()
+            center.removePendingNotificationRequests(withIdentifiers: identifiers)
+            center.removeDeliveredNotifications(withIdentifiers: identifiers)
+            WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
         }
-        WarmAlarmStore.shared.remove(id: id)
-        let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: identifiers)
-        center.removeDeliveredNotifications(withIdentifiers: identifiers)
-        completion(.success(()))
     }
 
     func cancelAllAlarms(completion: @escaping (Result<Void, Error>) -> Void) {
-        WarmAlarmStore.shared.clear()
-        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
-        completion(.success(()))
+        notificationMutationQueue.enqueue { [weak self] finish in
+            guard let self else {
+                finish()
+                return
+            }
+            WarmAlarmStore.shared.clear()
+            UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+            WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
+        }
     }
 
     func getScheduledAlarms(completion: @escaping (Result<[WarmAlarmSnapshotWire], Error>) -> Void) {
