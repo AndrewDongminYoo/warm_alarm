@@ -64,6 +64,31 @@ final class WarmAlarmMutationQueue {
     }
 }
 
+// Pigeon provides non-Sendable callbacks.
+// This immutable envelope invokes each callback once on the main platform thread.
+// Remove @unchecked Sendable when Pigeon provides Sendable callbacks.
+final class WarmAlarmPlatformReply: @unchecked Sendable {
+    private let reply: () -> Void
+
+    private init(reply: @escaping () -> Void) {
+        self.reply = reply
+    }
+
+    static func complete<Value>(
+        _ result: Result<Value, Error>,
+        completion: @escaping (Result<Value, Error>) -> Void,
+        finish: @escaping () -> Void
+    ) {
+        let reply = WarmAlarmPlatformReply {
+            completion(result)
+            finish()
+        }
+        DispatchQueue.main.async {
+            reply.reply()
+        }
+    }
+}
+
 enum WarmAlarmRecovery {
     static func recoverAll<Alarm>(
         _ alarms: [Alarm],
@@ -161,8 +186,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                     nowMillis: nowMillis)
             }
             guard !recoverableAlarms.isEmpty else {
-                completion(.success(()))
-                finish()
+                WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
                 return
             }
             let center = UNUserNotificationCenter.current()
@@ -177,8 +201,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                     nowMillis: nowMillis,
                     center: center
                 ) { result in
-                    completion(result)
-                    finish()
+                    WarmAlarmPlatformReply.complete(result, completion: completion, finish: finish)
                 }
             }
         }
@@ -373,21 +396,19 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 if let error {
                     WarmAlarmStore.shared.remove(id: schedule.id)
                     self.delegate.emitFailure(alarmId: schedule.id, message: error.localizedDescription)
-                    completion(.success(WarmAlarmScheduleResultWire(
+                    WarmAlarmPlatformReply.complete(.success(WarmAlarmScheduleResultWire(
                         alarmId: schedule.id,
                         readiness: WarmAlarmReadinessWire(level: .limited, reasons: [.backgroundExecutionLimited]),
                         warning: WarmAlarmWarningWire(message: "Scheduling failed: \(error.localizedDescription)")
-                    )))
-                    finish()
+                    )), completion: completion, finish: finish)
                     return
                 }
                 self.delegate.emitScheduled(alarmId: schedule.id)
                 self.getReadiness { result in
                     let readiness = (try? result.get())
                         ?? WarmAlarmReadinessWire(level: .limited, reasons: [.backgroundExecutionLimited])
-                    completion(.success(WarmAlarmScheduleResultWire(
-                        alarmId: schedule.id, readiness: readiness, warning: nil)))
-                    finish()
+                    WarmAlarmPlatformReply.complete(.success(WarmAlarmScheduleResultWire(
+                        alarmId: schedule.id, readiness: readiness, warning: nil)), completion: completion, finish: finish)
                 }
             }
         }
@@ -410,8 +431,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             let center = UNUserNotificationCenter.current()
             center.removePendingNotificationRequests(withIdentifiers: identifiers)
             center.removeDeliveredNotifications(withIdentifiers: identifiers)
-            completion(.success(()))
-            finish()
+            WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
         }
     }
 
@@ -424,8 +444,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             self.delegate.stopAllIfPlaying()
             WarmAlarmStore.shared.clear()
             UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
-            completion(.success(()))
-            finish()
+            WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
         }
     }
 
