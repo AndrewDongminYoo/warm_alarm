@@ -166,7 +166,10 @@ internal object WarmAlarmStore {
 
         val legacyPrefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         when (devicePrefs.getString(retriggerMigrationKey(id), null)) {
-            RETRIGGER_MIGRATION_COMPLETE -> return
+            RETRIGGER_MIGRATION_COMPLETE -> {
+                return
+            }
+
             RETRIGGER_MIGRATION_IMPORTED -> {
                 legacyPrefs.edit().remove(retriggerKey(id)).apply()
                 devicePrefs.edit().putString(retriggerMigrationKey(id), RETRIGGER_MIGRATION_COMPLETE).apply()
@@ -180,7 +183,8 @@ internal object WarmAlarmStore {
             } else {
                 devicePrefs.getInt(retriggerKey(id), 0) + legacyPrefs.getInt(retriggerKey(id), 0)
             }
-        devicePrefs.edit()
+        devicePrefs
+            .edit()
             .putInt(retriggerKey(id), mergedCount)
             .remove(retriggerTombstoneKey(id))
             .putString(retriggerMigrationKey(id), RETRIGGER_MIGRATION_IMPORTED)
@@ -194,9 +198,11 @@ internal object WarmAlarmStore {
         id: Long,
     ) {
         val devicePrefs = schedulePrefs(context)
-        val editor = devicePrefs.edit()
-            .remove(retriggerKey(id))
-            .remove(retriggerMigrationKey(id))
+        val editor =
+            devicePrefs
+                .edit()
+                .remove(retriggerKey(id))
+                .remove(retriggerMigrationKey(id))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
             !WarmAlarmDirectBoot.canReadCredentialProtectedFiles(context)
         ) {
@@ -209,7 +215,11 @@ internal object WarmAlarmStore {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
             WarmAlarmDirectBoot.canReadCredentialProtectedFiles(context)
         ) {
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(retriggerKey(id)).apply()
+            context
+                .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .remove(retriggerKey(id))
+                .apply()
         }
     }
 

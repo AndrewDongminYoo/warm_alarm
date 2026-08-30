@@ -139,7 +139,10 @@ void main() {
       expect(
         store,
         contains(
-          'context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(retriggerKey(id)).apply()',
+          RegExp(
+            r'context\s*\.getSharedPreferences\(PREFS,\s*Context\.MODE_PRIVATE\)\s*'
+            r'\.edit\(\)\s*\.remove\(retriggerKey\(id\)\)\s*\.apply\(\)',
+          ),
         ),
       );
     },
