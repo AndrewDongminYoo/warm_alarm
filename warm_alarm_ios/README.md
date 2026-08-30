@@ -17,7 +17,7 @@ This package is [endorsed][endorsed_link], which means you do **not** add it dir
 | Notification scheduling   | ✅ Full    | `UNUserNotificationCenter`                                |
 | Exact alarm scheduling    | ⚠️ Limited | Notification-based; system may throttle background launch |
 | Background audio playback | ⚠️ Limited | `AVAudioSession` `.playback` category; Silent mode bypass |
-| Full-screen presentation  | ⚠️ Limited | Full-screen intent is not supported; notification only    |
+| Full-screen presentation  | ❌ None    | Full-screen intent is not supported; notification only    |
 | Wake-check                | ❌ None    | iOS cannot self-trigger background wakes after dismissal  |
 
 **⚠️ Limited** means the alarm fires via a `UNUserNotificationCenter` notification. The app is not

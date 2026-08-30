@@ -23,24 +23,11 @@
 
 ## Installation
 
-> **Note:** `warm_alarm` is not yet published to pub.dev. Add it from your local workspace or via a Git reference.
-
-**From a local path** (monorepo or local checkout):
+Add `warm_alarm` to your Flutter app.
 
 ```yaml
 dependencies:
-  warm_alarm:
-    path: ../warm_alarm/warm_alarm
-```
-
-**From Git:**
-
-```yaml
-dependencies:
-  warm_alarm:
-    git:
-      url: https://github.com/AndrewDongminYoo/warm_alarm.git
-      path: warm_alarm
+  warm_alarm: ^0.1.0+1
 ```
 
 Then run:
@@ -102,15 +89,15 @@ await WarmAlarm.cancelAlarm(1);
 
 ## Platform Capabilities
 
-| Feature                   | Android | iOS            | macOS          |
-| ------------------------- | ------- | -------------- | -------------- |
-| Notification scheduling   | ✅ Full | ✅ Full        | ✅ Full        |
-| Exact alarm scheduling    | ✅ Full | ⚠️ Limited     | ❌ Unsupported |
-| Background audio playback | ✅ Full | ⚠️ Limited     | ⚠️ Limited     |
-| Full-screen presentation  | ✅ Full | ⚠️ Limited     | ❌ Unsupported |
-| Wake-check                | ✅ Full | ❌ Unsupported | ❌ Unsupported |
+| Feature                   | Android    | iOS            | macOS          |
+| ------------------------- | ---------- | -------------- | -------------- |
+| Notification scheduling   | ✅ Full    | ✅ Full        | ✅ Full        |
+| Exact alarm scheduling    | ✅ Full    | ⚠️ Limited     | ❌ Unsupported |
+| Background audio playback | ⚠️ Limited | ⚠️ Limited     | ⚠️ Limited     |
+| Full-screen presentation  | ✅ Full    | ❌ Unsupported | ❌ Unsupported |
+| Wake-check                | ✅ Full    | ❌ Unsupported | ❌ Unsupported |
 
-**⚠️ Limited** means the platform delivers the alarm via a notification instead of a guaranteed background wake. The app may not launch automatically; the alarm fires only if the user interacts with the notification.
+**⚠️ Limited** means the native implementation reports conditional support. Call `getReadiness()` before you schedule an alarm.
 
 Call `getReadiness()` at runtime and surface the reasons to your users so they can take corrective action (grant permissions, disable battery optimization, etc.).
 

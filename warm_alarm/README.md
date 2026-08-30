@@ -24,25 +24,11 @@ deliver before you commit to a schedule.
 
 ## Installation
 
-> **Note:** `warm_alarm` is not yet published to pub.dev. Add it from your local checkout or via a
-> Git reference.
-
-**From a local path:**
+Add `warm_alarm` to your Flutter app.
 
 ```yaml
 dependencies:
-  warm_alarm:
-    path: ../warm_alarm/warm_alarm
-```
-
-**From Git:**
-
-```yaml
-dependencies:
-  warm_alarm:
-    git:
-      url: https://github.com/AndrewDongminYoo/warm_alarm.git
-      path: warm_alarm
+  warm_alarm: ^0.1.0+1
 ```
 
 Then run:
@@ -104,17 +90,15 @@ await WarmAlarm.cancelAlarm(1);
 
 ## Platform Capabilities
 
-| Feature                   | Android | iOS        | macOS      |
-| ------------------------- | ------- | ---------- | ---------- |
-| Notification scheduling   | ✅ Full | ✅ Full    | ✅ Full    |
-| Exact alarm scheduling    | ✅ Full | ⚠️ Limited | ⚠️ Limited |
-| Background audio playback | ✅ Full | ⚠️ Limited | ⚠️ Limited |
-| Full-screen presentation  | ✅ Full | ⚠️ Limited | ❌ None    |
-| Wake-check                | ✅ Full | ❌ None    | ❌ None    |
+| Feature                   | Android    | iOS        | macOS      |
+| ------------------------- | ---------- | ---------- | ---------- |
+| Notification scheduling   | ✅ Full    | ✅ Full    | ✅ Full    |
+| Exact alarm scheduling    | ✅ Full    | ⚠️ Limited | ⚠️ Limited |
+| Background audio playback | ⚠️ Limited | ⚠️ Limited | ⚠️ Limited |
+| Full-screen presentation  | ✅ Full    | ❌ None    | ❌ None    |
+| Wake-check                | ✅ Full    | ❌ None    | ❌ None    |
 
-**⚠️ Limited** means the platform delivers the alarm via a notification instead of a guaranteed
-background wake. The app may not launch automatically; the alarm fires only when the user interacts
-with the notification.
+**⚠️ Limited** means the native implementation reports conditional support. Call `getReadiness()` before you schedule an alarm.
 
 Call `getReadiness()` at runtime and surface the `reasons` list to your users so they can take
 corrective action (grant permissions, disable battery optimization, etc.).
