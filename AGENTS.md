@@ -70,7 +70,7 @@ melos run get                                  # equivalent: very_good packages 
 melos run generate                             # regenerate Pigeon for packages depending on `pigeon`
 melos run test                                 # flutter test --coverage --test-randomize-ordering-seed random (per package)
 melos run test:ci                              # same, --concurrency 4
-melos run format                               # dart fix --apply ; dart format --line-length 120 .
+melos run format                               # dart fix --apply ; dart format .
 melos run format:ci                            # check-only (--set-exit-if-changed)
 trunk check                                    # cspell / markdownlint / ktlint / yamllint / actionlint / etc.
 

@@ -9,3 +9,10 @@ analyzer:
     - android/**
     - ios/**
     - macos/**
+    - web/**
+    - windows/**
+    - linux/**
+
+formatter:
+  trailing_commas: preserve
+  page_width: 120
