@@ -50,6 +50,10 @@ jobs:
         working-directory: warm_alarm/example
         run: flutter pub get
 
+      - name: Generate Android Gradle wrapper
+        working-directory: warm_alarm/example
+        run: flutter create --platforms=android .
+
       - name: Run Android native unit tests
         working-directory: warm_alarm/example/android
         run: ./gradlew :warm_alarm_android:testDebugUnitTest --console=plain

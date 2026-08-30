@@ -27,16 +27,7 @@ jobs:
     uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/license_check.yml@v1
     with:
       allowed: MIT,BSD-3-Clause,BSD-2-Clause,Apache-2.0
-      working_directory: warm_alarm
-      flutter_version: 3.41.9
-      flutter_channel: stable
-      dart_sdk: 3.11.5
-
-  license_check_platform_interface:
-    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/license_check.yml@v1
-    with:
-      allowed: MIT,BSD-3-Clause,BSD-2-Clause,Apache-2.0
-      working_directory: warm_alarm_platform_interface
+      working_directory: .
       flutter_version: 3.41.9
       flutter_channel: stable
       dart_sdk: 3.11.5

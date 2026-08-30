@@ -1,9 +1,15 @@
 version: "0.2"
 $schema: https://raw.githubusercontent.com/streetsidesoftware/cspell/main/cspell.schema.json
 dictionaries:
+  - en-gb
   - custom-dictionary
   - vgv_allowed
   - vgv_forbidden
+  - flutter
+  - dart
+  - cpp
+  - cpp-legacy
+  - cpp-compound-words
 dictionaryDefinitions:
   - name: custom-dictionary
     path: ./.cspell/custom-dictionary.txt
@@ -15,11 +21,18 @@ dictionaryDefinitions:
     path: https://raw.githubusercontent.com/verygoodopensource/very_good_dictionaries/main/forbidden.txt
     description: Forbidden VGV Spellings
 useGitignore: true
-allowsCompoundWords: true
+ignorePaths:
+  - .github/workflows/**
+  - .gitignore
+  - "**/project.pbxproj"
+  - "**/Runner.xcscheme"
+  - "**/MainMenu.xib"
 ignoreWords:
   - meta-data
   - datatype
   - plaintext
+  - pbxproj
 words:
   - Dongmin
   - fluttium
+  - WarmWake

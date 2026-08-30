@@ -46,8 +46,7 @@ jobs:
       working_directory: warm_alarm
 
   android:
-    # Both E2E jobs are red. Until they are green they run on demand or on a
-    # release tag only, instead of billing every push and PR.
+    # Run E2E on demand or on a release tag to control runner capacity.
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
 
     # Linux runners are 1x-billed and the only place this action gets hardware
@@ -123,7 +122,7 @@ jobs:
         # Start an iPhone simulator
         run: |
           UDID=$(xcrun xctrace list devices | grep "^iPhone" | awk '{gsub(/[()]/,""); print $NF}' | head -n 1)
-          echo $UDID
+          echo "$UDID"
           xcrun simctl boot "${UDID:?No Simulator with this name found}"
 
       - name: E2E Tests
