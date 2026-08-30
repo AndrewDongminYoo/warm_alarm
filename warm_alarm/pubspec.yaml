@@ -1,6 +1,6 @@
 name: warm_alarm
-description: A platform-honest Flutter alarm plugin for Android, iOS, and macOS.
-version: 0.1.0+1
+description: An independent Flutter alarm plugin extracted from WarmWake's core alarm functionality.
+version: 0.1.1
 
 homepage: https://github.com/AndrewDongminYoo/warm_alarm
 repository: https://github.com/AndrewDongminYoo/warm_alarm

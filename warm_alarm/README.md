@@ -10,6 +10,13 @@ deliver before you commit to a schedule.
 
 ---
 
+## Background
+
+`warm_alarm` was extracted from the core alarm functionality of [WarmWake][warmwake_link].
+It is maintained as an independent Flutter plugin and does not require the WarmWake app.
+
+---
+
 ## Features
 
 - **Capability-first design** — each platform reports exactly what it can do; no silent no-ops
@@ -28,7 +35,7 @@ Add `warm_alarm` to your Flutter app.
 
 ```yaml
 dependencies:
-  warm_alarm: ^0.1.0+1
+  warm_alarm: ^0.1.1
 ```
 
 Then run:
@@ -209,3 +216,4 @@ BSD-3-Clause — Copyright (c) 2026, Dongmin Yu. See [LICENSE](LICENSE) for deta
 [very_good_analysis_badge]: https://img.shields.io/badge/style-very_good_analysis-B22C89.svg
 [very_good_analysis_link]: https://pub.dev/packages/very_good_analysis
 [alarm_package_link]: https://pub.dev/packages/alarm
+[warmwake_link]: https://warmwake.donminzzi.kr
