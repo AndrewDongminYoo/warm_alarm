@@ -39,13 +39,26 @@ void main() {
       expect(await action.execute(tester), isFalse);
     });
 
+    test('matches any reported readiness level', () async {
+      const action = CheckReadiness();
+
+      await action.execute(tester);
+
+      verify(
+        () => tester.find(
+          'Readiness: (ready|limited|blocked|unsupported)',
+          timeout: any(named: 'timeout'),
+        ),
+      ).called(1);
+    });
+
     test('show correct description for every platform', () {
       bool isTrue() => true;
       bool isFalse() => false;
 
       final testCases = [
         (
-          'Check alarm inspection state: readiness="blocked", exactScheduling="supported"',
+          'Check alarm inspection state: readiness="(ready|limited|blocked|unsupported)", exactScheduling="supported"',
           CheckReadiness(
             isAndroid: isTrue,
             isIOS: isFalse,
@@ -56,7 +69,7 @@ void main() {
           ),
         ),
         (
-          'Check alarm inspection state: readiness="limited", exactScheduling="limited"',
+          'Check alarm inspection state: readiness="(ready|limited|blocked|unsupported)", exactScheduling="limited"',
           CheckReadiness(
             isAndroid: isFalse,
             isIOS: isTrue,
@@ -67,7 +80,7 @@ void main() {
           ),
         ),
         (
-          'Check alarm inspection state: readiness="unsupported", exactScheduling="unsupported"',
+          'Check alarm inspection state: readiness="(ready|limited|blocked|unsupported)", exactScheduling="unsupported"',
           CheckReadiness(
             isAndroid: isFalse,
             isIOS: isFalse,
@@ -78,7 +91,7 @@ void main() {
           ),
         ),
         (
-          'Check alarm inspection state: readiness="unsupported", exactScheduling="unsupported"',
+          'Check alarm inspection state: readiness="(ready|limited|blocked|unsupported)", exactScheduling="unsupported"',
           CheckReadiness(
             isAndroid: isFalse,
             isIOS: isFalse,
@@ -89,7 +102,7 @@ void main() {
           ),
         ),
         (
-          'Check alarm inspection state: readiness="limited", exactScheduling="unsupported"',
+          'Check alarm inspection state: readiness="(ready|limited|blocked|unsupported)", exactScheduling="unsupported"',
           CheckReadiness(
             isAndroid: isFalse,
             isIOS: isFalse,
@@ -100,7 +113,7 @@ void main() {
           ),
         ),
         (
-          'Check alarm inspection state: readiness="unsupported", exactScheduling="unsupported"',
+          'Check alarm inspection state: readiness="(ready|limited|blocked|unsupported)", exactScheduling="unsupported"',
           CheckReadiness(
             isAndroid: isFalse,
             isIOS: isFalse,

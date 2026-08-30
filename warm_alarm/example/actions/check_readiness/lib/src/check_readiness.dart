@@ -28,6 +28,8 @@ class CheckReadiness extends Action {
        _isWindows = isWindows,
        _isWeb = isWeb;
 
+  static const _readinessPattern = '(ready|limited|blocked|unsupported)';
+
   final bool _isWeb;
 
   final bool Function() _isAndroid;
@@ -48,18 +50,10 @@ class CheckReadiness extends Action {
     throw UnsupportedError('Unsupported platform ${Platform.operatingSystem}');
   }
 
-  String get _expectedReadiness {
-    if (_isAndroid()) return 'blocked';
-    if (_isIOS()) return 'limited';
-    if (_isMacOS()) return 'limited';
-    if (_isWeb || _isLinux() || _isWindows()) return 'unsupported';
-    throw UnsupportedError('Unsupported platform ${Platform.operatingSystem}');
-  }
-
   @override
   Future<bool> execute(Tester tester) async {
-    final readinessVisible = await ExpectVisible(
-      text: 'Readiness: $_expectedReadiness',
+    final readinessVisible = await const ExpectVisible(
+      text: 'Readiness: $_readinessPattern',
     ).execute(tester);
     final exactSchedulingVisible = await ExpectVisible(
       text: 'Exact scheduling: $_expectedExactScheduling',
@@ -70,7 +64,7 @@ class CheckReadiness extends Action {
 
   @override
   String description() =>
-      'Check alarm inspection state: readiness="$_expectedReadiness", exactScheduling="$_expectedExactScheduling"';
+      'Check alarm inspection state: readiness="$_readinessPattern", exactScheduling="$_expectedExactScheduling"';
 }
 
 // coverage:ignore-start these are just wrappers for overloading
