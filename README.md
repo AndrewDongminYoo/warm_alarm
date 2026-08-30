@@ -213,14 +213,14 @@ Public-facing model classes are hand-written in `warm_alarm_platform_interface/l
 
 ## Implementation Status
 
-| Phase | Scope                                                                                                                      | Status     |
-| ----- | -------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| 1A    | Core Dart API, platform interface, Android AlarmManager + ForegroundService                                                | ✅ Done    |
-| 1B    | Android audio (MediaPlayer), snooze, recurrence, notification actions                                                      | ✅ Done    |
-| 1C    | iOS + macOS (UNUserNotificationCenter + AVAudioPlayer), kill-warning lifecycle                                             | ✅ Done    |
-| 2     | Android wake-check: retrigger flow, `WarmAlarmWakeCheck`, `WarmAlarmBootReceiver` stub                                     | ✅ Done    |
-| 3     | Parity with `alarm`: `isRinging`, `payload`, enriched snapshot, staircase volume fade, notification icon, kill-warning API | ✅ Done    |
-| 4     | App-start recovery (`init()`), convenience query (`hasAlarm`, `getAlarm`), `androidFullScreenIntent` toggle                | 🔲 Planned |
+| Phase | Scope                                                                                                                      | Status  |
+| ----- | -------------------------------------------------------------------------------------------------------------------------- | ------- |
+| 1A    | Core Dart API, platform interface, Android AlarmManager + ForegroundService                                                | ✅ Done |
+| 1B    | Android audio (MediaPlayer), snooze, recurrence, notification actions                                                      | ✅ Done |
+| 1C    | iOS + macOS (UNUserNotificationCenter + AVAudioPlayer), kill-warning lifecycle                                             | ✅ Done |
+| 2     | Android wake-check: retrigger flow, `WarmAlarmWakeCheck`, `WarmAlarmBootReceiver` stub                                     | ✅ Done |
+| 3     | Parity with `alarm`: `isRinging`, `payload`, enriched snapshot, staircase volume fade, notification icon, kill-warning API | ✅ Done |
+| 4     | App-start recovery (`init()`), convenience query (`hasAlarm`, `getAlarm`), `androidFullScreenIntent` toggle                | ✅ Done |
 
 See `docs/plans/` for full task lists per phase.
 
