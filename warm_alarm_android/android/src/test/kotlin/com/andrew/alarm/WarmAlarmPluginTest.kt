@@ -1,9 +1,22 @@
 package com.andrew.alarm
 
+import org.mockito.Mockito
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class WarmAlarmPluginTest {
+    @Test
+    fun androidReportsWakeCheckAsSupported() {
+        val plugin = Mockito.mock(WarmAlarmPlugin::class.java, Mockito.CALLS_REAL_METHODS)
+        lateinit var capabilities: WarmAlarmCapabilitiesWire
+
+        plugin.getCapabilities { result ->
+            capabilities = result.getOrThrow()
+        }
+
+        assertEquals(WarmAlarmSupportStatusWire.SUPPORTED, capabilities.wakeCheck)
+    }
+
     @Test
     fun alarmSchedulingDoesNotRequireAnAttachedFlutterEngine() {
         val backend = FakeAlarmSchedulingBackend()

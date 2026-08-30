@@ -129,7 +129,7 @@ class WarmAlarmPlugin :
                     notificationScheduling = WarmAlarmSupportStatusWire.SUPPORTED,
                     backgroundAudioPlayback = WarmAlarmSupportStatusWire.LIMITED,
                     fullScreenPresentation = WarmAlarmSupportStatusWire.SUPPORTED,
-                    wakeCheck = WarmAlarmSupportStatusWire.UNSUPPORTED,
+                    wakeCheck = WarmAlarmSupportStatusWire.SUPPORTED,
                     liveActivity = WarmAlarmSupportStatusWire.UNSUPPORTED,
                 ),
             ),

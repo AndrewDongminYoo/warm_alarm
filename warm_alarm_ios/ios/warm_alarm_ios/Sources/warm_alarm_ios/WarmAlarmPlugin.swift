@@ -306,7 +306,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             backgroundAudioPlayback: .limited,
             fullScreenPresentation: .unsupported,
             wakeCheck: .unsupported,
-            liveActivity: .supported
+            liveActivity: .unsupported
         )))
     }
 

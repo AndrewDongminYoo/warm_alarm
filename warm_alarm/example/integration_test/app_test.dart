@@ -1,12 +1,25 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
+import 'package:warm_alarm/warm_alarm.dart';
 import 'package:warm_alarm_example/main.dart' as app;
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   group('E2E', () {
+    testWidgets(
+      'reports Live Activity as unsupported on iOS',
+      (tester) async {
+        final capabilities = await WarmAlarm.getCapabilities();
+
+        expect(capabilities.liveActivity, WarmAlarmSupportStatus.unsupported);
+      },
+      skip: !Platform.isIOS,
+    );
+
     testWidgets('shows schedule result and event log entries', (tester) async {
       app.main();
       await tester.pumpAndSettle();
