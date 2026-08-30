@@ -134,6 +134,18 @@ Call `getReadiness()` at runtime and surface the reasons to your users so they c
 | `setKillWarning({title, body})` | `Future<void>`             | Set the notification shown if the app is force-killed       |
 | `clearKillWarning()`            | `Future<void>`             | Clear the app-kill warning notification                     |
 
+### Scheduling validation
+
+Invalid input makes `WarmAlarm.scheduleAlarm()` complete with `ArgumentError`.
+
+The facade validates input before it calls a platform.
+
+- A recurrence must contain at least one ISO weekday from `1` through `7`.
+- Configured snooze, fade-in, fade-step, and wake-check durations must not be negative.
+- Audio and fade-step volumes must be finite values from `0.0` through `1.0`.
+
+Zero-duration fields remain valid.
+
 ### Key data classes
 
 | Class                      | Purpose                                                                                                                                             |

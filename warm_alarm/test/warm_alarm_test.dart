@@ -7,8 +7,24 @@ import 'package:warm_alarm/warm_alarm.dart';
 
 class MockWarmAlarmPlatform extends Mock with MockPlatformInterfaceMixin implements WarmAlarmPlatform {}
 
+WarmAlarmSchedule _schedule({
+  WarmAlarmAudio audio = const WarmAlarmAudio(),
+  WarmAlarmRecurrence? recurrence,
+  WarmAlarmSnooze? snooze,
+  WarmAlarmWakeCheck? wakeCheck,
+}) => WarmAlarmSchedule(
+  id: 1,
+  scheduledAt: DateTime(2026, 4, 27, 7),
+  notification: const WarmAlarmNotification(title: 'Wake up', body: 'Now'),
+  audio: audio,
+  recurrence: recurrence,
+  snooze: snooze,
+  wakeCheck: wakeCheck,
+);
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() => registerFallbackValue(_schedule()));
 
   group(WarmAlarm, () {
     late WarmAlarmPlatform warmAlarmPlatform;
@@ -19,16 +35,25 @@ void main() {
     });
 
     test(
-      'scheduleAlarm forwards to platform and returns typed result',
+      'scheduleAlarm accepts zero values and forwards the typed result',
       () async {
-        final schedule = WarmAlarmSchedule(
-          id: 1,
-          scheduledAt: DateTime(2026, 4, 27, 7),
-          notification: const WarmAlarmNotification(
-            title: 'Wake up',
-            body: 'Now',
+        final schedule = _schedule(
+          audio: const WarmAlarmAudio(
+            volume: 0,
+            fadeInDuration: Duration.zero,
+            fadeSteps: <WarmAlarmVolumeFadeStep>[
+              WarmAlarmVolumeFadeStep(time: Duration.zero, volume: 0),
+            ],
           ),
-          audio: const WarmAlarmAudio(filePath: '/tmp/voice.m4a'),
+          recurrence: const WarmAlarmRecurrence(
+            weekdays: <int>[DateTime.monday],
+          ),
+          snooze: const WarmAlarmSnooze(duration: Duration.zero),
+          wakeCheck: const WarmAlarmWakeCheck(
+            checkDelay: Duration.zero,
+            retriggerDelay: Duration.zero,
+            maxRetriggers: 0,
+          ),
         );
 
         const result = WarmAlarmScheduleResult(
@@ -46,6 +71,158 @@ void main() {
         expect(await WarmAlarm.scheduleAlarm(schedule), result);
       },
     );
+
+    final invalidSchedules =
+        <
+          ({
+            String argumentName,
+            String description,
+            WarmAlarmSchedule schedule,
+          })
+        >[
+          (
+            argumentName: 'schedule.recurrence.weekdays',
+            description: 'an empty recurring weekday list',
+            schedule: _schedule(
+              recurrence: const WarmAlarmRecurrence(weekdays: <int>[]),
+            ),
+          ),
+          (
+            argumentName: 'schedule.recurrence.weekdays',
+            description: 'a recurring weekday outside the ISO range',
+            schedule: _schedule(
+              recurrence: const WarmAlarmRecurrence(weekdays: <int>[8]),
+            ),
+          ),
+          (
+            argumentName: 'schedule.snooze.duration',
+            description: 'a negative snooze duration',
+            schedule: _schedule(
+              snooze: const WarmAlarmSnooze(duration: Duration(seconds: -1)),
+            ),
+          ),
+          (
+            argumentName: 'schedule.audio.volume',
+            description: 'audio volume above one',
+            schedule: _schedule(audio: const WarmAlarmAudio(volume: 1.1)),
+          ),
+          (
+            argumentName: 'schedule.audio.volume',
+            description: 'audio volume below zero',
+            schedule: _schedule(audio: const WarmAlarmAudio(volume: -0.1)),
+          ),
+          (
+            argumentName: 'schedule.audio.volume',
+            description: 'a non-finite audio volume',
+            schedule: _schedule(
+              audio: const WarmAlarmAudio(volume: double.nan),
+            ),
+          ),
+          (
+            argumentName: 'schedule.audio.fadeSteps.time',
+            description: 'a negative fade step time',
+            schedule: _schedule(
+              audio: const WarmAlarmAudio(
+                fadeSteps: <WarmAlarmVolumeFadeStep>[
+                  WarmAlarmVolumeFadeStep(
+                    time: Duration(seconds: -1),
+                    volume: 0.5,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          (
+            argumentName: 'schedule.audio.fadeSteps.volume',
+            description: 'fade step volume above one',
+            schedule: _schedule(
+              audio: const WarmAlarmAudio(
+                fadeSteps: <WarmAlarmVolumeFadeStep>[
+                  WarmAlarmVolumeFadeStep(time: Duration.zero, volume: 1.1),
+                ],
+              ),
+            ),
+          ),
+          (
+            argumentName: 'schedule.audio.fadeSteps.volume',
+            description: 'fade step volume below zero',
+            schedule: _schedule(
+              audio: const WarmAlarmAudio(
+                fadeSteps: <WarmAlarmVolumeFadeStep>[
+                  WarmAlarmVolumeFadeStep(time: Duration.zero, volume: -0.1),
+                ],
+              ),
+            ),
+          ),
+          (
+            argumentName: 'schedule.audio.fadeSteps.volume',
+            description: 'a non-finite fade step volume',
+            schedule: _schedule(
+              audio: const WarmAlarmAudio(
+                fadeSteps: <WarmAlarmVolumeFadeStep>[
+                  WarmAlarmVolumeFadeStep(
+                    time: Duration.zero,
+                    volume: double.nan,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          (
+            argumentName: 'schedule.audio.fadeInDuration',
+            description: 'a negative fade-in duration',
+            schedule: _schedule(
+              audio: const WarmAlarmAudio(
+                fadeInDuration: Duration(seconds: -1),
+              ),
+            ),
+          ),
+          (
+            argumentName: 'schedule.wakeCheck.checkDelay',
+            description: 'a negative wake check delay',
+            schedule: _schedule(
+              wakeCheck: const WarmAlarmWakeCheck(
+                checkDelay: Duration(seconds: -1),
+              ),
+            ),
+          ),
+          (
+            argumentName: 'schedule.wakeCheck.retriggerDelay',
+            description: 'a negative wake check retrigger delay',
+            schedule: _schedule(
+              wakeCheck: const WarmAlarmWakeCheck(
+                checkDelay: Duration.zero,
+                retriggerDelay: Duration(seconds: -1),
+              ),
+            ),
+          ),
+          (
+            argumentName: 'schedule.wakeCheck.maxRetriggers',
+            description: 'a negative wake check retrigger count',
+            schedule: _schedule(
+              wakeCheck: const WarmAlarmWakeCheck(
+                checkDelay: Duration.zero,
+                maxRetriggers: -1,
+              ),
+            ),
+          ),
+        ];
+
+    for (final testCase in invalidSchedules) {
+      test('scheduleAlarm rejects ${testCase.description}', () async {
+        await expectLater(
+          WarmAlarm.scheduleAlarm(testCase.schedule),
+          throwsA(
+            isA<ArgumentError>().having(
+              (error) => error.name,
+              'name',
+              testCase.argumentName,
+            ),
+          ),
+        );
+        verifyNever(() => warmAlarmPlatform.scheduleAlarm(any()));
+      });
+    }
 
     test('getCapabilities delegates to platform', () async {
       when(warmAlarmPlatform.getCapabilities).thenAnswer(
