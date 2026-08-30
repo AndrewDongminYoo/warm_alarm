@@ -1,0 +1,67 @@
+name: publish
+
+# Automated publishing to pub.dev via GitHub Actions OIDC. No secrets required.
+#
+# One-time setup, per package, on pub.dev > Admin > Automated publishing:
+#   - Repository: AndrewDongminYoo/warm_alarm
+#   - Tag pattern: <package_name>-v{{version}}
+#
+# Each tag runs only its matching job. The tag version must equal the package
+# pubspec version or pub.dev rejects the publish.
+
+permissions: read-all
+
+on:
+  push:
+    tags:
+      - warm_alarm-v[0-9]+.[0-9]+.[0-9]+
+      - warm_alarm_platform_interface-v[0-9]+.[0-9]+.[0-9]+
+      - warm_alarm_android-v[0-9]+.[0-9]+.[0-9]+
+      - warm_alarm_ios-v[0-9]+.[0-9]+.[0-9]+
+      - warm_alarm_macos-v[0-9]+.[0-9]+.[0-9]+
+
+jobs:
+  platform_interface:
+    if: startsWith(github.ref, 'refs/tags/warm_alarm_platform_interface-v')
+    permissions:
+      id-token: write
+      contents: read
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+    with:
+      working-directory: warm_alarm_platform_interface
+
+  android:
+    if: startsWith(github.ref, 'refs/tags/warm_alarm_android-v')
+    permissions:
+      id-token: write
+      contents: read
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+    with:
+      working-directory: warm_alarm_android
+
+  ios:
+    if: startsWith(github.ref, 'refs/tags/warm_alarm_ios-v')
+    permissions:
+      id-token: write
+      contents: read
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+    with:
+      working-directory: warm_alarm_ios
+
+  macos:
+    if: startsWith(github.ref, 'refs/tags/warm_alarm_macos-v')
+    permissions:
+      id-token: write
+      contents: read
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+    with:
+      working-directory: warm_alarm_macos
+
+  app:
+    if: startsWith(github.ref, 'refs/tags/warm_alarm-v')
+    permissions:
+      id-token: write
+      contents: read
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+    with:
+      working-directory: warm_alarm
