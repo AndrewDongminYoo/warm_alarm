@@ -3,6 +3,21 @@ import 'package:warm_alarm_platform_interface/src/method_channel_warm_alarm.dart
 import 'package:warm_alarm_platform_interface/src/models/models.dart';
 export 'package:warm_alarm_platform_interface/src/models/models.dart';
 
+const _unsupportedRemediationResult = WarmAlarmRemediationResult(
+  status: WarmAlarmRemediationStatus.unsupported,
+  permissionState: WarmAlarmPermissionState(
+    notificationsGranted: false,
+    exactAlarmGranted: false,
+    fullScreenIntentGranted: false,
+  ),
+  readiness: WarmAlarmReadiness(
+    level: WarmAlarmReadinessLevel.unsupported,
+    reasons: <WarmAlarmReadinessReason>[
+      WarmAlarmReadinessReason.platformUnsupported,
+    ],
+  ),
+);
+
 /// {@template warm_alarm_platform}
 /// The interface that implementations of
 /// warm_alarm must implement.
@@ -43,6 +58,16 @@ abstract class WarmAlarmPlatform extends PlatformInterface {
   Future<WarmAlarmPermissionState> getPermissionState();
 
   Future<WarmAlarmReadiness> getReadiness();
+
+  /// Requests notification authorization where the platform supports it.
+  /// The result includes the permission state and readiness snapshot when the action returns.
+  Future<WarmAlarmRemediationResult> requestNotificationPermission() async => _unsupportedRemediationResult;
+
+  /// Opens native settings for a readiness [reason] when the platform supports it.
+  /// The result includes the permission state and readiness snapshot when the action returns.
+  Future<WarmAlarmRemediationResult> openReadinessSettings(
+    WarmAlarmReadinessReason reason,
+  ) async => _unsupportedRemediationResult;
 
   Future<WarmAlarmScheduleResult> scheduleAlarm(WarmAlarmSchedule schedule);
 

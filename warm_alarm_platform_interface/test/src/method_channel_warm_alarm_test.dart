@@ -77,6 +77,18 @@ void main() {
       expect(state.fullScreenIntentGranted, isFalse);
     });
 
+    test('readiness remediation returns unsupported stubs without channel traffic', () async {
+      final permissionResult = await methodChannelWarmAlarm.requestNotificationPermission();
+      final settingsResult = await methodChannelWarmAlarm.openReadinessSettings(
+        WarmAlarmReadinessReason.notificationPermissionDenied,
+      );
+
+      expect(permissionResult.status, WarmAlarmRemediationStatus.unsupported);
+      expect(settingsResult.status, WarmAlarmRemediationStatus.unsupported);
+      expect(settingsResult.readiness.level, WarmAlarmReadinessLevel.unsupported);
+      expect(log, isEmpty);
+    });
+
     test('getScheduledAlarms returns empty list', () async {
       final alarms = await methodChannelWarmAlarm.getScheduledAlarms();
       expect(alarms, isEmpty);
