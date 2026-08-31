@@ -112,6 +112,63 @@ void main() {
       verify(api.getPermissionState).called(1);
     });
 
+    test('requestNotificationPermission maps the native remediation result', () async {
+      when(api.requestNotificationPermission).thenAnswer(
+        (_) async => WarmAlarmRemediationResultWire(
+          status: WarmAlarmRemediationStatusWire.completed,
+          permissionState: WarmAlarmPermissionStateWire(
+            notificationsGranted: true,
+            exactAlarmGranted: true,
+            fullScreenIntentGranted: true,
+          ),
+          readiness: WarmAlarmReadinessWire(
+            level: WarmAlarmReadinessLevelWire.ready,
+            reasons: <WarmAlarmReadinessReasonWire>[],
+          ),
+        ),
+      );
+
+      final result = await warmAlarm.requestNotificationPermission();
+
+      expect(result.status, WarmAlarmRemediationStatus.completed);
+      expect(result.permissionState.notificationsGranted, isTrue);
+      expect(result.readiness.level, WarmAlarmReadinessLevel.ready);
+    });
+
+    test('openReadinessSettings passes the Android exact-alarm reason', () async {
+      when(
+        () => api.openReadinessSettings(
+          WarmAlarmReadinessReasonWire.exactAlarmPermissionDenied,
+        ),
+      ).thenAnswer(
+        (_) async => WarmAlarmRemediationResultWire(
+          status: WarmAlarmRemediationStatusWire.completed,
+          permissionState: WarmAlarmPermissionStateWire(
+            notificationsGranted: true,
+            exactAlarmGranted: false,
+            fullScreenIntentGranted: true,
+          ),
+          readiness: WarmAlarmReadinessWire(
+            level: WarmAlarmReadinessLevelWire.limited,
+            reasons: <WarmAlarmReadinessReasonWire>[
+              WarmAlarmReadinessReasonWire.exactAlarmPermissionDenied,
+            ],
+          ),
+        ),
+      );
+
+      final result = await warmAlarm.openReadinessSettings(
+        WarmAlarmReadinessReason.exactAlarmPermissionDenied,
+      );
+
+      expect(result.status, WarmAlarmRemediationStatus.completed);
+      verify(
+        () => api.openReadinessSettings(
+          WarmAlarmReadinessReasonWire.exactAlarmPermissionDenied,
+        ),
+      ).called(1);
+    });
+
     test('getReadiness maps blocked level with all reason variants', () async {
       when(api.getReadiness).thenAnswer(
         (_) async => WarmAlarmReadinessWire(

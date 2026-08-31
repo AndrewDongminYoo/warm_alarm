@@ -1,8 +1,10 @@
 package com.andrew.alarm
 
+import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import org.mockito.Mockito
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertSame
 
 class WarmAlarmPluginTest {
     @Test
@@ -44,7 +46,41 @@ class WarmAlarmPluginTest {
         assertEquals(listOf(1_234L), backend.legacySchedules)
         assertEquals(emptyList(), backend.exactSchedules)
     }
+
+    @Test
+    fun configurationChangeKeepsPendingNotificationPermissionCallback() {
+        val plugin = Mockito.mock(WarmAlarmPlugin::class.java, Mockito.CALLS_REAL_METHODS)
+        val activityBinding = Mockito.mock(ActivityPluginBinding::class.java)
+        val callback: (Result<WarmAlarmRemediationResultWire>) -> Unit = {}
+        setPrivateField(plugin, "activityBinding", activityBinding)
+        setPrivateField(plugin, "pendingNotificationPermissionCallback", callback)
+
+        plugin.onDetachedFromActivityForConfigChanges()
+
+        assertSame(callback, getPrivateField(plugin, "pendingNotificationPermissionCallback"))
+        Mockito.verify(activityBinding).removeRequestPermissionsResultListener(plugin)
+    }
 }
+
+private fun setPrivateField(
+    instance: Any,
+    fieldName: String,
+    value: Any?,
+) {
+    instance.javaClass
+        .getDeclaredField(fieldName)
+        .apply { isAccessible = true }
+        .set(instance, value)
+}
+
+private fun getPrivateField(
+    instance: Any,
+    fieldName: String,
+): Any? =
+    instance.javaClass
+        .getDeclaredField(fieldName)
+        .apply { isAccessible = true }
+        .get(instance)
 
 private class FakeAlarmSchedulingBackend : AlarmSchedulingBackend {
     val legacySchedules = mutableListOf<Long>()
