@@ -15,6 +15,13 @@ class WarmAlarm {
 
   static Future<WarmAlarmReadiness> getReadiness() => _platform.getReadiness();
 
+  static Future<WarmAlarmRemediationResult> requestNotificationPermission() =>
+      _platform.requestNotificationPermission();
+
+  static Future<WarmAlarmRemediationResult> openReadinessSettings(
+    WarmAlarmReadinessReason reason,
+  ) => _platform.openReadinessSettings(reason);
+
   static Future<WarmAlarmScheduleResult> scheduleAlarm(
     WarmAlarmSchedule schedule,
   ) async {

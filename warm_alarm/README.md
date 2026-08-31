@@ -35,7 +35,7 @@ Add `warm_alarm` to your Flutter app.
 
 ```yaml
 dependencies:
-  warm_alarm: ^0.1.1
+  warm_alarm: ^0.1.2
 ```
 
 Then run:
@@ -116,39 +116,48 @@ corrective action (grant permissions, disable battery optimization, etc.).
 
 ### `WarmAlarm` — static entry point
 
-| Method                    | Returns                      | Description                                                 |
-| ------------------------- | ---------------------------- | ----------------------------------------------------------- |
-| `init()`                  | `Future<void>`               | Rehydrate native alarm state after a process restart        |
-| `getCapabilities()`       | `WarmAlarmCapabilities`      | Per-feature support status for the current platform         |
-| `getPermissionState()`    | `WarmAlarmPermissionState`   | Current notification and exact-alarm permission grants      |
-| `getReadiness()`          | `WarmAlarmReadiness`         | Overall system readiness with actionable reason codes       |
-| `scheduleAlarm(schedule)` | `WarmAlarmScheduleResult`    | Schedule an alarm; returns the assigned ID and any warnings |
-| `cancelAlarm(id)`         | `Future<void>`               | Cancel a specific alarm by ID                               |
-| `cancelAllAlarms()`       | `Future<void>`               | Cancel all scheduled alarms                                 |
-| `getScheduledAlarms()`    | `List<WarmAlarmSnapshot>`    | List all currently scheduled alarms                         |
-| `hasAlarm()`              | `Future<bool>`               | Whether any future alarm is currently scheduled             |
-| `getAlarm(id)`            | `Future<WarmAlarmSnapshot?>` | Fetch a single future scheduled alarm by ID                 |
-| `isRinging({id})`         | `Future<bool>`               | Whether an alarm (or any alarm) is currently ringing        |
-| `setKillWarning(...)`     | `Future<void>`               | Post a persistent notification warning against force-quit   |
-| `clearKillWarning()`      | `Future<void>`               | Remove the kill-warning notification                        |
-| `events`                  | `Stream<WarmAlarmEvent>`     | Real-time alarm lifecycle event stream                      |
+| Method                            | Returns                      | Description                                                 |
+| --------------------------------- | ---------------------------- | ----------------------------------------------------------- |
+| `init()`                          | `Future<void>`               | Rehydrate native alarm state after a process restart        |
+| `getCapabilities()`               | `WarmAlarmCapabilities`      | Per-feature support status for the current platform         |
+| `getPermissionState()`            | `WarmAlarmPermissionState`   | Current notification and exact-alarm permission grants      |
+| `getReadiness()`                  | `WarmAlarmReadiness`         | Overall system readiness with actionable reason codes       |
+| `requestNotificationPermission()` | `WarmAlarmRemediationResult` | Request notification authorization and return current state |
+| `openReadinessSettings(reason)`   | `WarmAlarmRemediationResult` | Open supported native settings and return current state     |
+| `scheduleAlarm(schedule)`         | `WarmAlarmScheduleResult`    | Schedule an alarm; returns the assigned ID and any warnings |
+| `cancelAlarm(id)`                 | `Future<void>`               | Cancel a specific alarm by ID                               |
+| `cancelAllAlarms()`               | `Future<void>`               | Cancel all scheduled alarms                                 |
+| `getScheduledAlarms()`            | `List<WarmAlarmSnapshot>`    | List all currently scheduled alarms                         |
+| `hasAlarm()`                      | `Future<bool>`               | Whether any future alarm is currently scheduled             |
+| `getAlarm(id)`                    | `Future<WarmAlarmSnapshot?>` | Fetch a single future scheduled alarm by ID                 |
+| `isRinging({id})`                 | `Future<bool>`               | Whether an alarm (or any alarm) is currently ringing        |
+| `setKillWarning(...)`             | `Future<void>`               | Post a persistent notification warning against force-quit   |
+| `clearKillWarning()`              | `Future<void>`               | Remove the kill-warning notification                        |
+| `events`                          | `Stream<WarmAlarmEvent>`     | Real-time alarm lifecycle event stream                      |
+
+`openReadinessSettings(reason)` hands the user off to a system screen and returns as soon as the
+platform accepts the request, so its snapshot describes the state before the remediation — call
+`getReadiness()` again once the app resumes to see the outcome.
+`requestNotificationPermission()` awaits the system dialog, so its snapshot already reflects the
+user's answer.
 
 ### Key data classes
 
-| Class                      | Purpose                                                                                                                          |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `WarmAlarmSchedule`        | Full alarm configuration: timing, notification, audio, snooze, recurrence, payload, wake-check                                   |
-| `WarmAlarmCapabilities`    | `WarmAlarmSupportStatus` per feature: notification & exact scheduling, background audio, full-screen, wake-check, Live Activity  |
-| `WarmAlarmReadiness`       | `level` (`ready \| limited \| blocked \| unsupported`) + `List<WarmAlarmReadinessReason>`                                        |
-| `WarmAlarmPermissionState` | Boolean flags: `notificationsGranted`, `exactAlarmGranted`, `fullScreenIntentGranted`                                            |
-| `WarmAlarmScheduleResult`  | `alarmId`, `readiness`, optional `WarmAlarmWarning`                                                                              |
-| `WarmAlarmAudio`           | `filePath?`, `assetPath?`, `loop`, `volume?`, `fadeInDuration?`, `fadeSteps?`, `volumeEnforced`, `vibrate`                       |
-| `WarmAlarmNotification`    | `title`, `body`, `stopActionTitle?`, `snoozeActionTitle?`, `androidIcon?`, `androidIconColor?`, `keepNotificationAfterAlarmEnds` |
-| `WarmAlarmSnooze`          | `duration`                                                                                                                       |
-| `WarmAlarmRecurrence`      | `weekdays` — list of ISO weekday numbers (1 = Monday … 7 = Sunday)                                                               |
-| `WarmAlarmWakeCheck`       | `checkDelay`, `retriggerDelay?`, `maxRetriggers` (Android only)                                                                  |
-| `WarmAlarmVolumeFadeStep`  | `time` (offset from alarm start), `volume` (0.0–1.0) — element of `WarmAlarmAudio.fadeSteps`                                     |
-| `WarmAlarmSnapshot`        | Full scheduled-alarm record returned by `getScheduledAlarms()` — mirrors `WarmAlarmSchedule` fields                              |
+| Class                        | Purpose                                                                                                                          |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `WarmAlarmSchedule`          | Full alarm configuration: timing, notification, audio, snooze, recurrence, payload, wake-check                                   |
+| `WarmAlarmCapabilities`      | `WarmAlarmSupportStatus` per feature: notification & exact scheduling, background audio, full-screen, wake-check, Live Activity  |
+| `WarmAlarmReadiness`         | `level` (`ready \| limited \| blocked \| unsupported`) + `List<WarmAlarmReadinessReason>`                                        |
+| `WarmAlarmPermissionState`   | Boolean flags: `notificationsGranted`, `exactAlarmGranted`, `fullScreenIntentGranted`                                            |
+| `WarmAlarmRemediationResult` | Action status plus permission and readiness state when the action returns                                                        |
+| `WarmAlarmScheduleResult`    | `alarmId`, `readiness`, optional `WarmAlarmWarning`                                                                              |
+| `WarmAlarmAudio`             | `filePath?`, `assetPath?`, `loop`, `volume?`, `fadeInDuration?`, `fadeSteps?`, `volumeEnforced`, `vibrate`                       |
+| `WarmAlarmNotification`      | `title`, `body`, `stopActionTitle?`, `snoozeActionTitle?`, `androidIcon?`, `androidIconColor?`, `keepNotificationAfterAlarmEnds` |
+| `WarmAlarmSnooze`            | `duration`                                                                                                                       |
+| `WarmAlarmRecurrence`        | `weekdays` — list of ISO weekday numbers (1 = Monday … 7 = Sunday)                                                               |
+| `WarmAlarmWakeCheck`         | `checkDelay`, `retriggerDelay?`, `maxRetriggers` (Android only)                                                                  |
+| `WarmAlarmVolumeFadeStep`    | `time` (offset from alarm start), `volume` (0.0–1.0) — element of `WarmAlarmAudio.fadeSteps`                                     |
+| `WarmAlarmSnapshot`          | Full scheduled-alarm record returned by `getScheduledAlarms()` — mirrors `WarmAlarmSchedule` fields                              |
 
 ### `WarmAlarmEvent` — sealed event types
 
