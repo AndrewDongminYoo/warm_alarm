@@ -80,6 +80,17 @@ cd warm_alarm/example && fluttium test flows/test_readiness.yaml -d iPhone
 cd warm_alarm/example && fluttium test flows/test_readiness.yaml -d macos
 ```
 
+## RELEASING
+
+- **The workspace hides constraint errors from every local check.** Root `pubspec.yaml` declares a `workspace:` and each package sets `resolution: workspace`, so `flutter pub get` always resolves the sibling `warm_alarm*` packages **by path**. Tests, `flutter analyze`, and the native host builds pass no matter what the version constraints say. Only pana reads pub.dev.
+- **pana analyses against the lowest version a constraint allows** (it runs `dart pub downgrade`). A package using an API added to a sibling must require the release that carries it. When it does not, the run reports `[pub-downgrade-failed]` and the score collapses far below the workflow's minimum of 120.
+- **That forces a publish order — one merge and one publish per stage, never bundled:**
+  1. `warm_alarm_platform_interface`
+  2. `warm_alarm_android` / `warm_alarm_ios` / `warm_alarm_macos`, with their interface constraint raised
+  3. `warm_alarm`, which depends on the interface **and** all three platform packages
+- Publishing is triggered by pushing a tag matching `<package_name>-v{{version}}`; the tag version must equal that package's pubspec version.
+- **pub.dev's Automated publishing is configured per package**, not per repository. Each package needs Repository `AndrewDongminYoo/warm_alarm` and its own tag pattern set at `https://pub.dev/packages/<package>/admin`. Without it the upload fails with `publishing from github is not enabled` after the package validates cleanly. Re-run the workflow once the setting exists — the pushed tag stays valid and must not be re-created.
+
 ## NOTES
 
 - Each platform package has its **own** Pigeon schema (`<pkg>/pigeons/messages.dart`). They can diverge intentionally — keep semantically-shared enum/class names aligned across the three to avoid model-mapping drift.
