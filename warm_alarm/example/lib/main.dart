@@ -24,7 +24,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   WarmAlarmReadiness? _readiness;
   String? _exactScheduling;
   String? _remediationStatus;
@@ -36,6 +36,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _eventsSubscription = WarmAlarm.events.listen((event) {
       if (!mounted) return;
       setState(() {
@@ -46,8 +47,24 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     unawaited(_eventsSubscription?.cancel());
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Opening a settings screen returns before the user changes anything, so the outcome only
+    // becomes visible once they come back.
+    if (state == AppLifecycleState.resumed && _readiness != null) {
+      unawaited(_refreshReadiness());
+    }
+  }
+
+  Future<void> _refreshReadiness() async {
+    final readiness = await WarmAlarm.getReadiness();
+    if (!mounted) return;
+    setState(() => _readiness = readiness);
   }
 
   Future<void> _remediate(
