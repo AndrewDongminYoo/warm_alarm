@@ -62,9 +62,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _refreshReadiness() async {
-    final readiness = await WarmAlarm.getReadiness();
-    if (!mounted) return;
-    setState(() => _readiness = readiness);
+    try {
+      final readiness = await WarmAlarm.getReadiness();
+      if (!mounted) return;
+      setState(() => _readiness = readiness);
+    } on Exception catch (error) {
+      // Nothing awaits this on resume, so an uncaught failure would surface as a Flutter error
+      // rather than reaching the user the way the button actions do.
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Theme.of(context).primaryColor,
+          content: Text('$error'),
+        ),
+      );
+    }
   }
 
   Future<void> _remediate(
