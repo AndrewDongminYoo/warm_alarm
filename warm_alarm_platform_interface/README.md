@@ -38,6 +38,13 @@ platform implementation.
 | `clearKillWarning()`              | `Future<void>`               | Dismiss the kill-warning notification                       |
 | `events`                          | `Stream<WarmAlarmEvent>`     | Broadcast stream of alarm lifecycle events                  |
 
+The two remediation methods carry an `unsupported` default, so a platform package built against an
+earlier version of this contract keeps working and simply reports that it cannot remediate.
+The endorsed Android, iOS, and macOS implementations ship in their own packages once they depend on
+this version.
+Both hand the user off to a system screen or dialog, so the snapshot each one returns describes the
+state before the user acted on it — call `getReadiness()` again after the app resumes.
+
 ### Public models
 
 All public-facing model classes live in `lib/src/models/` and are stable across platform

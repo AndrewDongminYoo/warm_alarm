@@ -64,7 +64,9 @@ abstract class WarmAlarmPlatform extends PlatformInterface {
   Future<WarmAlarmRemediationResult> requestNotificationPermission() async => _unsupportedRemediationResult;
 
   /// Opens native settings for a readiness [reason] when the platform supports it.
-  /// The result includes the permission state and readiness snapshot when the action returns.
+  /// Settings open in a separate screen and this call returns as soon as the platform accepts
+  /// the request, so the returned snapshot still describes the state before the user changed
+  /// anything. Call [getReadiness] again once the app resumes to see the outcome.
   Future<WarmAlarmRemediationResult> openReadinessSettings(
     WarmAlarmReadinessReason reason,
   ) async => _unsupportedRemediationResult;
