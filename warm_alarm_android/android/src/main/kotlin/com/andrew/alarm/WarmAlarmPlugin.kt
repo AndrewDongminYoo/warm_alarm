@@ -187,8 +187,15 @@ class WarmAlarmPlugin :
             return
         }
 
+        // A request the framework abandoned across a configuration change never receives its
+        // result, so release it here instead of letting it block every later request.
+        pendingNotificationPermissionCallback?.let { abandoned ->
+            pendingNotificationPermissionCallback = null
+            abandoned(Result.success(currentRemediationResult(WarmAlarmRemediationStatusWire.UNAVAILABLE)))
+        }
+
         val attachedActivity = activity
-        if (attachedActivity == null || pendingNotificationPermissionCallback != null) {
+        if (attachedActivity == null) {
             callback(Result.success(currentRemediationResult(WarmAlarmRemediationStatusWire.UNAVAILABLE)))
             return
         }
