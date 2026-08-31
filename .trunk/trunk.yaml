@@ -31,6 +31,10 @@ lint:
     - svgo@4.0.1
     - trufflehog@3.95.2
     - yamllint@1.38.0
+  ignore:
+    - linters: [git-diff-check, ktlint]
+      paths:
+        - warm_alarm_android/android/src/main/kotlin/com/andrew/alarm/Messages.g.kt
 actions:
   enabled:
     - trunk-announce
