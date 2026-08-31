@@ -1,6 +1,6 @@
 name: warm_alarm_macos
 description: MacOS implementation of the warm_alarm plugin
-version: 0.1.0+1
+version: 0.1.1
 
 homepage: https://github.com/AndrewDongminYoo/warm_alarm
 repository: https://github.com/AndrewDongminYoo/warm_alarm
@@ -24,7 +24,7 @@ dependencies:
   flutter:
     sdk: flutter
   meta: ^1.16.0
-  warm_alarm_platform_interface: ^0.1.0+1
+  warm_alarm_platform_interface: ^0.1.1
 
 dev_dependencies:
   flutter_test:

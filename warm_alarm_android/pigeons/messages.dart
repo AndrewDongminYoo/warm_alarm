@@ -34,6 +34,12 @@ enum WarmAlarmReadinessReasonWire {
   unknown,
 }
 
+enum WarmAlarmRemediationStatusWire {
+  completed,
+  unavailable,
+  unsupported,
+}
+
 enum WarmAlarmFailureCodeWire {
   unknown,
   invalidArguments,
@@ -96,6 +102,18 @@ class WarmAlarmReadinessWire {
 
   final WarmAlarmReadinessLevelWire level;
   final List<WarmAlarmReadinessReasonWire> reasons;
+}
+
+class WarmAlarmRemediationResultWire {
+  const WarmAlarmRemediationResultWire({
+    required this.status,
+    required this.permissionState,
+    required this.readiness,
+  });
+
+  final WarmAlarmRemediationStatusWire status;
+  final WarmAlarmPermissionStateWire permissionState;
+  final WarmAlarmReadinessWire readiness;
 }
 
 class WarmAlarmWarningWire {
@@ -287,6 +305,12 @@ abstract class WarmAlarmApi {
 
   @async
   WarmAlarmReadinessWire getReadiness();
+
+  @async
+  WarmAlarmRemediationResultWire requestNotificationPermission();
+
+  @async
+  WarmAlarmRemediationResultWire openReadinessSettings(WarmAlarmReadinessReasonWire reason);
 
   @async
   WarmAlarmScheduleResultWire scheduleAlarm(WarmAlarmScheduleWire schedule);

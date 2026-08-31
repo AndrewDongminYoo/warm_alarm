@@ -18,6 +18,42 @@ void main() {
       warmAlarm = WarmAlarmMacOS(api: api);
     });
 
+    test('remediation maps every wire status and readiness reason', () async {
+      const statuses = <WarmAlarmRemediationStatusWire, WarmAlarmRemediationStatus>{
+        WarmAlarmRemediationStatusWire.completed: WarmAlarmRemediationStatus.completed,
+        WarmAlarmRemediationStatusWire.unavailable: WarmAlarmRemediationStatus.unavailable,
+        WarmAlarmRemediationStatusWire.unsupported: WarmAlarmRemediationStatus.unsupported,
+      };
+      for (final entry in statuses.entries) {
+        when(
+          api.requestNotificationPermission,
+        ).thenAnswer((_) async => _remediationWire(entry.key));
+        expect(
+          (await warmAlarm.requestNotificationPermission()).status,
+          entry.value,
+        );
+      }
+
+      const reasons = <WarmAlarmReadinessReason, WarmAlarmReadinessReasonWire>{
+        WarmAlarmReadinessReason.notificationPermissionDenied:
+            WarmAlarmReadinessReasonWire.notificationPermissionDenied,
+        WarmAlarmReadinessReason.exactAlarmPermissionDenied: WarmAlarmReadinessReasonWire.exactAlarmPermissionDenied,
+        WarmAlarmReadinessReason.fullScreenPermissionDenied: WarmAlarmReadinessReasonWire.fullScreenPermissionDenied,
+        WarmAlarmReadinessReason.backgroundExecutionLimited: WarmAlarmReadinessReasonWire.backgroundExecutionLimited,
+        WarmAlarmReadinessReason.backgroundAudioLimited: WarmAlarmReadinessReasonWire.backgroundAudioLimited,
+        WarmAlarmReadinessReason.platformUnsupported: WarmAlarmReadinessReasonWire.platformUnsupported,
+        WarmAlarmReadinessReason.batteryOptimizationMayDelay: WarmAlarmReadinessReasonWire.batteryOptimizationMayDelay,
+        WarmAlarmReadinessReason.unknown: WarmAlarmReadinessReasonWire.unknown,
+      };
+      for (final entry in reasons.entries) {
+        when(() => api.openReadinessSettings(entry.value)).thenAnswer(
+          (_) async => _remediationWire(WarmAlarmRemediationStatusWire.completed),
+        );
+        await warmAlarm.openReadinessSettings(entry.key);
+        verify(() => api.openReadinessSettings(entry.value)).called(1);
+      }
+    });
+
     test('can be registered', () {
       WarmAlarmMacOS.registerWith();
       expect(
@@ -343,6 +379,68 @@ void main() {
       final state = await platform.getPermissionState();
       expect(state.notificationsGranted, isTrue);
       expect(state.exactAlarmGranted, isFalse);
+    });
+
+    test('requestNotificationPermission maps the native remediation result', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmMacOS(api: api);
+      when(api.requestNotificationPermission).thenAnswer(
+        (_) async => WarmAlarmRemediationResultWire(
+          status: WarmAlarmRemediationStatusWire.completed,
+          permissionState: WarmAlarmPermissionStateWire(
+            notificationsGranted: true,
+            exactAlarmGranted: false,
+            fullScreenIntentGranted: false,
+          ),
+          readiness: WarmAlarmReadinessWire(
+            level: WarmAlarmReadinessLevelWire.limited,
+            reasons: <WarmAlarmReadinessReasonWire>[
+              WarmAlarmReadinessReasonWire.backgroundExecutionLimited,
+            ],
+          ),
+        ),
+      );
+
+      final result = await platform.requestNotificationPermission();
+
+      expect(result.status, WarmAlarmRemediationStatus.completed);
+      expect(result.permissionState.notificationsGranted, isTrue);
+    });
+
+    test('openReadinessSettings maps an unsupported macOS result', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmMacOS(api: api);
+      when(
+        () => api.openReadinessSettings(
+          WarmAlarmReadinessReasonWire.notificationPermissionDenied,
+        ),
+      ).thenAnswer(
+        (_) async => WarmAlarmRemediationResultWire(
+          status: WarmAlarmRemediationStatusWire.unsupported,
+          permissionState: WarmAlarmPermissionStateWire(
+            notificationsGranted: false,
+            exactAlarmGranted: false,
+            fullScreenIntentGranted: false,
+          ),
+          readiness: WarmAlarmReadinessWire(
+            level: WarmAlarmReadinessLevelWire.unsupported,
+            reasons: <WarmAlarmReadinessReasonWire>[
+              WarmAlarmReadinessReasonWire.platformUnsupported,
+            ],
+          ),
+        ),
+      );
+
+      final result = await platform.openReadinessSettings(
+        WarmAlarmReadinessReason.notificationPermissionDenied,
+      );
+
+      expect(result.status, WarmAlarmRemediationStatus.unsupported);
+      verify(
+        () => api.openReadinessSettings(
+          WarmAlarmReadinessReasonWire.notificationPermissionDenied,
+        ),
+      ).called(1);
     });
 
     test('getReadiness maps ready level', () async {
@@ -743,3 +841,18 @@ void main() {
     });
   });
 }
+
+WarmAlarmRemediationResultWire _remediationWire(
+  WarmAlarmRemediationStatusWire status,
+) => WarmAlarmRemediationResultWire(
+  status: status,
+  permissionState: WarmAlarmPermissionStateWire(
+    notificationsGranted: true,
+    exactAlarmGranted: true,
+    fullScreenIntentGranted: true,
+  ),
+  readiness: WarmAlarmReadinessWire(
+    level: WarmAlarmReadinessLevelWire.ready,
+    reasons: <WarmAlarmReadinessReasonWire>[],
+  ),
+);

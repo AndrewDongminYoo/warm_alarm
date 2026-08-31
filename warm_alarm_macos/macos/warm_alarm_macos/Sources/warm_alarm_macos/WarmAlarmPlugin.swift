@@ -344,26 +344,87 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     }
 
     func getPermissionState(completion: @escaping (Result<WarmAlarmPermissionStateWire, Error>) -> Void) {
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            let granted = settings.authorizationStatus == .authorized
-                || settings.authorizationStatus == .provisional
-            completion(.success(WarmAlarmPermissionStateWire(
-                notificationsGranted: granted,
-                exactAlarmGranted: false,
-                fullScreenIntentGranted: false
-            )))
+        captureNotificationSnapshot { permissionState, _ in
+            completion(.success(permissionState))
         }
     }
 
     func getReadiness(completion: @escaping (Result<WarmAlarmReadinessWire, Error>) -> Void) {
+        captureNotificationSnapshot { _, readiness in
+            completion(.success(readiness))
+        }
+    }
+
+    func requestNotificationPermission(
+        completion: @escaping (Result<WarmAlarmRemediationResultWire, Error>) -> Void
+    ) {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, error in
+            if let error {
+                WarmAlarmPlatformReply.complete(.failure(error), completion: completion, finish: {})
+                return
+            }
+            self.completeRemediation(status: .completed, completion: completion)
+        }
+    }
+
+    func openReadinessSettings(
+        reason _: WarmAlarmReadinessReasonWire,
+        completion: @escaping (Result<WarmAlarmRemediationResultWire, Error>) -> Void
+    ) {
+        completeRemediation(status: .unsupported, completion: completion)
+    }
+
+    /// Reads permission and readiness from one settings query so the two cannot disagree.
+    private func captureNotificationSnapshot(
+        _ handler: @escaping (WarmAlarmPermissionStateWire, WarmAlarmReadinessWire) -> Void
+    ) {
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             let granted = settings.authorizationStatus == .authorized
                 || settings.authorizationStatus == .provisional
             var reasons: [WarmAlarmReadinessReasonWire] = [.backgroundExecutionLimited]
             if !granted { reasons.insert(.notificationPermissionDenied, at: 0) }
-            let level: WarmAlarmReadinessLevelWire = granted ? .limited : .blocked
-            completion(.success(WarmAlarmReadinessWire(level: level, reasons: reasons)))
+            handler(
+                WarmAlarmPermissionStateWire(
+                    notificationsGranted: granted,
+                    exactAlarmGranted: false,
+                    fullScreenIntentGranted: false
+                ),
+                WarmAlarmReadinessWire(level: granted ? .limited : .blocked, reasons: reasons)
+            )
         }
+    }
+
+    private func completeRemediation(
+        status: WarmAlarmRemediationStatusWire,
+        completion: @escaping (Result<WarmAlarmRemediationResultWire, Error>) -> Void
+    ) {
+        captureNotificationSnapshot { permissionState, readiness in
+            self.replyRemediation(
+                status: status,
+                permissionState: permissionState,
+                readiness: readiness,
+                completion: completion
+            )
+        }
+    }
+
+    /// The notification-centre callbacks land on an arbitrary queue, so every reply goes back
+    /// through the envelope that delivers it on the main platform thread.
+    private func replyRemediation(
+        status: WarmAlarmRemediationStatusWire,
+        permissionState: WarmAlarmPermissionStateWire,
+        readiness: WarmAlarmReadinessWire,
+        completion: @escaping (Result<WarmAlarmRemediationResultWire, Error>) -> Void
+    ) {
+        WarmAlarmPlatformReply.complete(
+            .success(WarmAlarmRemediationResultWire(
+                status: status,
+                permissionState: permissionState,
+                readiness: readiness
+            )),
+            completion: completion,
+            finish: {}
+        )
     }
 
     /// Builds the notification request(s) for a schedule.

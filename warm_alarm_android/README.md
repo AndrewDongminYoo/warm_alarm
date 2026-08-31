@@ -31,6 +31,12 @@ device is in Doze mode. The exact-alarm permission (either `USE_EXACT_ALARM` for
 `SCHEDULE_EXACT_ALARM` with user approval) is declared in the manifest and checked at runtime
 through `getPermissionState()`.
 
+`requestNotificationPermission()` requests `POST_NOTIFICATIONS` on Android 13+.
+On Android 12 and earlier there is no runtime notification permission to request, so the call reports `unsupported` and the caller should open notification settings instead.
+`openReadinessSettings(reason)` opens notification, exact-alarm, or full-screen settings when the reported reason supports it.
+The settings action returns when Android accepts the deep link.
+Query readiness again after the app resumes.
+
 ### Alarm delivery
 
 When the scheduled time arrives `WarmAlarmReceiver` receives the `com.andrew.alarm.ACTION_FIRE`

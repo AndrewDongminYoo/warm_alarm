@@ -58,6 +58,17 @@ class WarmAlarmIOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   Future<WarmAlarmReadiness> getReadiness() async => _readinessFromWire(await api.getReadiness());
 
   @override
+  Future<WarmAlarmRemediationResult> requestNotificationPermission() async =>
+      _remediationResultFromWire(await api.requestNotificationPermission());
+
+  @override
+  Future<WarmAlarmRemediationResult> openReadinessSettings(
+    WarmAlarmReadinessReason reason,
+  ) async => _remediationResultFromWire(
+    await api.openReadinessSettings(_readinessReasonToWire(reason)),
+  );
+
+  @override
   Future<List<WarmAlarmSnapshot>> getScheduledAlarms() async =>
       (await api.getScheduledAlarms()).map(_snapshotFromWire).toList(growable: false);
 
@@ -213,6 +224,29 @@ WarmAlarmReadiness _readinessFromWire(WarmAlarmReadinessWire wire) {
   );
 }
 
+WarmAlarmRemediationResult _remediationResultFromWire(
+  WarmAlarmRemediationResultWire wire,
+) {
+  return WarmAlarmRemediationResult(
+    status: _remediationStatusFromWire(wire.status),
+    permissionState: _permissionStateFromWire(wire.permissionState),
+    readiness: _readinessFromWire(wire.readiness),
+  );
+}
+
+WarmAlarmRemediationStatus _remediationStatusFromWire(
+  WarmAlarmRemediationStatusWire wire,
+) {
+  switch (wire) {
+    case WarmAlarmRemediationStatusWire.completed:
+      return WarmAlarmRemediationStatus.completed;
+    case WarmAlarmRemediationStatusWire.unavailable:
+      return WarmAlarmRemediationStatus.unavailable;
+    case WarmAlarmRemediationStatusWire.unsupported:
+      return WarmAlarmRemediationStatus.unsupported;
+  }
+}
+
 WarmAlarmReadinessLevel _readinessLevelFromWire(
   WarmAlarmReadinessLevelWire wire,
 ) {
@@ -248,6 +282,29 @@ WarmAlarmReadinessReason _readinessReasonFromWire(
       return WarmAlarmReadinessReason.batteryOptimizationMayDelay;
     case WarmAlarmReadinessReasonWire.unknown:
       return WarmAlarmReadinessReason.unknown;
+  }
+}
+
+WarmAlarmReadinessReasonWire _readinessReasonToWire(
+  WarmAlarmReadinessReason reason,
+) {
+  switch (reason) {
+    case WarmAlarmReadinessReason.notificationPermissionDenied:
+      return WarmAlarmReadinessReasonWire.notificationPermissionDenied;
+    case WarmAlarmReadinessReason.exactAlarmPermissionDenied:
+      return WarmAlarmReadinessReasonWire.exactAlarmPermissionDenied;
+    case WarmAlarmReadinessReason.fullScreenPermissionDenied:
+      return WarmAlarmReadinessReasonWire.fullScreenPermissionDenied;
+    case WarmAlarmReadinessReason.backgroundExecutionLimited:
+      return WarmAlarmReadinessReasonWire.backgroundExecutionLimited;
+    case WarmAlarmReadinessReason.backgroundAudioLimited:
+      return WarmAlarmReadinessReasonWire.backgroundAudioLimited;
+    case WarmAlarmReadinessReason.platformUnsupported:
+      return WarmAlarmReadinessReasonWire.platformUnsupported;
+    case WarmAlarmReadinessReason.batteryOptimizationMayDelay:
+      return WarmAlarmReadinessReasonWire.batteryOptimizationMayDelay;
+    case WarmAlarmReadinessReason.unknown:
+      return WarmAlarmReadinessReasonWire.unknown;
   }
 }
 

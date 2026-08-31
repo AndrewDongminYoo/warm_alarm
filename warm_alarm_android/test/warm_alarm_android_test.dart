@@ -38,6 +38,42 @@ void main() {
       warmAlarm = WarmAlarmAndroid(api: api);
     });
 
+    test('remediation maps every wire status and readiness reason', () async {
+      const statuses = <WarmAlarmRemediationStatusWire, WarmAlarmRemediationStatus>{
+        WarmAlarmRemediationStatusWire.completed: WarmAlarmRemediationStatus.completed,
+        WarmAlarmRemediationStatusWire.unavailable: WarmAlarmRemediationStatus.unavailable,
+        WarmAlarmRemediationStatusWire.unsupported: WarmAlarmRemediationStatus.unsupported,
+      };
+      for (final entry in statuses.entries) {
+        when(
+          api.requestNotificationPermission,
+        ).thenAnswer((_) async => _remediationWire(entry.key));
+        expect(
+          (await warmAlarm.requestNotificationPermission()).status,
+          entry.value,
+        );
+      }
+
+      const reasons = <WarmAlarmReadinessReason, WarmAlarmReadinessReasonWire>{
+        WarmAlarmReadinessReason.notificationPermissionDenied:
+            WarmAlarmReadinessReasonWire.notificationPermissionDenied,
+        WarmAlarmReadinessReason.exactAlarmPermissionDenied: WarmAlarmReadinessReasonWire.exactAlarmPermissionDenied,
+        WarmAlarmReadinessReason.fullScreenPermissionDenied: WarmAlarmReadinessReasonWire.fullScreenPermissionDenied,
+        WarmAlarmReadinessReason.backgroundExecutionLimited: WarmAlarmReadinessReasonWire.backgroundExecutionLimited,
+        WarmAlarmReadinessReason.backgroundAudioLimited: WarmAlarmReadinessReasonWire.backgroundAudioLimited,
+        WarmAlarmReadinessReason.platformUnsupported: WarmAlarmReadinessReasonWire.platformUnsupported,
+        WarmAlarmReadinessReason.batteryOptimizationMayDelay: WarmAlarmReadinessReasonWire.batteryOptimizationMayDelay,
+        WarmAlarmReadinessReason.unknown: WarmAlarmReadinessReasonWire.unknown,
+      };
+      for (final entry in reasons.entries) {
+        when(() => api.openReadinessSettings(entry.value)).thenAnswer(
+          (_) async => _remediationWire(WarmAlarmRemediationStatusWire.completed),
+        );
+        await warmAlarm.openReadinessSettings(entry.key);
+        verify(() => api.openReadinessSettings(entry.value)).called(1);
+      }
+    });
+
     test('can be registered', () {
       WarmAlarmAndroid.registerWith();
       expect(
@@ -110,6 +146,63 @@ void main() {
       expect(state.exactAlarmGranted, isFalse);
       expect(state.fullScreenIntentGranted, isTrue);
       verify(api.getPermissionState).called(1);
+    });
+
+    test('requestNotificationPermission maps the native remediation result', () async {
+      when(api.requestNotificationPermission).thenAnswer(
+        (_) async => WarmAlarmRemediationResultWire(
+          status: WarmAlarmRemediationStatusWire.completed,
+          permissionState: WarmAlarmPermissionStateWire(
+            notificationsGranted: true,
+            exactAlarmGranted: true,
+            fullScreenIntentGranted: true,
+          ),
+          readiness: WarmAlarmReadinessWire(
+            level: WarmAlarmReadinessLevelWire.ready,
+            reasons: <WarmAlarmReadinessReasonWire>[],
+          ),
+        ),
+      );
+
+      final result = await warmAlarm.requestNotificationPermission();
+
+      expect(result.status, WarmAlarmRemediationStatus.completed);
+      expect(result.permissionState.notificationsGranted, isTrue);
+      expect(result.readiness.level, WarmAlarmReadinessLevel.ready);
+    });
+
+    test('openReadinessSettings passes the Android exact-alarm reason', () async {
+      when(
+        () => api.openReadinessSettings(
+          WarmAlarmReadinessReasonWire.exactAlarmPermissionDenied,
+        ),
+      ).thenAnswer(
+        (_) async => WarmAlarmRemediationResultWire(
+          status: WarmAlarmRemediationStatusWire.completed,
+          permissionState: WarmAlarmPermissionStateWire(
+            notificationsGranted: true,
+            exactAlarmGranted: false,
+            fullScreenIntentGranted: true,
+          ),
+          readiness: WarmAlarmReadinessWire(
+            level: WarmAlarmReadinessLevelWire.limited,
+            reasons: <WarmAlarmReadinessReasonWire>[
+              WarmAlarmReadinessReasonWire.exactAlarmPermissionDenied,
+            ],
+          ),
+        ),
+      );
+
+      final result = await warmAlarm.openReadinessSettings(
+        WarmAlarmReadinessReason.exactAlarmPermissionDenied,
+      );
+
+      expect(result.status, WarmAlarmRemediationStatus.completed);
+      verify(
+        () => api.openReadinessSettings(
+          WarmAlarmReadinessReasonWire.exactAlarmPermissionDenied,
+        ),
+      ).called(1);
     });
 
     test('getReadiness maps blocked level with all reason variants', () async {
@@ -1058,3 +1151,18 @@ void main() {
     );
   });
 }
+
+WarmAlarmRemediationResultWire _remediationWire(
+  WarmAlarmRemediationStatusWire status,
+) => WarmAlarmRemediationResultWire(
+  status: status,
+  permissionState: WarmAlarmPermissionStateWire(
+    notificationsGranted: true,
+    exactAlarmGranted: true,
+    fullScreenIntentGranted: true,
+  ),
+  readiness: WarmAlarmReadinessWire(
+    level: WarmAlarmReadinessLevelWire.ready,
+    reasons: <WarmAlarmReadinessReasonWire>[],
+  ),
+);

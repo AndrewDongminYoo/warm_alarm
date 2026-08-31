@@ -1,1 +1,2 @@
 Copyright (c) 2026, Com andrew alarm
+dart format off
