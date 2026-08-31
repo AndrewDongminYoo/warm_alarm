@@ -27,7 +27,7 @@ Add `warm_alarm` to your Flutter app.
 
 ```yaml
 dependencies:
-  warm_alarm: ^0.1.0+1
+  warm_alarm: ^0.1.2
 ```
 
 Then run:
@@ -122,6 +122,12 @@ Call `getReadiness()` at runtime and surface the reasons to your users so they c
 | `isRinging({id})`                 | `Future<bool>`               | Whether any alarm — or a specific alarm by ID — is ringing  |
 | `setKillWarning({title, body})`   | `Future<void>`               | Set the notification shown if the app is force-killed       |
 | `clearKillWarning()`              | `Future<void>`               | Clear the app-kill warning notification                     |
+
+`openReadinessSettings(reason)` hands the user off to a system screen and returns as soon as the
+platform accepts the request, so its snapshot describes the state before the remediation — call
+`getReadiness()` again once the app resumes to see the outcome.
+`requestNotificationPermission()` awaits the system dialog, so its snapshot already reflects the
+user's answer.
 
 ### Scheduling validation
 
