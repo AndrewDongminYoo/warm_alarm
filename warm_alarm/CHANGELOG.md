@@ -1,4 +1,4 @@
-# Unreleased
+# 0.1.2
 
 - Add APIs that request notification authorization or open supported readiness settings.
 
