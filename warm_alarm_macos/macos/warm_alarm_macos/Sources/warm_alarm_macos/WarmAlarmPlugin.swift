@@ -366,6 +366,56 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         }
     }
 
+    func requestNotificationPermission(
+        completion: @escaping (Result<WarmAlarmRemediationResultWire, Error>) -> Void
+    ) {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, error in
+            if let error {
+                WarmAlarmPlatformReply.complete(.failure(error), completion: completion, finish: {})
+                return
+            }
+            self.completeRemediation(status: .completed, completion: completion)
+        }
+    }
+
+    func openReadinessSettings(
+        reason _: WarmAlarmReadinessReasonWire,
+        completion: @escaping (Result<WarmAlarmRemediationResultWire, Error>) -> Void
+    ) {
+        completeRemediation(status: .unsupported, completion: completion)
+    }
+
+    private func completeRemediation(
+        status: WarmAlarmRemediationStatusWire,
+        completion: @escaping (Result<WarmAlarmRemediationResultWire, Error>) -> Void
+    ) {
+        // The notification-centre callbacks land on an arbitrary queue, so every reply goes
+        // back through the envelope that delivers it on the main platform thread.
+        getPermissionState { permissionStateResult in
+            switch permissionStateResult {
+            case .failure(let error):
+                WarmAlarmPlatformReply.complete(.failure(error), completion: completion, finish: {})
+            case .success(let permissionState):
+                self.getReadiness { readinessResult in
+                    switch readinessResult {
+                    case .failure(let error):
+                        WarmAlarmPlatformReply.complete(.failure(error), completion: completion, finish: {})
+                    case .success(let readiness):
+                        WarmAlarmPlatformReply.complete(
+                            .success(WarmAlarmRemediationResultWire(
+                                status: status,
+                                permissionState: permissionState,
+                                readiness: readiness
+                            )),
+                            completion: completion,
+                            finish: {}
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     /// Builds the notification request(s) for a schedule.
     ///
     /// A non-recurring alarm produces a single one-shot request keyed by the alarm
