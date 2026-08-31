@@ -265,6 +265,53 @@ void main() {
       verify(warmAlarmPlatform.getReadiness).called(1);
     });
 
+    test('requestNotificationPermission forwards the remediation result', () async {
+      const result = WarmAlarmRemediationResult(
+        status: WarmAlarmRemediationStatus.completed,
+        permissionState: WarmAlarmPermissionState(
+          notificationsGranted: true,
+          exactAlarmGranted: true,
+          fullScreenIntentGranted: true,
+        ),
+        readiness: WarmAlarmReadiness(
+          level: WarmAlarmReadinessLevel.ready,
+          reasons: <WarmAlarmReadinessReason>[],
+        ),
+      );
+      when(warmAlarmPlatform.requestNotificationPermission).thenAnswer((_) async => result);
+
+      expect(await WarmAlarm.requestNotificationPermission(), result);
+    });
+
+    test('openReadinessSettings forwards the selected reason', () async {
+      const result = WarmAlarmRemediationResult(
+        status: WarmAlarmRemediationStatus.completed,
+        permissionState: WarmAlarmPermissionState(
+          notificationsGranted: true,
+          exactAlarmGranted: false,
+          fullScreenIntentGranted: true,
+        ),
+        readiness: WarmAlarmReadiness(
+          level: WarmAlarmReadinessLevel.limited,
+          reasons: <WarmAlarmReadinessReason>[
+            WarmAlarmReadinessReason.exactAlarmPermissionDenied,
+          ],
+        ),
+      );
+      when(
+        () => warmAlarmPlatform.openReadinessSettings(
+          WarmAlarmReadinessReason.exactAlarmPermissionDenied,
+        ),
+      ).thenAnswer((_) async => result);
+
+      expect(
+        await WarmAlarm.openReadinessSettings(
+          WarmAlarmReadinessReason.exactAlarmPermissionDenied,
+        ),
+        result,
+      );
+    });
+
     test('cancelAlarm delegates to platform', () async {
       when(() => warmAlarmPlatform.cancelAlarm(any())).thenAnswer((_) async {});
       await WarmAlarm.cancelAlarm(3);
