@@ -76,7 +76,6 @@ class WarmAlarmPlugin :
     private var activity: Activity? = null
     private var activityBinding: ActivityPluginBinding? = null
     private var pendingNotificationPermissionCallback: ((Result<WarmAlarmRemediationResultWire>) -> Unit)? = null
-    private var pendingNotificationPermissionActivity: Activity? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         context = binding.applicationContext
@@ -188,27 +187,16 @@ class WarmAlarmPlugin :
             return
         }
 
+        // A rotated request still receives its result on the recreated activity, so a pending one
+        // is never assumed abandoned here; duplicates wait and the callback is released when the
+        // activity goes away for good.
         val attachedActivity = activity
-        if (attachedActivity == null) {
+        if (attachedActivity == null || pendingNotificationPermissionCallback != null) {
             callback(Result.success(currentRemediationResult(WarmAlarmRemediationStatusWire.UNAVAILABLE)))
             return
         }
 
-        // A pending request issued against the activity that is still attached is genuinely in
-        // flight, so a second call waits. One issued against an activity the framework has since
-        // replaced can never receive its result, so it is released rather than blocking forever.
-        pendingNotificationPermissionCallback?.let { pending ->
-            if (pendingNotificationPermissionActivity === attachedActivity) {
-                callback(Result.success(currentRemediationResult(WarmAlarmRemediationStatusWire.UNAVAILABLE)))
-                return
-            }
-            pendingNotificationPermissionCallback = null
-            pendingNotificationPermissionActivity = null
-            pending(Result.success(currentRemediationResult(WarmAlarmRemediationStatusWire.UNAVAILABLE)))
-        }
-
         pendingNotificationPermissionCallback = callback
-        pendingNotificationPermissionActivity = attachedActivity
         attachedActivity.requestPermissions(
             arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
             REQUEST_NOTIFICATION_PERMISSION,
@@ -286,7 +274,6 @@ class WarmAlarmPlugin :
         if (requestCode != REQUEST_NOTIFICATION_PERMISSION) return false
         val callback = pendingNotificationPermissionCallback ?: return false
         pendingNotificationPermissionCallback = null
-        pendingNotificationPermissionActivity = null
         // Android delivers empty arrays when the permission dialog is interrupted before the
         // user decides, which is a cancellation rather than a denial the caller can act on.
         val status =
@@ -497,7 +484,6 @@ class WarmAlarmPlugin :
         if (!cancelPendingPermissionRequest) return
         pendingNotificationPermissionCallback?.let { callback ->
             pendingNotificationPermissionCallback = null
-            pendingNotificationPermissionActivity = null
             callback(Result.success(currentRemediationResult(WarmAlarmRemediationStatusWire.UNAVAILABLE)))
         }
     }
