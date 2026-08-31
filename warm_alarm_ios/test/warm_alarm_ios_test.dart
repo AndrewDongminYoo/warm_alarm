@@ -390,6 +390,68 @@ void main() {
       expect(state.fullScreenIntentGranted, isTrue);
     });
 
+    test('requestNotificationPermission maps the native remediation result', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmIOS(api: api);
+      when(api.requestNotificationPermission).thenAnswer(
+        (_) async => WarmAlarmRemediationResultWire(
+          status: WarmAlarmRemediationStatusWire.completed,
+          permissionState: WarmAlarmPermissionStateWire(
+            notificationsGranted: true,
+            exactAlarmGranted: false,
+            fullScreenIntentGranted: false,
+          ),
+          readiness: WarmAlarmReadinessWire(
+            level: WarmAlarmReadinessLevelWire.limited,
+            reasons: <WarmAlarmReadinessReasonWire>[
+              WarmAlarmReadinessReasonWire.backgroundExecutionLimited,
+            ],
+          ),
+        ),
+      );
+
+      final result = await platform.requestNotificationPermission();
+
+      expect(result.status, WarmAlarmRemediationStatus.completed);
+      expect(result.permissionState.notificationsGranted, isTrue);
+    });
+
+    test('openReadinessSettings maps the iOS notification-settings result', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmIOS(api: api);
+      when(
+        () => api.openReadinessSettings(
+          WarmAlarmReadinessReasonWire.notificationPermissionDenied,
+        ),
+      ).thenAnswer(
+        (_) async => WarmAlarmRemediationResultWire(
+          status: WarmAlarmRemediationStatusWire.unavailable,
+          permissionState: WarmAlarmPermissionStateWire(
+            notificationsGranted: false,
+            exactAlarmGranted: false,
+            fullScreenIntentGranted: false,
+          ),
+          readiness: WarmAlarmReadinessWire(
+            level: WarmAlarmReadinessLevelWire.blocked,
+            reasons: <WarmAlarmReadinessReasonWire>[
+              WarmAlarmReadinessReasonWire.notificationPermissionDenied,
+            ],
+          ),
+        ),
+      );
+
+      final result = await platform.openReadinessSettings(
+        WarmAlarmReadinessReason.notificationPermissionDenied,
+      );
+
+      expect(result.status, WarmAlarmRemediationStatus.unavailable);
+      verify(
+        () => api.openReadinessSettings(
+          WarmAlarmReadinessReasonWire.notificationPermissionDenied,
+        ),
+      ).called(1);
+    });
+
     test('getReadiness maps ready level', () async {
       final api = _MockWarmAlarmApi();
       final platform = WarmAlarmIOS(api: api);

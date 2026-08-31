@@ -74,6 +74,26 @@ final class WarmAlarmPlatformReply: @unchecked Sendable {
         self.reply = reply
     }
 
+    static func performOnMain(_ action: @escaping () -> Void) {
+        let reply = WarmAlarmPlatformReply(reply: action)
+        DispatchQueue.main.async {
+            reply.reply()
+        }
+    }
+
+    /// Opens `url` and reports whether the system accepted it.
+    /// Both outcomes are wrapped up front because the completion handler cannot carry
+    /// non-Sendable Pigeon callbacks across the concurrency boundary.
+    static func open(_ url: URL, then handler: @escaping (Bool) -> Void) {
+        let onOpened = WarmAlarmPlatformReply { handler(true) }
+        let onRejected = WarmAlarmPlatformReply { handler(false) }
+        performOnMain {
+            UIApplication.shared.open(url, options: [:]) { opened in
+                (opened ? onOpened : onRejected).reply()
+            }
+        }
+    }
+
     static func complete<Value>(
         _ result: Result<Value, Error>,
         completion: @escaping (Result<Value, Error>) -> Void,
@@ -83,7 +103,7 @@ final class WarmAlarmPlatformReply: @unchecked Sendable {
             completion(result)
             finish()
         }
-        DispatchQueue.main.async {
+        performOnMain {
             reply.reply()
         }
     }
@@ -330,6 +350,77 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             if !granted { reasons.insert(.notificationPermissionDenied, at: 0) }
             let level: WarmAlarmReadinessLevelWire = granted ? .limited : .blocked
             completion(.success(WarmAlarmReadinessWire(level: level, reasons: reasons)))
+        }
+    }
+
+    func requestNotificationPermission(
+        completion: @escaping (Result<WarmAlarmRemediationResultWire, Error>) -> Void
+    ) {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, error in
+            if let error {
+                WarmAlarmPlatformReply.complete(.failure(error), completion: completion, finish: {})
+                return
+            }
+            self.completeRemediation(status: .completed, completion: completion)
+        }
+    }
+
+    func openReadinessSettings(
+        reason: WarmAlarmReadinessReasonWire,
+        completion: @escaping (Result<WarmAlarmRemediationResultWire, Error>) -> Void
+    ) {
+        guard reason == .notificationPermissionDenied else {
+            completeRemediation(status: .unsupported, completion: completion)
+            return
+        }
+
+        let settingsURLString: String
+        if #available(iOS 16.0, *) {
+            settingsURLString = UIApplication.openNotificationSettingsURLString
+        } else {
+            settingsURLString = UIApplication.openSettingsURLString
+        }
+        guard let settingsURL = URL(string: settingsURLString) else {
+            completeRemediation(status: .unavailable, completion: completion)
+            return
+        }
+
+        WarmAlarmPlatformReply.open(settingsURL) { opened in
+            self.completeRemediation(
+                status: opened ? .completed : .unavailable,
+                completion: completion
+            )
+        }
+    }
+
+    private func completeRemediation(
+        status: WarmAlarmRemediationStatusWire,
+        completion: @escaping (Result<WarmAlarmRemediationResultWire, Error>) -> Void
+    ) {
+        // The notification-centre callbacks land on an arbitrary queue, so every reply goes
+        // back through the envelope that delivers it on the main platform thread.
+        getPermissionState { permissionStateResult in
+            switch permissionStateResult {
+            case .failure(let error):
+                WarmAlarmPlatformReply.complete(.failure(error), completion: completion, finish: {})
+            case .success(let permissionState):
+                self.getReadiness { readinessResult in
+                    switch readinessResult {
+                    case .failure(let error):
+                        WarmAlarmPlatformReply.complete(.failure(error), completion: completion, finish: {})
+                    case .success(let readiness):
+                        WarmAlarmPlatformReply.complete(
+                            .success(WarmAlarmRemediationResultWire(
+                                status: status,
+                                permissionState: permissionState,
+                                readiness: readiness
+                            )),
+                            completion: completion,
+                            finish: {}
+                        )
+                    }
+                }
+            }
         }
     }
 
