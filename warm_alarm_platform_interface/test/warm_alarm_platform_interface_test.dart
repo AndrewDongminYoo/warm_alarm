@@ -358,5 +358,21 @@ void main() {
       WarmAlarmPlatform.instance = platform;
       await expectLater(WarmAlarmPlatform.instance.init(), completes);
     });
+
+    test("unsupported remediation reports the platform's own snapshots", () async {
+      // A platform that has not implemented remediation still knows its permission and readiness
+      // state, so the inherited default must not contradict a direct query.
+      final platform = WarmAlarmMock();
+      final result = await platform.requestNotificationPermission();
+      final settingsResult = await platform.openReadinessSettings(
+        WarmAlarmReadinessReason.notificationPermissionDenied,
+      );
+
+      expect(result.status, WarmAlarmRemediationStatus.unsupported);
+      expect(result.permissionState.notificationsGranted, isTrue);
+      expect(result.readiness.level, WarmAlarmReadinessLevel.limited);
+      expect(settingsResult.status, WarmAlarmRemediationStatus.unsupported);
+      expect(settingsResult.readiness.level, WarmAlarmReadinessLevel.limited);
+    });
   });
 }

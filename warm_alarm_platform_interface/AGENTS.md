@@ -43,7 +43,9 @@ test/
 
 - Never put Pigeon (`*Wire`) types here. Wire types are private to each platform package's `lib/src/messages.g.dart`.
 - Never make `WarmAlarmPlatform` a regular `abstract class` without the `PlatformInterface` token-verify pattern; doing so breaks federated-plugin safety.
-- Don't add a contract method without also adding a no-op default in `MethodChannelWarmAlarm` — otherwise apps without a registered platform impl will throw at startup.
+- Don't add a contract method without a no-op default reachable from `MethodChannelWarmAlarm` — otherwise apps without a registered platform impl will throw at startup.
+  An abstract method needs that default declared on `MethodChannelWarmAlarm` itself.
+  A method added to an existing contract cannot be abstract, because the already-published platform packages do not implement it; give it a default implementation on `WarmAlarmPlatform` instead, which `MethodChannelWarmAlarm` and those packages both inherit.
 - Don't add platform-conditional logic here (no `Platform.isAndroid` etc.). Platform behavior belongs in the platform packages.
 
 ## NOTES

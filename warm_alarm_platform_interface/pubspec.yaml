@@ -1,6 +1,6 @@
 name: warm_alarm_platform_interface
 description: A common platform interface for the warm_alarm plugin.
-version: 0.1.0+1
+version: 0.1.1
 
 homepage: https://github.com/AndrewDongminYoo/warm_alarm
 repository: https://github.com/AndrewDongminYoo/warm_alarm
