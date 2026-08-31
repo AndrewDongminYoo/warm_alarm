@@ -1,4 +1,4 @@
-# Unreleased
+# 0.1.1
 
 - Add notification authorization remediation and explicit unsupported settings remediation.
 
