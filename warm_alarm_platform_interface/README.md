@@ -42,8 +42,11 @@ The two remediation methods carry an `unsupported` default, so a platform packag
 earlier version of this contract keeps working and simply reports that it cannot remediate.
 The endorsed Android, iOS, and macOS implementations ship in their own packages once they depend on
 this version.
-Both hand the user off to a system screen or dialog, so the snapshot each one returns describes the
-state before the user acted on it — call `getReadiness()` again after the app resumes.
+`openReadinessSettings()` hands the user off to a separate screen and returns as soon as the
+platform accepts the request, so its snapshot describes the state before the user acted on it — call
+`getReadiness()` again after the app resumes.
+`requestNotificationPermission()` awaits the system dialog, so its snapshot is the state after the
+user answered.
 
 ### Public models
 
