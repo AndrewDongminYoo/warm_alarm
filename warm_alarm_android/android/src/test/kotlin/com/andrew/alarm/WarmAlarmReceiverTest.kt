@@ -40,8 +40,8 @@ class WarmAlarmReceiverTest {
 
     @Test
     fun aScheduleThatCouldNotBeReadIsLeftAlone() {
-        // Device-protected storage holds no schedules until the first unlock
-        // migrates them. Removing then persists an empty list over every alarm.
+        // WarmAlarmStore.remove persists the map it just read, so removing on
+        // a read that came back empty writes an empty list over every schedule.
         assertFalse(WarmAlarmReceiver.wakeCheckMayRemoveSchedule(null))
     }
 }

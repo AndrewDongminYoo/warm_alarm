@@ -22,9 +22,10 @@ class WarmAlarmReceiver : BroadcastReceiver() {
          * Whether finishing a wake check may delete [schedule] from the store.
          *
          * Only a one-shot alarm that was actually read back qualifies. A null
-         * schedule means the store could not be read - device-protected storage
-         * holds no schedules until the first unlock migrates them - and removing
-         * what we cannot read would persist an empty list over the whole series.
+         * schedule is ambiguous: the alarm may have been deleted, or the read
+         * may have failed. WarmAlarmStore.remove persists the map it just read,
+         * so removing on a read that came back empty would write an empty list
+         * over every schedule. Not knowing which happened, keep the schedule.
          */
         internal fun wakeCheckMayRemoveSchedule(schedule: WarmAlarmScheduleWire?): Boolean =
             schedule != null && schedule.recurrence?.weekdays.isNullOrEmpty()
