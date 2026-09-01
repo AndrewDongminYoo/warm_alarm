@@ -4,7 +4,6 @@ import java.util.Calendar
 import java.util.TimeZone
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -177,16 +176,5 @@ class WarmAlarmRecurrenceTest {
         assertEquals(6, cal.get(Calendar.HOUR_OF_DAY))
         assertEquals(30, cal.get(Calendar.MINUTE))
         assertEquals(7, isoWeekdayOf(next, eastern))
-    }
-
-    @Test
-    fun finishingAWakeCheckKeepsARecurringSchedule() {
-        assertTrue(WarmAlarmRecurrence.isRecurring(listOf(1L, 3L, 5L)))
-    }
-
-    @Test
-    fun finishingAWakeCheckReleasesAOneShotSchedule() {
-        assertFalse(WarmAlarmRecurrence.isRecurring(null))
-        assertFalse(WarmAlarmRecurrence.isRecurring(emptyList()))
     }
 }

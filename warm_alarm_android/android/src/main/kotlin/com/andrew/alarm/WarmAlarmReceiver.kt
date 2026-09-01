@@ -17,6 +17,17 @@ class WarmAlarmReceiver : BroadcastReceiver() {
         const val EXTRA_ALARM_ID = "alarm_id"
         const val EXTRA_IS_RETRIGGER = "is_retrigger"
         private const val WAKE_CHECK_NOTIF_OFFSET = 20_000
+
+        /**
+         * Whether finishing a wake check may delete [schedule] from the store.
+         *
+         * Only a one-shot alarm that was actually read back qualifies. A null
+         * schedule means the store could not be read - device-protected storage
+         * holds no schedules until the first unlock migrates them - and removing
+         * what we cannot read would persist an empty list over the whole series.
+         */
+        internal fun wakeCheckMayRemoveSchedule(schedule: WarmAlarmScheduleWire?): Boolean =
+            schedule != null && schedule.recurrence?.weekdays.isNullOrEmpty()
     }
 
     override fun onReceive(
@@ -202,10 +213,10 @@ class WarmAlarmReceiver : BroadcastReceiver() {
                 extraFlags = PendingIntent.FLAG_NO_CREATE,
             )?.let { (context.getSystemService(Context.ALARM_SERVICE) as AlarmManager).cancel(it) }
 
-        if (WarmAlarmRecurrence.isRecurring(schedule?.recurrence?.weekdays)) {
-            WarmAlarmStore.clearRetriggerCount(context, alarmId)
-        } else {
+        if (wakeCheckMayRemoveSchedule(schedule)) {
             WarmAlarmStore.remove(context, alarmId)
+        } else {
+            WarmAlarmStore.clearRetriggerCount(context, alarmId)
         }
     }
 }

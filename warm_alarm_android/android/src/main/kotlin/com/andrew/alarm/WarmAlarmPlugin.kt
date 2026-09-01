@@ -136,7 +136,7 @@ class WarmAlarmPlugin :
         }
         recoverableAlarms
             .forEach { (alarmId, fireAt) ->
-                val pending = alarmPendingIntent(alarmId, PendingIntent.FLAG_UPDATE_CURRENT)!!
+                val pending = alarmPendingIntent(alarmId, PendingIntent.FLAG_UPDATE_CURRENT, WarmAlarmIntentKind.REGULAR)!!
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
                     alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pending)
                 } else {
@@ -307,7 +307,7 @@ class WarmAlarmPlugin :
         // onTaskRemoved can post the kill warning if the app is swiped away
         // before the alarm rings.
         WarmAlarmKillWarningService.start(context)
-        val pending = alarmPendingIntent(schedule.id, PendingIntent.FLAG_UPDATE_CURRENT)!!
+        val pending = alarmPendingIntent(schedule.id, PendingIntent.FLAG_UPDATE_CURRENT, WarmAlarmIntentKind.REGULAR)!!
         val inexact = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()
         val readiness =
             if (inexact) {
@@ -499,7 +499,7 @@ class WarmAlarmPlugin :
     private fun alarmPendingIntent(
         alarmId: Long,
         extraFlags: Int,
-        kind: WarmAlarmIntentKind = WarmAlarmIntentKind.REGULAR,
+        kind: WarmAlarmIntentKind,
     ): PendingIntent? = WarmAlarmPendingIntents.broadcast(context, alarmId, kind, extraFlags)
 
     // Cancels both identities: a wake-check retrigger can be armed alongside the

@@ -3,6 +3,7 @@
 - Give a wake-check retrigger its own `PendingIntent` identity. It shared the regular alarm's, so arming a retrigger re-targeted the pending next occurrence and dismissing a wake check cancelled it.
 - Keep a recurring alarm's stored schedule when a wake check finishes. Only a one-shot alarm's schedule is removed.
 - Cancel both alarm identities from `cancelAlarm` and `cancelAllAlarms`.
+- Leave the stored schedule alone when a wake check finishes and the store could not be read. Device-protected storage holds no schedules until the first unlock migrates them, and removing there persisted an empty list over every alarm.
 
 # 0.1.1
 
