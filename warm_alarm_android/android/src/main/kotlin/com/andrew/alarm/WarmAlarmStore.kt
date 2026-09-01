@@ -193,7 +193,7 @@ internal object WarmAlarmStore {
         devicePrefs.edit().putString(retriggerMigrationKey(id), RETRIGGER_MIGRATION_COMPLETE).apply()
     }
 
-    private fun clearRetriggerCount(
+    fun clearRetriggerCount(
         context: Context,
         id: Long,
     ) {

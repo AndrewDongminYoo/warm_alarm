@@ -119,7 +119,7 @@ class WarmAlarmReceiver : BroadcastReceiver() {
                     occurredAtMillis = System.currentTimeMillis(),
                 ),
             )
-            WarmAlarmStore.remove(context, alarmId)
+            finishWakeCheck(context, alarmId, schedule)
             return
         }
 
@@ -173,27 +173,10 @@ class WarmAlarmReceiver : BroadcastReceiver() {
         val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
         if (alarmId == -1L) return
 
-        val retriggerIntent =
-            Intent(context, WarmAlarmReceiver::class.java).apply {
-                action = ACTION_FIRE
-                putExtra(EXTRA_ALARM_ID, alarmId)
-                putExtra(EXTRA_IS_RETRIGGER, true)
-            }
-        val retriggerPending =
-            PendingIntent.getBroadcast(
-                context,
-                alarmId.toInt(),
-                retriggerIntent,
-                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
-            )
-        retriggerPending?.let {
-            (context.getSystemService(Context.ALARM_SERVICE) as AlarmManager).cancel(it)
-        }
-
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.cancel((alarmId + WAKE_CHECK_NOTIF_OFFSET).toInt())
 
-        WarmAlarmStore.remove(context, alarmId)
+        finishWakeCheck(context, alarmId, WarmAlarmStore.load(context, alarmId))
         WarmAlarmPlugin.emitEventFromBackground(
             WarmAlarmEventWire(
                 alarmId = alarmId,
@@ -201,5 +184,28 @@ class WarmAlarmReceiver : BroadcastReceiver() {
                 occurredAtMillis = System.currentTimeMillis(),
             ),
         )
+    }
+
+    // Finishing a wake check ends the retrigger cycle only. handleAlarmFire has
+    // already armed a recurring alarm's next occurrence, so deleting the stored
+    // schedule here would take the whole series with it.
+    private fun finishWakeCheck(
+        context: Context,
+        alarmId: Long,
+        schedule: WarmAlarmScheduleWire?,
+    ) {
+        WarmAlarmPendingIntents
+            .broadcast(
+                context = context,
+                alarmId = alarmId,
+                kind = WarmAlarmIntentKind.RETRIGGER,
+                extraFlags = PendingIntent.FLAG_NO_CREATE,
+            )?.let { (context.getSystemService(Context.ALARM_SERVICE) as AlarmManager).cancel(it) }
+
+        if (WarmAlarmRecurrence.isRecurring(schedule?.recurrence?.weekdays)) {
+            WarmAlarmStore.clearRetriggerCount(context, alarmId)
+        } else {
+            WarmAlarmStore.remove(context, alarmId)
+        }
     }
 }

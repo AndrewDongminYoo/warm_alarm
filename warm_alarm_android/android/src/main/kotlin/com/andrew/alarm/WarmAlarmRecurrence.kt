@@ -15,6 +15,12 @@ object WarmAlarmRecurrence {
     private fun isoWeekday(calendarDayOfWeek: Int): Int = if (calendarDayOfWeek == Calendar.SUNDAY) 7 else calendarDayOfWeek - 1
 
     /**
+     * A recurring alarm keeps its stored schedule when a wake check finishes;
+     * only a one-shot alarm is done with it.
+     */
+    fun isRecurring(weekdays: List<Long>?): Boolean = !weekdays.isNullOrEmpty()
+
+    /**
      * Returns the next fire time strictly after [afterMillis] that matches one of
      * [weekdays] (ISO 1=Mon..7=Sun) at the same local time-of-day as [baseMillis],
      * or `null` when [weekdays] is empty.

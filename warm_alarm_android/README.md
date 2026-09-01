@@ -54,6 +54,13 @@ primary alarm fires. If `ACTION_WAKE_CHECK_FIRE` arrives without the user having
 primary alarm, the alarm retriggers (up to `maxRetriggers` times at `retriggerDelay` intervals).
 `ACTION_WAKE_CHECK_DISMISS` cancels the follow-up chain.
 
+A retrigger and the regular alarm are separate `PendingIntent`s.
+`AlarmManager` matches on request code plus `Intent.filterEquals`, which ignores extras, so a shared identity let arming a retrigger re-target the pending next occurrence and let a dismiss cancel it.
+Only the retrigger carries a `warm-alarm://<package>/alarm/<id>/retrigger` data Uri; the regular alarm keeps the data-less identity it had before 0.1.2, so an alarm scheduled by an older install stays cancellable after an update.
+Finishing a wake check clears a recurring alarm's retrigger count and removes the stored schedule only for a one-shot alarm.
+
+`filterEquals` cannot be exercised from the JVM unit tests, so verify it on a device: schedule a recurring alarm, let the wake check fire, tap the dismiss action, then confirm the next occurrence is still listed by `adb shell dumpsys alarm | grep <package>`.
+
 ### Recurrence
 
 Weekly recurrence is re-armed on fire: `AlarmManager` is single-shot, so when a recurring alarm

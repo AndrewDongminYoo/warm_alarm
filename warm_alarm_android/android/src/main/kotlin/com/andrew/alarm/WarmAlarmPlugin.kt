@@ -36,16 +36,12 @@ private class AndroidAlarmSchedulingBackend(
 ) : AlarmSchedulingBackend {
     private val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     private val pendingIntent =
-        PendingIntent.getBroadcast(
-            context,
-            alarmId.toInt(),
-            Intent(context, WarmAlarmReceiver::class.java).apply {
-                action = WarmAlarmReceiver.ACTION_FIRE
-                putExtra(WarmAlarmReceiver.EXTRA_ALARM_ID, alarmId)
-                putExtra(WarmAlarmReceiver.EXTRA_IS_RETRIGGER, isRetrigger)
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
+        WarmAlarmPendingIntents.broadcast(
+            context = context,
+            alarmId = alarmId,
+            kind = if (isRetrigger) WarmAlarmIntentKind.RETRIGGER else WarmAlarmIntentKind.REGULAR,
+            extraFlags = PendingIntent.FLAG_UPDATE_CURRENT,
+        )!!
 
     override fun canScheduleExactAlarms(): Boolean = alarmManager.canScheduleExactAlarms()
 
@@ -355,8 +351,7 @@ class WarmAlarmPlugin :
         callback: (Result<Unit>) -> Unit,
     ) {
         WarmAlarmStore.remove(context, id)
-        val pending = alarmPendingIntent(id, PendingIntent.FLAG_NO_CREATE)
-        pending?.let { alarmManager.cancel(it) }
+        cancelScheduledAlarms(id)
         WarmAlarmForegroundService.requestCancelCurrentAlarm(context, id)
         if (WarmAlarmStore.loadAll(context).isEmpty()) {
             WarmAlarmKillWarningService.stop(context)
@@ -365,10 +360,7 @@ class WarmAlarmPlugin :
     }
 
     override fun cancelAllAlarms(callback: (Result<Unit>) -> Unit) {
-        WarmAlarmStore.loadAll(context).keys.forEach { id ->
-            val pending = alarmPendingIntent(id, PendingIntent.FLAG_NO_CREATE)
-            pending?.let { alarmManager.cancel(it) }
-        }
+        WarmAlarmStore.loadAll(context).keys.forEach { id -> cancelScheduledAlarms(id) }
         WarmAlarmStore.clear(context)
         WarmAlarmKillWarningService.stop(context)
         WarmAlarmForegroundService.currentAlarmId?.let { id ->
@@ -507,14 +499,15 @@ class WarmAlarmPlugin :
     private fun alarmPendingIntent(
         alarmId: Long,
         extraFlags: Int,
-    ): PendingIntent? {
-        val intent =
-            Intent(context, WarmAlarmReceiver::class.java).apply {
-                action = WarmAlarmReceiver.ACTION_FIRE
-                putExtra(WarmAlarmReceiver.EXTRA_ALARM_ID, alarmId)
-            }
-        val flags = extraFlags or PendingIntent.FLAG_IMMUTABLE
-        return PendingIntent.getBroadcast(context, alarmId.toInt(), intent, flags)
+        kind: WarmAlarmIntentKind = WarmAlarmIntentKind.REGULAR,
+    ): PendingIntent? = WarmAlarmPendingIntents.broadcast(context, alarmId, kind, extraFlags)
+
+    // Cancels both identities: a wake-check retrigger can be armed alongside the
+    // regular alarm, and it is a separate PendingIntent since the identity split.
+    private fun cancelScheduledAlarms(alarmId: Long) {
+        listOf(WarmAlarmIntentKind.REGULAR, WarmAlarmIntentKind.RETRIGGER).forEach { kind ->
+            alarmPendingIntent(alarmId, PendingIntent.FLAG_NO_CREATE, kind)?.let { alarmManager.cancel(it) }
+        }
     }
 
     companion object {

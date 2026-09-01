@@ -1,6 +1,6 @@
 name: warm_alarm_android
 description: Android implementation of the warm_alarm plugin
-version: 0.1.1
+version: 0.1.2
 
 homepage: https://github.com/AndrewDongminYoo/warm_alarm
 repository: https://github.com/AndrewDongminYoo/warm_alarm
