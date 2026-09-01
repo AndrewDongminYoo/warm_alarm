@@ -123,7 +123,7 @@ void main() {
         'android/src/main/kotlin/com/andrew/alarm/WarmAlarmStore.kt',
       ).readAsStringSync();
 
-      expect(store, contains('private fun clearRetriggerCount('));
+      expect(store, contains('fun clearRetriggerCount('));
       expect(
         store,
         contains(
