@@ -1,6 +1,5 @@
 package com.andrew.alarm
 
-import android.app.AlarmManager
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -16,7 +15,18 @@ class WarmAlarmReceiver : BroadcastReceiver() {
         const val ACTION_WAKE_CHECK_DISMISS = "com.andrew.alarm.ACTION_WAKE_CHECK_DISMISS"
         const val EXTRA_ALARM_ID = "alarm_id"
         const val EXTRA_IS_RETRIGGER = "is_retrigger"
-        private const val WAKE_CHECK_NOTIF_OFFSET = 20_000
+
+        /**
+         * Whether finishing a wake check may delete [schedule] from the store.
+         *
+         * Only a one-shot alarm that was actually read back qualifies. A null
+         * schedule is ambiguous: the alarm may have been deleted, or the read
+         * may have failed. WarmAlarmStore.remove persists the map it just read,
+         * so removing on a read that came back empty would write an empty list
+         * over every schedule. Not knowing which happened, keep the schedule.
+         */
+        internal fun wakeCheckMayRemoveSchedule(schedule: WarmAlarmScheduleWire?): Boolean =
+            schedule != null && schedule.recurrence?.weekdays.isNullOrEmpty()
     }
 
     override fun onReceive(
@@ -119,7 +129,7 @@ class WarmAlarmReceiver : BroadcastReceiver() {
                     occurredAtMillis = System.currentTimeMillis(),
                 ),
             )
-            WarmAlarmStore.remove(context, alarmId)
+            finishWakeCheck(context, alarmId, schedule)
             return
         }
 
@@ -148,7 +158,7 @@ class WarmAlarmReceiver : BroadcastReceiver() {
         val dismissPending =
             PendingIntent.getBroadcast(
                 context,
-                (alarmId + WAKE_CHECK_NOTIF_OFFSET).toInt(),
+                WarmAlarmPendingIntents.wakeCheckNotificationId(alarmId),
                 dismissIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
@@ -163,7 +173,7 @@ class WarmAlarmReceiver : BroadcastReceiver() {
                 .setAutoCancel(true)
                 .build()
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.notify((alarmId + WAKE_CHECK_NOTIF_OFFSET).toInt(), notification)
+        nm.notify(WarmAlarmPendingIntents.wakeCheckNotificationId(alarmId), notification)
     }
 
     private fun handleWakeCheckDismiss(
@@ -173,27 +183,7 @@ class WarmAlarmReceiver : BroadcastReceiver() {
         val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
         if (alarmId == -1L) return
 
-        val retriggerIntent =
-            Intent(context, WarmAlarmReceiver::class.java).apply {
-                action = ACTION_FIRE
-                putExtra(EXTRA_ALARM_ID, alarmId)
-                putExtra(EXTRA_IS_RETRIGGER, true)
-            }
-        val retriggerPending =
-            PendingIntent.getBroadcast(
-                context,
-                alarmId.toInt(),
-                retriggerIntent,
-                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
-            )
-        retriggerPending?.let {
-            (context.getSystemService(Context.ALARM_SERVICE) as AlarmManager).cancel(it)
-        }
-
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.cancel((alarmId + WAKE_CHECK_NOTIF_OFFSET).toInt())
-
-        WarmAlarmStore.remove(context, alarmId)
+        finishWakeCheck(context, alarmId, WarmAlarmStore.load(context, alarmId))
         WarmAlarmPlugin.emitEventFromBackground(
             WarmAlarmEventWire(
                 alarmId = alarmId,
@@ -201,5 +191,19 @@ class WarmAlarmReceiver : BroadcastReceiver() {
                 occurredAtMillis = System.currentTimeMillis(),
             ),
         )
+    }
+
+    // Finishing a wake check ends the retrigger cycle only. handleAlarmFire has
+    // already armed a recurring alarm's next occurrence, so deleting the stored
+    // schedule here would take the whole series with it.
+    private fun finishWakeCheck(
+        context: Context,
+        alarmId: Long,
+        schedule: WarmAlarmScheduleWire?,
+    ) {
+        WarmAlarmPendingIntents.endWakeCheckCycle(context, alarmId)
+        if (wakeCheckMayRemoveSchedule(schedule)) {
+            WarmAlarmStore.remove(context, alarmId)
+        }
     }
 }

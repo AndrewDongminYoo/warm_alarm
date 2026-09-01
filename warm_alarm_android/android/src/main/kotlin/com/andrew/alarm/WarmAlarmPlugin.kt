@@ -36,16 +36,12 @@ private class AndroidAlarmSchedulingBackend(
 ) : AlarmSchedulingBackend {
     private val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     private val pendingIntent =
-        PendingIntent.getBroadcast(
-            context,
-            alarmId.toInt(),
-            Intent(context, WarmAlarmReceiver::class.java).apply {
-                action = WarmAlarmReceiver.ACTION_FIRE
-                putExtra(WarmAlarmReceiver.EXTRA_ALARM_ID, alarmId)
-                putExtra(WarmAlarmReceiver.EXTRA_IS_RETRIGGER, isRetrigger)
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
+        WarmAlarmPendingIntents.broadcast(
+            context = context,
+            alarmId = alarmId,
+            kind = if (isRetrigger) WarmAlarmIntentKind.RETRIGGER else WarmAlarmIntentKind.REGULAR,
+            extraFlags = PendingIntent.FLAG_UPDATE_CURRENT,
+        )!!
 
     override fun canScheduleExactAlarms(): Boolean = alarmManager.canScheduleExactAlarms()
 
@@ -140,7 +136,7 @@ class WarmAlarmPlugin :
         }
         recoverableAlarms
             .forEach { (alarmId, fireAt) ->
-                val pending = alarmPendingIntent(alarmId, PendingIntent.FLAG_UPDATE_CURRENT)!!
+                val pending = alarmPendingIntent(alarmId, PendingIntent.FLAG_UPDATE_CURRENT, WarmAlarmIntentKind.REGULAR)!!
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
                     alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pending)
                 } else {
@@ -311,7 +307,12 @@ class WarmAlarmPlugin :
         // onTaskRemoved can post the kill warning if the app is swiped away
         // before the alarm rings.
         WarmAlarmKillWarningService.start(context)
-        val pending = alarmPendingIntent(schedule.id, PendingIntent.FLAG_UPDATE_CURRENT)!!
+        // Replacing an alarm ends any wake-check cycle still in flight for it.
+        // The retrigger is its own PendingIntent now, so FLAG_UPDATE_CURRENT on
+        // the regular identity below no longer retargets it and it would ring at
+        // the old delay against the replacement schedule.
+        WarmAlarmPendingIntents.endWakeCheckCycle(context, schedule.id)
+        val pending = alarmPendingIntent(schedule.id, PendingIntent.FLAG_UPDATE_CURRENT, WarmAlarmIntentKind.REGULAR)!!
         val inexact = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()
         val readiness =
             if (inexact) {
@@ -355,8 +356,7 @@ class WarmAlarmPlugin :
         callback: (Result<Unit>) -> Unit,
     ) {
         WarmAlarmStore.remove(context, id)
-        val pending = alarmPendingIntent(id, PendingIntent.FLAG_NO_CREATE)
-        pending?.let { alarmManager.cancel(it) }
+        cancelScheduledAlarms(id)
         WarmAlarmForegroundService.requestCancelCurrentAlarm(context, id)
         if (WarmAlarmStore.loadAll(context).isEmpty()) {
             WarmAlarmKillWarningService.stop(context)
@@ -365,10 +365,7 @@ class WarmAlarmPlugin :
     }
 
     override fun cancelAllAlarms(callback: (Result<Unit>) -> Unit) {
-        WarmAlarmStore.loadAll(context).keys.forEach { id ->
-            val pending = alarmPendingIntent(id, PendingIntent.FLAG_NO_CREATE)
-            pending?.let { alarmManager.cancel(it) }
-        }
+        WarmAlarmStore.loadAll(context).keys.forEach { id -> cancelScheduledAlarms(id) }
         WarmAlarmStore.clear(context)
         WarmAlarmKillWarningService.stop(context)
         WarmAlarmForegroundService.currentAlarmId?.let { id ->
@@ -507,14 +504,16 @@ class WarmAlarmPlugin :
     private fun alarmPendingIntent(
         alarmId: Long,
         extraFlags: Int,
-    ): PendingIntent? {
-        val intent =
-            Intent(context, WarmAlarmReceiver::class.java).apply {
-                action = WarmAlarmReceiver.ACTION_FIRE
-                putExtra(WarmAlarmReceiver.EXTRA_ALARM_ID, alarmId)
-            }
-        val flags = extraFlags or PendingIntent.FLAG_IMMUTABLE
-        return PendingIntent.getBroadcast(context, alarmId.toInt(), intent, flags)
+        kind: WarmAlarmIntentKind,
+    ): PendingIntent? = WarmAlarmPendingIntents.broadcast(context, alarmId, kind, extraFlags)
+
+    // Cancels both identities: a wake-check retrigger can be armed alongside the
+    // regular alarm, and it is a separate PendingIntent since the identity split.
+    private fun cancelScheduledAlarms(alarmId: Long) {
+        listOf(WarmAlarmIntentKind.REGULAR, WarmAlarmIntentKind.RETRIGGER).forEach { kind ->
+            alarmPendingIntent(alarmId, PendingIntent.FLAG_NO_CREATE, kind)?.let { alarmManager.cancel(it) }
+        }
+        WarmAlarmPendingIntents.endWakeCheckCycle(context, alarmId)
     }
 
     companion object {

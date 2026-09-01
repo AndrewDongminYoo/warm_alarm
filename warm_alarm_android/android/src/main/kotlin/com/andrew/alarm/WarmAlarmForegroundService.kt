@@ -27,7 +27,6 @@ class WarmAlarmForegroundService : Service() {
         const val EXTRA_ALARM_ID = WarmAlarmReceiver.EXTRA_ALARM_ID
         const val CHANNEL_ID = "warm_alarm_channel"
         private const val NOTIF_ID = 2001
-        private const val WAKE_CHECK_PENDING_OFFSET = 30_000
 
         // internal so WarmAlarmKillWarningService reuses the exact same channel/id
         // — a swipe observed by both services then dedupes to one notification.
@@ -117,8 +116,13 @@ class WarmAlarmForegroundService : Service() {
         val isRecurring = schedule?.recurrence?.weekdays.isNullOrEmpty() == false
         if (wakeCheckDelay != null && retriggerCount < maxRetriggers) {
             scheduleWakeCheck(alarmId, System.currentTimeMillis() + wakeCheckDelay)
-        } else if (!isRecurring) {
-            WarmAlarmStore.remove(this, alarmId)
+        } else {
+            // No further check is coming, so the cycle is over for this
+            // occurrence. Reset it: otherwise a recurring alarm carries a count
+            // already at maxRetriggers into every later occurrence and skips
+            // its wake check for good.
+            WarmAlarmPendingIntents.endWakeCheckCycle(this, alarmId)
+            if (!isRecurring) WarmAlarmStore.remove(this, alarmId)
         }
         val keepNotif = schedule?.notification?.keepNotificationAfterAlarmEnds == true
         @Suppress("DEPRECATION")
@@ -141,18 +145,7 @@ class WarmAlarmForegroundService : Service() {
         alarmId: Long,
         checkAtMillis: Long,
     ) {
-        val intent =
-            Intent(this, WarmAlarmReceiver::class.java).apply {
-                action = WarmAlarmReceiver.ACTION_WAKE_CHECK_FIRE
-                putExtra(WarmAlarmReceiver.EXTRA_ALARM_ID, alarmId)
-            }
-        val pending =
-            PendingIntent.getBroadcast(
-                this,
-                (alarmId + WAKE_CHECK_PENDING_OFFSET).toInt(),
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
+        val pending = WarmAlarmPendingIntents.wakeCheckTrigger(this, alarmId, PendingIntent.FLAG_UPDATE_CURRENT)!!
         val am = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
         am.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, checkAtMillis, pending)
     }
