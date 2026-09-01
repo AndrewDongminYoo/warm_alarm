@@ -311,8 +311,7 @@ class WarmAlarmPlugin :
         // The retrigger is its own PendingIntent now, so FLAG_UPDATE_CURRENT on
         // the regular identity below no longer retargets it and it would ring at
         // the old delay against the replacement schedule.
-        cancelRetrigger(schedule.id)
-        WarmAlarmStore.clearRetriggerCount(context, schedule.id)
+        WarmAlarmPendingIntents.endWakeCheckCycle(context, schedule.id)
         val pending = alarmPendingIntent(schedule.id, PendingIntent.FLAG_UPDATE_CURRENT, WarmAlarmIntentKind.REGULAR)!!
         val inexact = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()
         val readiness =
@@ -514,11 +513,7 @@ class WarmAlarmPlugin :
         listOf(WarmAlarmIntentKind.REGULAR, WarmAlarmIntentKind.RETRIGGER).forEach { kind ->
             alarmPendingIntent(alarmId, PendingIntent.FLAG_NO_CREATE, kind)?.let { alarmManager.cancel(it) }
         }
-    }
-
-    private fun cancelRetrigger(alarmId: Long) {
-        alarmPendingIntent(alarmId, PendingIntent.FLAG_NO_CREATE, WarmAlarmIntentKind.RETRIGGER)
-            ?.let { alarmManager.cancel(it) }
+        WarmAlarmPendingIntents.endWakeCheckCycle(context, alarmId)
     }
 
     companion object {

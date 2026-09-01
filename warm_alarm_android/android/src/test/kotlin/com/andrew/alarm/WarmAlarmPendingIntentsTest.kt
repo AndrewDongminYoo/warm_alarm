@@ -35,4 +35,20 @@ class WarmAlarmPendingIntentsTest {
 
         assertNotEquals(first, second)
     }
+
+    @Test
+    fun oneAlarmsThreeWakeCheckHandlesAreDistinct() {
+        // The alarm itself, the pending wake check, and the prompt's dismiss
+        // action are all broadcasts keyed by request code. Sharing one is the
+        // defect this class exists to prevent.
+        val alarmId = 7L
+        val codes =
+            setOf(
+                alarmId.toInt(),
+                WarmAlarmPendingIntents.wakeCheckRequestCode(alarmId),
+                WarmAlarmPendingIntents.wakeCheckNotificationId(alarmId),
+            )
+
+        assertEquals(3, codes.size)
+    }
 }
