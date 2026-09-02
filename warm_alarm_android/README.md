@@ -59,7 +59,10 @@ A retrigger and the regular alarm are separate `PendingIntent`s.
 Only the retrigger carries a `warm-alarm://<package>/alarm/<id>/retrigger` data Uri; the regular alarm keeps the data-less identity it had before 0.1.2, so an alarm scheduled by an older install stays cancellable after an update.
 Finishing a wake check clears a recurring alarm's retrigger count and removes the stored schedule only for a one-shot alarm.
 
-`filterEquals` cannot be exercised from the JVM unit tests, so verify it on a device: schedule a recurring alarm, let the wake check fire, tap the dismiss action, then confirm the next occurrence is still listed by `adb shell dumpsys alarm | grep <package>`.
+`filterEquals` cannot be exercised from the JVM unit tests.
+`WarmAlarmPendingIntentsInstrumentedTest` asserts it against the real framework registry and runs on an emulator in CI, so the identity split itself is gated.
+What that test does not cover is the scenario around it, which is still a device check: schedule a recurring alarm, let the wake check fire, tap the dismiss action, then confirm the next occurrence is still listed by `adb shell dumpsys alarm | grep <package>`.
+Read `adb shell dumpsys activity intents` rather than `dumpsys alarm` when the question is which `PendingIntent` is which: only the former prints `requestCode` and the intent's data Uri.
 
 ### Recurrence
 

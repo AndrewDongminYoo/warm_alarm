@@ -5,10 +5,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 
-// ponytail: these assert the identity this plugin *asks* for, not that Android
-// treats the two Intents as distinct. Intent.filterEquals is the load-bearing
-// claim and no JVM test here can reach it. The device check under "Wake-check"
-// in README.md is what actually verifies it.
+// These assert the identity this plugin *asks* for, not that Android treats the
+// two Intents as distinct. Intent.filterEquals is the load-bearing claim and no
+// JVM test here can reach it; WarmAlarmPendingIntentsInstrumentedTest asserts it
+// against the real framework registry and runs on an emulator in CI.
 class WarmAlarmPendingIntentsTest {
     @Test
     fun regularAlarmsKeepTheIdentityTheyHadBeforeTheSplit() {
