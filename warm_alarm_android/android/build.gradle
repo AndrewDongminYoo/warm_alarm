@@ -33,11 +33,7 @@ android {
     }
 
     defaultConfig {
-        // 19 was the plugin template's value and was never reachable: this module compiles
-        // against the Flutter embedding, and Flutter's own floor is 24 (FlutterExtension.kt).
-        // 21 is what androidx.test needs to build the instrumented test APK, and it stays
-        // below that floor, so no consumer loses support.
-        minSdkVersion 21
+        minSdkVersion 19
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
 
