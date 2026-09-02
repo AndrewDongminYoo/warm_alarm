@@ -29,16 +29,26 @@ android {
     sourceSets {
         main.kotlin.srcDirs += 'src/main/kotlin'
         test.kotlin.srcDirs += 'src/test/kotlin'
+        androidTest.kotlin.srcDirs += 'src/androidTest/kotlin'
     }
 
     defaultConfig {
-        minSdkVersion 19
+        // 19 was the plugin template's value and was never reachable: this module compiles
+        // against the Flutter embedding, and Flutter's own floor is 24 (FlutterExtension.kt).
+        // 21 is what androidx.test needs to build the instrumented test APK, and it stays
+        // below that floor, so no consumer loses support.
+        minSdkVersion 21
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
 
     dependencies {
         testImplementation 'org.json:json:20260522'
         testImplementation 'org.jetbrains.kotlin:kotlin-test'
         testImplementation 'org.mockito:mockito-core:5.0.0'
+        // The instrumented test needs a real PendingIntent registry, nothing more:
+        // plain JUnit4 under AndroidJUnitRunner, without androidx.test.ext.
+        androidTestImplementation 'androidx.test:runner:1.6.2'
+        androidTestImplementation 'junit:junit:4.13.2'
     }
 
     testOptions {
