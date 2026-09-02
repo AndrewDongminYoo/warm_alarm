@@ -1,0 +1,10 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!--
+      androidx.test and the Flutter embedding it drags onto the instrumented-test runtime
+      classpath declare minSdk 21, which the library's own floor of 19 would otherwise
+      reject. This applies to the test APK only, and that APK only ever runs on the CI
+      emulator, so the library keeps the floor AGENTS.md documents.
+    -->
+    <uses-sdk tools:overrideLibrary="androidx.test.runner, androidx.exifinterface" />
+</manifest>
