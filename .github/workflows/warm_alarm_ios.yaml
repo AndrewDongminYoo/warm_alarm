@@ -12,6 +12,8 @@ on:
       - .github/workflows/pana.yaml
       - .github/workflows/warm_alarm_ios.yaml
       - warm_alarm_ios/**
+      # The RunnerTests harness that runs this package's Swift tests lives in the example host.
+      - warm_alarm/example/ios/**
   push:
     branches:
       - main
@@ -19,6 +21,8 @@ on:
       - .github/workflows/pana.yaml
       - .github/workflows/warm_alarm_ios.yaml
       - warm_alarm_ios/**
+      # The RunnerTests harness that runs this package's Swift tests lives in the example host.
+      - warm_alarm/example/ios/**
 
 jobs:
   build:
@@ -41,6 +45,9 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Enable Swift Package Manager
+        run: flutter config --enable-swift-package-manager
+
       - name: Install workspace dependencies
         working-directory: warm_alarm/example
         run: flutter pub get
@@ -48,6 +55,38 @@ jobs:
       - name: Build the iOS example host
         working-directory: warm_alarm/example
         run: flutter build ios --simulator --no-codesign
+
+      - name: Assert the plugin resolved as a Swift package
+        run: test -d warm_alarm/example/ios/Flutter/ephemeral/Packages/.packages/warm_alarm_ios
+
+      - name: Select an iOS simulator
+        id: simulator
+        run: |
+          udid=$(xcrun simctl list devices available --json \
+            | jq -r '[.devices[][] | select(.name | startswith("iPhone"))] | last | .udid')
+          if [ -z "$udid" ] || [ "$udid" = "null" ]; then
+            echo "No iPhone simulator is available on this runner" >&2
+            exit 1
+          fi
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      - name: Run the iOS native unit tests
+        working-directory: warm_alarm/example/ios
+        env:
+          SIMULATOR_UDID: ${{ steps.simulator.outputs.udid }}
+        run: |
+          set -euo pipefail
+          result_bundle="$RUNNER_TEMP/RunnerTests.xcresult"
+          xcodebuild test -quiet \
+            -workspace Runner.xcworkspace \
+            -scheme Runner \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
+            -only-testing:RunnerTests \
+            -resultBundlePath "$result_bundle"
+          test_count=$(xcrun xcresulttool get test-results summary \
+            --path "$result_bundle" --format json \
+            | jq -er '.totalTestCount | select(. > 0)')
+          echo "Executed $test_count iOS native tests."
 
   pana:
     uses: ./.github/workflows/pana.yaml
