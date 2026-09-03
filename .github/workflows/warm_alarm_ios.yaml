@@ -28,7 +28,6 @@ jobs:
   build:
     uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/flutter_package.yml@v1
     with:
-      flutter_version: 3.41.9
       coverage_excludes: "**/*.g.dart"
       format_line_length: 120
       working_directory: warm_alarm_ios
@@ -41,7 +40,6 @@ jobs:
 
       - uses: subosito/flutter-action@v2.23.0
         with:
-          flutter-version: 3.41.9
           channel: stable
           cache: true
 
