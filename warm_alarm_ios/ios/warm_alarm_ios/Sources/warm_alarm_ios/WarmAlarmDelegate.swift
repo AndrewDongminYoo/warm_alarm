@@ -81,7 +81,9 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         // triggers stay armed, so keep the stored schedule. cancelAlarm tears down
         // the series.
         let isRecurring = !(schedule?.recurrenceWeekdays?.isEmpty ?? true)
-        if !isRecurring {
+        if isRecurring, let schedule {
+            WarmAlarmStore.shared.save(schedule.clearingFallbackAnchor())
+        } else {
             WarmAlarmStore.shared.remove(id: alarmId)
         }
         if schedule?.keepNotificationAfterAlarmEnds != true {

@@ -141,6 +141,7 @@ struct WarmAlarmRequestSelection {
 public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     private let delegate: WarmAlarmDelegate
     private static let killWarningNotifId = "warm_alarm_kill_warning_notif"
+    private static let killWarningDefaultsKey = "warm_alarm_kill_warning"
     private static let fallbackCount = 6
     private static let fallbackIntervalMillis: Int64 = 30_000
     private static let pendingNotificationLimit = 64
@@ -251,19 +252,23 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 content: content
             )
         }
+        let reservedSlotCount = Self.killWarningReservedSlotCount(
+            isConfigured: Self.isKillWarningConfigured,
+            pendingIdentifiers: pendingIdentifiers
+        )
         guard let selection = Self.selectRecoveryRequestsWithinPendingLimit(
             requestGroups,
             pendingIdentifiers: pendingIdentifiers,
+            reservedSlotCount: reservedSlotCount,
             limit: Self.pendingNotificationLimit
         ) else {
-            let coreCount = requestGroups.flatMap { $0 }
-                .filter { !Self.isFallbackIdentifier($0.identifier) }
-                .count
+            let coreCount = Self.coreRequestCount(in: requestGroups.flatMap { $0 })
             completion(.failure(Self.pendingLimitError(
                 requiredCoreCount: coreCount,
                 availableCount: Self.availableRequestSlotCount(
                     pendingIdentifiers: pendingIdentifiers,
                     replacingIdentifiers: [],
+                    reservedSlotCount: reservedSlotCount,
                     limit: Self.pendingNotificationLimit
                 )
             )))
@@ -619,16 +624,19 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         _ requests: [UNNotificationRequest],
         pendingIdentifiers: Set<String>,
         replacingIdentifiers: Set<String>,
+        reservedSlotCount: Int = 0,
         limit: Int
     ) -> WarmAlarmRequestSelection? {
         let availableCount = availableRequestSlotCount(
             pendingIdentifiers: pendingIdentifiers,
             replacingIdentifiers: replacingIdentifiers,
+            reservedSlotCount: reservedSlotCount,
             limit: limit
         )
-        let coreRequests = requests.filter { !isFallbackIdentifier($0.identifier) }
+        let uniqueRequests = deduplicatedRequests(requests)
+        let coreRequests = uniqueRequests.filter { !isFallbackIdentifier($0.identifier) }
         guard coreRequests.count <= availableCount else { return nil }
-        let fallbackRequests = requests.filter { isFallbackIdentifier($0.identifier) }
+        let fallbackRequests = uniqueRequests.filter { isFallbackIdentifier($0.identifier) }
         let selectedFallbacks = fallbackRequests.prefix(availableCount - coreRequests.count)
         return WarmAlarmRequestSelection(
             requests: coreRequests + Array(selectedFallbacks),
@@ -639,22 +647,56 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     static func selectRecoveryRequestsWithinPendingLimit(
         _ requestGroups: [[UNNotificationRequest]],
         pendingIdentifiers: Set<String>,
+        reservedSlotCount: Int = 0,
         limit: Int
     ) -> WarmAlarmRequestSelection? {
         selectRequestsWithinPendingLimit(
             requestGroups.flatMap { $0 },
             pendingIdentifiers: pendingIdentifiers,
             replacingIdentifiers: [],
+            reservedSlotCount: reservedSlotCount,
             limit: limit
         )
+    }
+
+    static func killWarningReservedSlotCount(
+        isConfigured: Bool,
+        pendingIdentifiers: Set<String>
+    ) -> Int {
+        isConfigured && !pendingIdentifiers.contains(killWarningNotifId) ? 1 : 0
+    }
+
+    static func canConfigureKillWarning(
+        pendingIdentifiers: Set<String>,
+        limit: Int
+    ) -> Bool {
+        pendingIdentifiers.contains(killWarningNotifId) || pendingIdentifiers.count < limit
+    }
+
+    private static var isKillWarningConfigured: Bool {
+        UserDefaults.standard.dictionary(forKey: killWarningDefaultsKey) != nil
+    }
+
+    private static func deduplicatedRequests(
+        _ requests: [UNNotificationRequest]
+    ) -> [UNNotificationRequest] {
+        var seenIdentifiers = Set<String>()
+        return requests.filter { seenIdentifiers.insert($0.identifier).inserted }
+    }
+
+    private static func coreRequestCount(in requests: [UNNotificationRequest]) -> Int {
+        deduplicatedRequests(requests)
+            .filter { !isFallbackIdentifier($0.identifier) }
+            .count
     }
 
     private static func availableRequestSlotCount(
         pendingIdentifiers: Set<String>,
         replacingIdentifiers: Set<String>,
+        reservedSlotCount: Int = 0,
         limit: Int
     ) -> Int {
-        max(0, limit - pendingIdentifiers.subtracting(replacingIdentifiers).count)
+        max(0, limit - pendingIdentifiers.subtracting(replacingIdentifiers).count - reservedSlotCount)
     }
 
     private static func isFallbackIdentifier(_ identifier: String) -> Bool {
@@ -751,17 +793,23 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                     return
                 }
                 let pendingIdentifiers = Set(pendingRequests.map(\.identifier))
+                let reservedSlotCount = Self.killWarningReservedSlotCount(
+                    isConfigured: Self.isKillWarningConfigured,
+                    pendingIdentifiers: pendingIdentifiers
+                )
                 guard let selection = Self.selectRequestsWithinPendingLimit(
                     requests,
                     pendingIdentifiers: pendingIdentifiers,
                     replacingIdentifiers: replacingIdentifiers,
+                    reservedSlotCount: reservedSlotCount,
                     limit: Self.pendingNotificationLimit
                 ) else {
                     let error = Self.pendingLimitError(
-                        requiredCoreCount: requests.filter { !Self.isFallbackIdentifier($0.identifier) }.count,
+                        requiredCoreCount: Self.coreRequestCount(in: requests),
                         availableCount: Self.availableRequestSlotCount(
                             pendingIdentifiers: pendingIdentifiers,
                             replacingIdentifiers: replacingIdentifiers,
+                            reservedSlotCount: reservedSlotCount,
                             limit: Self.pendingNotificationLimit
                         )
                     )
@@ -882,13 +930,35 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     func setKillWarning(
         title: String, body: String, completion: @escaping (Result<Void, Error>) -> Void
     ) {
-        UserDefaults.standard.setValue(["title": title, "body": body], forKey: "warm_alarm_kill_warning")
-        completion(.success(()))
+        notificationMutationQueue.enqueue { finish in
+            UNUserNotificationCenter.current().getPendingNotificationRequests { pendingRequests in
+                let pendingIdentifiers = Set(pendingRequests.map(\.identifier))
+                guard Self.canConfigureKillWarning(
+                    pendingIdentifiers: pendingIdentifiers,
+                    limit: Self.pendingNotificationLimit
+                ) else {
+                    let error = PigeonError(
+                        code: "pending-notification-limit",
+                        message: "iOS has no available notification slot for the kill warning.",
+                        details: nil
+                    )
+                    WarmAlarmPlatformReply.complete(.failure(error), completion: completion, finish: finish)
+                    return
+                }
+                UserDefaults.standard.setValue(
+                    ["title": title, "body": body],
+                    forKey: Self.killWarningDefaultsKey
+                )
+                WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
+            }
+        }
     }
 
     func clearKillWarning(completion: @escaping (Result<Void, Error>) -> Void) {
-        UserDefaults.standard.removeObject(forKey: "warm_alarm_kill_warning")
-        completion(.success(()))
+        notificationMutationQueue.enqueue { finish in
+            UserDefaults.standard.removeObject(forKey: Self.killWarningDefaultsKey)
+            WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
+        }
     }
 
     func isRinging(alarmId: Int64?, completion: @escaping (Result<Bool, Error>) -> Void) {
@@ -902,7 +972,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
 
     private func postKillWarningIfNeeded() {
         guard delegate.currentlyPlayingAlarmId != nil,
-              let dict = UserDefaults.standard.dictionary(forKey: "warm_alarm_kill_warning"),
+              let dict = UserDefaults.standard.dictionary(forKey: Self.killWarningDefaultsKey),
               let title = dict["title"] as? String,
               let body = dict["body"] as? String
         else { return }
@@ -931,7 +1001,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             data.snapshotScheduledAtMillis(nowMillis: nowMillis) > nowMillis
         }
         guard hasFutureAlarm || delegate.currentlyPlayingAlarmId != nil,
-              let dict = UserDefaults.standard.dictionary(forKey: "warm_alarm_kill_warning"),
+              let dict = UserDefaults.standard.dictionary(forKey: Self.killWarningDefaultsKey),
               let title = dict["title"] as? String,
               let body = dict["body"] as? String
         else { return }

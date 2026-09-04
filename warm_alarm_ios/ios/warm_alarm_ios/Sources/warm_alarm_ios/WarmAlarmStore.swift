@@ -115,7 +115,14 @@ extension WarmAlarmScheduleData {
     func withActiveSnooze(untilMillis: Int64) -> WarmAlarmScheduleData {
         copying(
             activeSnoozeUntilMillis: untilMillis,
-            fallbackAnchorMillis: fallbackAnchorMillis
+            fallbackAnchorMillis: nil
+        )
+    }
+
+    func clearingFallbackAnchor() -> WarmAlarmScheduleData {
+        copying(
+            activeSnoozeUntilMillis: activeSnoozeUntilMillis,
+            fallbackAnchorMillis: nil
         )
     }
 

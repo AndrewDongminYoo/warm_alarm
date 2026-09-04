@@ -333,6 +333,87 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertEqual(selection?.omittedFallbackCount, 0)
     }
 
+    func testPendingLimitDeduplicatesRepeatedCoreIdentifiers() {
+        let schedule = makeWireSchedule(
+            scheduledAtMillis: 1_900_000_000_000,
+            recurrenceWeekdays: [2, 2, 2]
+        )
+        let requests = WarmAlarmPlugin.makeRequests(
+            for: schedule,
+            content: UNMutableNotificationContent(),
+            fallbackAnchorMillis: 1_900_172_760_000,
+            calendar: utcCalendar()
+        )
+        let pending = Set((0..<62).map { "existing-\($0)" })
+
+        let selection = WarmAlarmPlugin.selectRequestsWithinPendingLimit(
+            requests,
+            pendingIdentifiers: pending,
+            replacingIdentifiers: [],
+            limit: 64
+        )
+
+        XCTAssertEqual(selection?.requests.map(\.identifier), ["42#2", "42#fallback#1"])
+        XCTAssertEqual(selection?.omittedFallbackCount, 5)
+    }
+
+    func testPendingLimitReservesConfiguredKillWarningSlot() {
+        let schedule = makeWireSchedule(scheduledAtMillis: 1_900_000_000_000)
+        let requests = WarmAlarmPlugin.makeRequests(
+            for: schedule,
+            content: UNMutableNotificationContent(),
+            fallbackAnchorMillis: schedule.scheduledAtMillis,
+            calendar: utcCalendar()
+        )
+        let pending = Set((0..<57).map { "existing-\($0)" })
+        let reservedSlotCount = WarmAlarmPlugin.killWarningReservedSlotCount(
+            isConfigured: true,
+            pendingIdentifiers: pending
+        )
+
+        let selection = WarmAlarmPlugin.selectRequestsWithinPendingLimit(
+            requests,
+            pendingIdentifiers: pending,
+            replacingIdentifiers: [],
+            reservedSlotCount: reservedSlotCount,
+            limit: 64
+        )
+
+        XCTAssertEqual(selection?.requests.map(\.identifier), [
+            "42",
+            "42#fallback#1",
+            "42#fallback#2",
+            "42#fallback#3",
+            "42#fallback#4",
+            "42#fallback#5",
+        ])
+        XCTAssertEqual(selection?.omittedFallbackCount, 1)
+        XCTAssertEqual(WarmAlarmPlugin.killWarningReservedSlotCount(
+            isConfigured: false,
+            pendingIdentifiers: pending
+        ), 0)
+        XCTAssertEqual(WarmAlarmPlugin.killWarningReservedSlotCount(
+            isConfigured: true,
+            pendingIdentifiers: pending.union(["warm_alarm_kill_warning_notif"])
+        ), 0)
+    }
+
+    func testKillWarningConfigurationRequiresAnAvailableSlot() {
+        XCTAssertFalse(WarmAlarmPlugin.canConfigureKillWarning(
+            pendingIdentifiers: Set((0..<64).map { "existing-\($0)" }),
+            limit: 64
+        ))
+        XCTAssertTrue(WarmAlarmPlugin.canConfigureKillWarning(
+            pendingIdentifiers: Set((0..<63).map { "existing-\($0)" }),
+            limit: 64
+        ))
+        XCTAssertTrue(WarmAlarmPlugin.canConfigureKillWarning(
+            pendingIdentifiers: Set((0..<63).map { "existing-\($0)" })
+                .union(["warm_alarm_kill_warning_notif"]),
+            limit: 64
+        ))
+    }
+
     func testRecoveryRestoresOnlyStillFutureFallbacksAsOneShots() {
         let anchor = Int64(1_900_000_000_000)
         let schedule = WarmAlarmScheduleData.from(

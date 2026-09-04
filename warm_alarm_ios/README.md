@@ -64,6 +64,8 @@ Scheduling fails without replacing the prior schedule if the primary or weekday 
 ringing, the plugin posts a non-actionable notification warning the user not to force-quit the app.
 `clearKillWarning()` removes the stored message; the pending notification is auto-dismissed when the
 app returns to the foreground.
+While a warning is configured, alarm scheduling reserves one of the 64 pending-request slots.
+Enabling the warning fails if no slot is available for that reservation.
 
 ### Events emitted
 
