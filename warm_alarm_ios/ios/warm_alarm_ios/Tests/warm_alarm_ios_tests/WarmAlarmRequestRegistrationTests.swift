@@ -165,7 +165,7 @@ final class WarmAlarmRequestTests: XCTestCase {
         }
     }
 
-    func testBuildsFallbackChainForSnoozedOccurrence() {
+    func testBuildsSnoozeFallbackChainWithRelativeIntervals() {
         let fireAtMillis = Int64(1_900_000_000_000)
         let schedule = WarmAlarmScheduleData.from(
             wire: makeWireSchedule(scheduledAtMillis: fireAtMillis),
@@ -179,8 +179,7 @@ final class WarmAlarmRequestTests: XCTestCase {
             for: schedule,
             fireAtMillis: fireAtMillis,
             nowMillis: fireAtMillis - 60_000,
-            content: content,
-            calendar: utcCalendar()
+            content: content
         )
 
         XCTAssertEqual(requests.map(\.identifier), [
@@ -192,19 +191,9 @@ final class WarmAlarmRequestTests: XCTestCase {
             "42#fallback#5",
             "42#fallback#6",
         ])
-        XCTAssertEqual((requests.first?.trigger as? UNTimeIntervalNotificationTrigger)?.timeInterval, 60)
         XCTAssertEqual(
-            requests.dropFirst().compactMap { ($0.trigger as? UNCalendarNotificationTrigger)?.dateComponents }
-                .compactMap { utcCalendar().date(from: $0) }
-                .map { Int64($0.timeIntervalSince1970 * 1_000) },
-            [
-                fireAtMillis + 30_000,
-                fireAtMillis + 60_000,
-                fireAtMillis + 90_000,
-                fireAtMillis + 120_000,
-                fireAtMillis + 150_000,
-                fireAtMillis + 180_000,
-            ]
+            requests.compactMap { ($0.trigger as? UNTimeIntervalNotificationTrigger)?.timeInterval },
+            [60, 90, 120, 150, 180, 210, 240]
         )
         XCTAssertTrue(requests.allSatisfy { $0.content.userInfo["alarmId"] as? String == "42" })
         XCTAssertTrue(requests.allSatisfy { $0.content.categoryIdentifier == "WARM_ALARM" })
@@ -345,8 +334,7 @@ final class WarmAlarmRequestTests: XCTestCase {
             for: schedule,
             fireAtMillis: fireAtMillis,
             nowMillis: fireAtMillis - 60_000,
-            content: UNMutableNotificationContent(),
-            calendar: utcCalendar()
+            content: UNMutableNotificationContent()
         )
         let fullCoreCapacity = Set((0..<63).map { "existing-\($0)" } + ["42#2"])
 

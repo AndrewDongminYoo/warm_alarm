@@ -601,19 +601,18 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         for schedule: WarmAlarmScheduleData,
         fireAtMillis: Int64,
         nowMillis: Int64,
-        content: UNNotificationContent,
-        calendar: Calendar = .current
+        content: UNNotificationContent
     ) -> [UNNotificationRequest] {
         let delay = max(1.0, Double(fireAtMillis - nowMillis) / 1000.0)
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: delay, repeats: false)
         let primaryRequest = UNNotificationRequest(
             identifier: String(schedule.id), content: content, trigger: trigger)
-        return [primaryRequest] + makeFallbackRequests(
-            alarmId: schedule.id,
-            content: content,
-            anchorMillis: fireAtMillis,
-            calendar: calendar
-        )
+        let fallbackRequests = fallbackIdentifiers(for: schedule.id).enumerated().map { index, identifier in
+            let fallbackDelay = delay + Double(index + 1) * Double(fallbackIntervalMillis) / 1_000.0
+            let fallbackTrigger = UNTimeIntervalNotificationTrigger(timeInterval: fallbackDelay, repeats: false)
+            return UNNotificationRequest(identifier: identifier, content: content, trigger: fallbackTrigger)
+        }
+        return [primaryRequest] + fallbackRequests
     }
 
     static func fallbackAnchorMillis(
