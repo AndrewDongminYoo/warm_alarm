@@ -402,29 +402,34 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             content: content
         )
         let center = UNUserNotificationCenter.current()
-        center.getPendingNotificationRequests { pendingRequests in
-            let pendingIdentifiers = Set(pendingRequests.map(\.identifier))
-            guard let selection = WarmAlarmPlugin.selectSnoozeRequestsWithinPendingLimit(
-                requests,
-                pendingIdentifiers: pendingIdentifiers
-            ) else {
-                completion(PigeonError(
-                    code: "pending-notification-limit",
-                    message: "iOS has no notification slot for the snoozed alarm.",
-                    details: nil
-                ))
-                return
-            }
-            WarmAlarmPlugin.addRequestsAtomically(
-                selection.requests,
-                center: center
-            ) { error in
-                if error == nil {
-                    WarmAlarmStore.shared.save(updated)
+        WarmAlarmSnoozeRegistration.perform(
+            persistIntent: {
+                WarmAlarmStore.shared.save(updated)
+            },
+            register: { registrationCompletion in
+                center.getPendingNotificationRequests { pendingRequests in
+                    let pendingIdentifiers = Set(pendingRequests.map(\.identifier))
+                    guard let selection = WarmAlarmPlugin.selectSnoozeRequestsWithinPendingLimit(
+                        requests,
+                        pendingIdentifiers: pendingIdentifiers
+                    ) else {
+                        registrationCompletion(PigeonError(
+                            code: "pending-notification-limit",
+                            message: "iOS has no notification slot for the snoozed alarm.",
+                            details: nil
+                        ))
+                        return
+                    }
+                    WarmAlarmPlugin.addRequestsAtomically(
+                        selection.requests,
+                        center: center,
+                        completion: registrationCompletion
+                    )
                 }
-                completion(error)
-            }
-        }
+            },
+            rollback: {},
+            completion: completion
+        )
     }
 
     private func removePendingFallbackRequests(for alarmId: Int64) {
