@@ -176,18 +176,32 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         let snoozeDurationMillis = schedule?.snoozeDurationMillis ?? (5 * 60 * 1000)
         let fireAt = nowMillis() + snoozeDurationMillis
         reschedule(
-            alarmId: alarmId,
             fireAtMillis: fireAt,
-            existing: schedule,
-            completion: completion
-        )
-        emitEvent(WarmAlarmEventWire(
-            alarmId: alarmId,
-            type: .snoozed,
-            occurredAtMillis: nowMillis(),
-            snoozeDurationMillis: snoozeDurationMillis,
-            payload: schedule?.payload
-        ))
+            existing: schedule
+        ) { [weak self] error in
+            guard let self else {
+                completion()
+                return
+            }
+            if let error {
+                let isRecurring = !(schedule?.recurrenceWeekdays?.isEmpty ?? true)
+                if isRecurring, let schedule {
+                    WarmAlarmStore.shared.save(schedule.clearingFallbackAnchor())
+                } else {
+                    WarmAlarmStore.shared.remove(id: alarmId)
+                }
+                self.emitFailure(alarmId: alarmId, message: error.localizedDescription)
+            } else {
+                self.emitEvent(WarmAlarmEventWire(
+                    alarmId: alarmId,
+                    type: .snoozed,
+                    occurredAtMillis: self.nowMillis(),
+                    snoozeDurationMillis: snoozeDurationMillis,
+                    payload: schedule?.payload
+                ))
+            }
+            completion()
+        }
     }
 
     // MARK: - Called by WarmAlarmPlugin
@@ -364,23 +378,53 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     // MARK: - Reschedule (snooze)
 
     private func reschedule(
-        alarmId: Int64,
         fireAtMillis: Int64,
         existing: WarmAlarmScheduleData?,
-        completion: @escaping () -> Void
+        completion: @escaping (Error?) -> Void
     ) {
         guard let existing else {
-            completion()
+            completion(PigeonError(
+                code: "alarm-not-found",
+                message: "The alarm schedule does not exist.",
+                details: nil
+            ))
             return
         }
-        let updated = existing.withActiveSnooze(untilMillis: fireAtMillis)
-        WarmAlarmStore.shared.save(updated)
+        let updated = existing.withActiveSnooze(
+            untilMillis: fireAtMillis,
+            fallbackAnchorMillis: fireAtMillis
+        )
         let content = makeContent(from: updated)
-        let delay = max(1.0, Double(fireAtMillis - nowMillis()) / 1000.0)
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: delay, repeats: false)
-        let request = UNNotificationRequest(
-            identifier: String(alarmId), content: content, trigger: trigger)
-        UNUserNotificationCenter.current().add(request) { _ in completion() }
+        let requests = WarmAlarmPlugin.makeSnoozeRequests(
+            for: updated,
+            fireAtMillis: fireAtMillis,
+            nowMillis: nowMillis(),
+            content: content
+        )
+        let center = UNUserNotificationCenter.current()
+        center.getPendingNotificationRequests { pendingRequests in
+            let pendingIdentifiers = Set(pendingRequests.map(\.identifier))
+            guard let selection = WarmAlarmPlugin.selectSnoozeRequestsWithinPendingLimit(
+                requests,
+                pendingIdentifiers: pendingIdentifiers
+            ) else {
+                completion(PigeonError(
+                    code: "pending-notification-limit",
+                    message: "iOS has no notification slot for the snoozed alarm.",
+                    details: nil
+                ))
+                return
+            }
+            WarmAlarmPlugin.addRequestsAtomically(
+                selection.requests,
+                center: center
+            ) { error in
+                if error == nil {
+                    WarmAlarmStore.shared.save(updated)
+                }
+                completion(error)
+            }
+        }
     }
 
     private func removePendingFallbackRequests(for alarmId: Int64) {

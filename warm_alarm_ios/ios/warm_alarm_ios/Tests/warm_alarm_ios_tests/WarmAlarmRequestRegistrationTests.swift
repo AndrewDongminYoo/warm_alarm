@@ -165,6 +165,51 @@ final class WarmAlarmRequestTests: XCTestCase {
         }
     }
 
+    func testBuildsFallbackChainForSnoozedOccurrence() {
+        let fireAtMillis = Int64(1_900_000_000_000)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: fireAtMillis),
+            fallbackAnchorMillis: nil
+        )
+        let content = UNMutableNotificationContent()
+        content.userInfo = ["alarmId": "42"]
+        content.categoryIdentifier = "WARM_ALARM"
+
+        let requests = WarmAlarmPlugin.makeSnoozeRequests(
+            for: schedule,
+            fireAtMillis: fireAtMillis,
+            nowMillis: fireAtMillis - 60_000,
+            content: content,
+            calendar: utcCalendar()
+        )
+
+        XCTAssertEqual(requests.map(\.identifier), [
+            "42",
+            "42#fallback#1",
+            "42#fallback#2",
+            "42#fallback#3",
+            "42#fallback#4",
+            "42#fallback#5",
+            "42#fallback#6",
+        ])
+        XCTAssertEqual((requests.first?.trigger as? UNTimeIntervalNotificationTrigger)?.timeInterval, 60)
+        XCTAssertEqual(
+            requests.dropFirst().compactMap { ($0.trigger as? UNCalendarNotificationTrigger)?.dateComponents }
+                .compactMap { utcCalendar().date(from: $0) }
+                .map { Int64($0.timeIntervalSince1970 * 1_000) },
+            [
+                fireAtMillis + 30_000,
+                fireAtMillis + 60_000,
+                fireAtMillis + 90_000,
+                fireAtMillis + 120_000,
+                fireAtMillis + 150_000,
+                fireAtMillis + 180_000,
+            ]
+        )
+        XCTAssertTrue(requests.allSatisfy { $0.content.userInfo["alarmId"] as? String == "42" })
+        XCTAssertTrue(requests.allSatisfy { $0.content.categoryIdentifier == "WARM_ALARM" })
+    }
+
     func testBuildsFiniteFallbackChainAlongsideRecurringRequests() {
         let calendar = utcCalendar()
         let schedule = WarmAlarmScheduleWire(
@@ -288,6 +333,56 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertNotNil(WarmAlarmPlugin.fallbackCapacityWarning(
             omittedCount: selection?.omittedFallbackCount ?? 0
         ))
+    }
+
+    func testSnoozeCapacityPreservesCoreAndKillWarningReservation() {
+        let fireAtMillis = Int64(1_900_000_000_000)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: fireAtMillis),
+            fallbackAnchorMillis: nil
+        )
+        let requests = WarmAlarmPlugin.makeSnoozeRequests(
+            for: schedule,
+            fireAtMillis: fireAtMillis,
+            nowMillis: fireAtMillis - 60_000,
+            content: UNMutableNotificationContent(),
+            calendar: utcCalendar()
+        )
+        let fullCoreCapacity = Set((0..<63).map { "existing-\($0)" } + ["42#2"])
+
+        XCTAssertNil(WarmAlarmPlugin.selectSnoozeRequestsWithinPendingLimit(
+            requests,
+            pendingIdentifiers: fullCoreCapacity,
+            isKillWarningConfigured: false,
+            limit: 64
+        ))
+
+        let killWarningReserved = WarmAlarmPlugin.selectSnoozeRequestsWithinPendingLimit(
+            requests,
+            pendingIdentifiers: Set((0..<62).map { "existing-\($0)" }),
+            isKillWarningConfigured: true,
+            limit: 64
+        )
+        XCTAssertEqual(killWarningReserved?.requests.map(\.identifier), ["42"])
+        XCTAssertEqual(killWarningReserved?.omittedFallbackCount, 6)
+
+        let pendingWithFallbacks = Set((0..<58).map { "existing-\($0)" })
+            .union(WarmAlarmPlugin.fallbackIdentifiers(for: 42))
+        let replacingFallbacks = WarmAlarmPlugin.selectSnoozeRequestsWithinPendingLimit(
+            requests,
+            pendingIdentifiers: pendingWithFallbacks,
+            isKillWarningConfigured: false,
+            limit: 64
+        )
+        XCTAssertEqual(replacingFallbacks?.requests.map(\.identifier), [
+            "42",
+            "42#fallback#1",
+            "42#fallback#2",
+            "42#fallback#3",
+            "42#fallback#4",
+            "42#fallback#5",
+        ])
+        XCTAssertEqual(replacingFallbacks?.omittedFallbackCount, 1)
     }
 
     func testPendingLimitRefusesScheduleWhenCoreDoesNotFit() {

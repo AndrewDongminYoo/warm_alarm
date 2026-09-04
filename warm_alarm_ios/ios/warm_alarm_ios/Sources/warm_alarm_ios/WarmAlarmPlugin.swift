@@ -412,7 +412,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         )
     }
 
-    private static func addRequestsAtomically(
+    static func addRequestsAtomically(
         _ requests: [UNNotificationRequest],
         center: UNUserNotificationCenter,
         completion: @escaping (Error?) -> Void
@@ -578,7 +578,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                     identifier: "\(schedule.id)#\(iso)", content: content, trigger: trigger)
             }
             return recurringRequests + makeFallbackRequests(
-                for: schedule,
+                alarmId: schedule.id,
                 content: content,
                 anchorMillis: fallbackAnchorMillis,
                 calendar: calendar
@@ -590,9 +590,28 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         let primaryRequest = UNNotificationRequest(
             identifier: String(schedule.id), content: content, trigger: trigger)
         return [primaryRequest] + makeFallbackRequests(
-            for: schedule,
+            alarmId: schedule.id,
             content: content,
             anchorMillis: fallbackAnchorMillis,
+            calendar: calendar
+        )
+    }
+
+    static func makeSnoozeRequests(
+        for schedule: WarmAlarmScheduleData,
+        fireAtMillis: Int64,
+        nowMillis: Int64,
+        content: UNNotificationContent,
+        calendar: Calendar = .current
+    ) -> [UNNotificationRequest] {
+        let delay = max(1.0, Double(fireAtMillis - nowMillis) / 1000.0)
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: delay, repeats: false)
+        let primaryRequest = UNNotificationRequest(
+            identifier: String(schedule.id), content: content, trigger: trigger)
+        return [primaryRequest] + makeFallbackRequests(
+            alarmId: schedule.id,
+            content: content,
+            anchorMillis: fireAtMillis,
             calendar: calendar
         )
     }
@@ -672,6 +691,37 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         )
     }
 
+    static func selectSnoozeRequestsWithinPendingLimit(
+        _ requests: [UNNotificationRequest],
+        pendingIdentifiers: Set<String>,
+        isKillWarningConfigured: Bool,
+        limit: Int
+    ) -> WarmAlarmRequestSelection? {
+        let reservedSlotCount = killWarningReservedSlotCount(
+            isConfigured: isKillWarningConfigured,
+            pendingIdentifiers: pendingIdentifiers
+        )
+        return selectRequestsWithinPendingLimit(
+            requests,
+            pendingIdentifiers: pendingIdentifiers,
+            replacingIdentifiers: Set(requests.map(\.identifier)),
+            reservedSlotCount: reservedSlotCount,
+            limit: limit
+        )
+    }
+
+    static func selectSnoozeRequestsWithinPendingLimit(
+        _ requests: [UNNotificationRequest],
+        pendingIdentifiers: Set<String>
+    ) -> WarmAlarmRequestSelection? {
+        selectSnoozeRequestsWithinPendingLimit(
+            requests,
+            pendingIdentifiers: pendingIdentifiers,
+            isKillWarningConfigured: isKillWarningConfigured,
+            limit: pendingNotificationLimit
+        )
+    }
+
     static func killWarningReservedSlotCount(
         isConfigured: Bool,
         pendingIdentifiers: Set<String>
@@ -737,12 +787,12 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     }
 
     private static func makeFallbackRequests(
-        for schedule: WarmAlarmScheduleWire,
+        alarmId: Int64,
         content: UNNotificationContent,
         anchorMillis: Int64,
         calendar: Calendar
     ) -> [UNNotificationRequest] {
-        fallbackIdentifiers(for: schedule.id).enumerated().map { index, identifier in
+        fallbackIdentifiers(for: alarmId).enumerated().map { index, identifier in
             let scheduledAtMillis = fallbackFireAtMillis(anchorMillis: anchorMillis, index: index + 1)
             let requestDate = Date(timeIntervalSince1970: Double(scheduledAtMillis) / 1000.0)
             let components = calendar.dateComponents(
