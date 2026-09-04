@@ -643,6 +643,76 @@ final class WarmAlarmRequestTests: XCTestCase {
         )
     }
 
+    func testRecoveryPreservesRecurringWallTimeAfterTimeZoneChange() {
+        var schedulingCalendar = Calendar(identifier: .gregorian)
+        schedulingCalendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        let wire = makeWireSchedule(
+            scheduledAtMillis: millis(2030, 3, 11, 7, 0, calendar: schedulingCalendar),
+            recurrenceWeekdays: [1]
+        )
+        let fallbackAnchorMillis = WarmAlarmPlugin.fallbackAnchorMillis(
+            for: wire,
+            nowMillis: millis(2030, 3, 11, 6, 0, calendar: schedulingCalendar),
+            calendar: schedulingCalendar
+        )
+        let schedule = WarmAlarmScheduleData.from(
+            wire: wire,
+            fallbackAnchorMillis: fallbackAnchorMillis,
+            calendar: schedulingCalendar
+        )
+        var recoveryCalendar = Calendar(identifier: .gregorian)
+        recoveryCalendar.timeZone = TimeZone(identifier: "America/New_York")!
+
+        let requests = WarmAlarmPlugin.makeRecoveryRequests(
+            for: schedule,
+            nowMillis: millis(2030, 3, 11, 7, 0, calendar: recoveryCalendar) + 45_000,
+            pendingIdentifiers: [],
+            content: UNMutableNotificationContent(),
+            calendar: recoveryCalendar
+        )
+
+        XCTAssertEqual(requests.map(\.identifier), [
+            "42#1",
+            "42#fallback#2",
+            "42#fallback#3",
+            "42#fallback#4",
+            "42#fallback#5",
+            "42#fallback#6",
+        ])
+        let primaryTrigger = requests.first?.trigger as? UNCalendarNotificationTrigger
+        XCTAssertEqual(primaryTrigger?.dateComponents.hour, 7)
+        XCTAssertEqual(primaryTrigger?.dateComponents.minute, 0)
+        let fallbackTriggers = requests.dropFirst().compactMap { $0.trigger as? UNCalendarNotificationTrigger }
+        XCTAssertEqual(fallbackTriggers.map(\.dateComponents.hour), [7, 7, 7, 7, 7])
+        XCTAssertEqual(fallbackTriggers.map(\.dateComponents.minute), [1, 1, 2, 2, 3])
+        XCTAssertEqual(fallbackTriggers.map(\.dateComponents.second), [0, 30, 0, 30, 0])
+    }
+
+    func testRecoveryDoesNotAdvanceAnExpiredRecurringFallbackChainWithoutTimeZoneChange() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        let anchor = millis(2030, 3, 11, 7, 0, calendar: calendar)
+        let wire = makeWireSchedule(
+            scheduledAtMillis: anchor,
+            recurrenceWeekdays: [1]
+        )
+        let schedule = WarmAlarmScheduleData.from(
+            wire: wire,
+            fallbackAnchorMillis: anchor,
+            calendar: calendar
+        )
+
+        let requests = WarmAlarmPlugin.makeRecoveryRequests(
+            for: schedule,
+            nowMillis: anchor + 181_000,
+            pendingIdentifiers: ["42#1"],
+            content: UNMutableNotificationContent(),
+            calendar: calendar
+        )
+
+        XCTAssertTrue(requests.isEmpty)
+    }
+
     func testRecoveryKeepsSnoozedPrimaryRelativeToFallbacks() {
         let anchor = Int64(1_900_000_000_000)
         let schedule = WarmAlarmScheduleData.from(
