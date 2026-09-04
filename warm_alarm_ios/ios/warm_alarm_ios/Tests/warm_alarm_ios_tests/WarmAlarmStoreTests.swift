@@ -44,6 +44,8 @@ final class WarmAlarmStoreTests: XCTestCase {
             loop: false, volume: 0.75, vibrate: true,
             fadeInDurationMillis: 3_000,
             recurrenceWeekdays: [1, 3, 5],
+            recurrenceHour: 7,
+            recurrenceMinute: 30,
             snoozeDurationMillis: 300_000,
             payload: "{\"key\":\"value\"}",
             volumeEnforced: nil,
@@ -63,6 +65,8 @@ final class WarmAlarmStoreTests: XCTestCase {
         XCTAssertTrue(loaded.vibrate)
         XCTAssertEqual(loaded.fadeInDurationMillis, 3_000)
         XCTAssertEqual(loaded.recurrenceWeekdays, [1, 3, 5])
+        XCTAssertEqual(loaded.recurrenceHour, 7)
+        XCTAssertEqual(loaded.recurrenceMinute, 30)
         XCTAssertEqual(loaded.snoozeDurationMillis, 300_000)
         XCTAssertEqual(loaded.payload, "{\"key\":\"value\"}")
         XCTAssertEqual(loaded.activeSnoozeUntilMillis, 9_500)
@@ -77,6 +81,8 @@ final class WarmAlarmStoreTests: XCTestCase {
         XCTAssertFalse(loaded.vibrate)
         XCTAssertNil(loaded.fadeInDurationMillis)
         XCTAssertNil(loaded.recurrenceWeekdays)
+        XCTAssertNil(loaded.recurrenceHour)
+        XCTAssertNil(loaded.recurrenceMinute)
         XCTAssertNil(loaded.snoozeDurationMillis)
         XCTAssertNil(loaded.payload)
         XCTAssertNil(loaded.activeSnoozeUntilMillis)
@@ -88,6 +94,8 @@ final class WarmAlarmStoreTests: XCTestCase {
             id: 42,
             scheduledAt: 1_000,
             recurrenceWeekdays: [1, 3, 5],
+            recurrenceHour: 7,
+            recurrenceMinute: 30,
             fallbackAnchorMillis: 1_500
         )
 
@@ -95,6 +103,8 @@ final class WarmAlarmStoreTests: XCTestCase {
 
         XCTAssertEqual(snoozed.scheduledAtMillis, 1_000)
         XCTAssertEqual(snoozed.recurrenceWeekdays, [1, 3, 5])
+        XCTAssertEqual(snoozed.recurrenceHour, 7)
+        XCTAssertEqual(snoozed.recurrenceMinute, 30)
         XCTAssertEqual(snoozed.activeSnoozeUntilMillis, 3_000)
         XCTAssertNil(snoozed.fallbackAnchorMillis)
         XCTAssertEqual(snoozed.snapshotScheduledAtMillis(nowMillis: 2_000), 3_000)
@@ -169,6 +179,25 @@ final class WarmAlarmStoreTests: XCTestCase {
         XCTAssertEqual(snapshotAt, millis(2026, 1, 12, 9, 0, calendar: calendar))
     }
 
+    func testFromWireCapturesRecurringWallTime() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        let scheduledAtMillis = millis(2030, 3, 11, 7, 30, calendar: calendar)
+        let wire = WarmAlarmScheduleWire(
+            id: 42,
+            scheduledAtMillis: scheduledAtMillis,
+            notification: WarmAlarmNotificationWire(
+                title: "Wake up", body: "Alarm", keepNotificationAfterAlarmEnds: false),
+            audio: WarmAlarmAudioWire(loop: true, vibrate: true, volumeEnforced: false),
+            recurrence: WarmAlarmRecurrenceWire(weekdays: [1])
+        )
+
+        let schedule = WarmAlarmScheduleData.from(wire: wire, calendar: calendar)
+
+        XCTAssertEqual(schedule.recurrenceHour, 7)
+        XCTAssertEqual(schedule.recurrenceMinute, 30)
+    }
+
     private func utcCalendar() -> Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
@@ -193,6 +222,8 @@ final class WarmAlarmStoreTests: XCTestCase {
         title: String = "Alarm",
         scheduledAt: Int64 = 0,
         recurrenceWeekdays: [Int64]? = nil,
+        recurrenceHour: Int? = nil,
+        recurrenceMinute: Int? = nil,
         fallbackAnchorMillis: Int64? = nil
     ) -> WarmAlarmScheduleData {
         WarmAlarmScheduleData(
@@ -202,6 +233,7 @@ final class WarmAlarmStoreTests: XCTestCase {
             filePath: nil, assetPath: nil,
             loop: true, volume: nil, vibrate: false,
             fadeInDurationMillis: nil, recurrenceWeekdays: recurrenceWeekdays,
+            recurrenceHour: recurrenceHour, recurrenceMinute: recurrenceMinute,
             snoozeDurationMillis: nil, payload: nil,
             volumeEnforced: nil, fadeSteps: nil,
             keepNotificationAfterAlarmEnds: nil,
