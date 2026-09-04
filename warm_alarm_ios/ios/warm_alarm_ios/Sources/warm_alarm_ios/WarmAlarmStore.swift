@@ -25,6 +25,7 @@ struct WarmAlarmScheduleData: Codable {
     let fadeSteps: [FadeStep]?
     let keepNotificationAfterAlarmEnds: Bool?
     let activeSnoozeUntilMillis: Int64?
+    let fallbackAnchorMillis: Int64?
 
     // Explicit CodingKeys lets the synthesized encode(to:) work while we
     // override init(from:) in the extension below to add migration defaults.
@@ -34,6 +35,7 @@ struct WarmAlarmScheduleData: Codable {
         case loop, volume, vibrate, fadeInDurationMillis
         case recurrenceWeekdays, snoozeDurationMillis, payload
         case volumeEnforced, fadeSteps, keepNotificationAfterAlarmEnds, activeSnoozeUntilMillis
+        case fallbackAnchorMillis
     }
 }
 
@@ -79,9 +81,13 @@ extension WarmAlarmScheduleData {
         keepNotificationAfterAlarmEnds = try c.decodeIfPresent(
             Bool.self, forKey: .keepNotificationAfterAlarmEnds)
         activeSnoozeUntilMillis = try c.decodeIfPresent(Int64.self, forKey: .activeSnoozeUntilMillis)
+        fallbackAnchorMillis = try c.decodeIfPresent(Int64.self, forKey: .fallbackAnchorMillis)
     }
 
-    static func from(wire: WarmAlarmScheduleWire) -> WarmAlarmScheduleData {
+    static func from(
+        wire: WarmAlarmScheduleWire,
+        fallbackAnchorMillis: Int64? = nil
+    ) -> WarmAlarmScheduleData {
         WarmAlarmScheduleData(
             id: wire.id,
             scheduledAtMillis: wire.scheduledAtMillis,
@@ -101,7 +107,8 @@ extension WarmAlarmScheduleData {
             volumeEnforced: wire.audio.volumeEnforced,
             fadeSteps: wire.audio.fadeSteps?.map { FadeStep(timeMillis: $0.timeMillis, volume: $0.volume) },
             keepNotificationAfterAlarmEnds: wire.notification.keepNotificationAfterAlarmEnds,
-            activeSnoozeUntilMillis: nil
+            activeSnoozeUntilMillis: nil,
+            fallbackAnchorMillis: fallbackAnchorMillis
         )
     }
 
@@ -119,7 +126,8 @@ extension WarmAlarmScheduleData {
             volumeEnforced: volumeEnforced,
             fadeSteps: fadeSteps,
             keepNotificationAfterAlarmEnds: keepNotificationAfterAlarmEnds,
-            activeSnoozeUntilMillis: untilMillis
+            activeSnoozeUntilMillis: untilMillis,
+            fallbackAnchorMillis: fallbackAnchorMillis
         )
     }
 }

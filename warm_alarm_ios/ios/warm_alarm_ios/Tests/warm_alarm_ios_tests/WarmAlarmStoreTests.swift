@@ -49,7 +49,8 @@ final class WarmAlarmStoreTests: XCTestCase {
             volumeEnforced: nil,
             fadeSteps: nil,
             keepNotificationAfterAlarmEnds: nil,
-            activeSnoozeUntilMillis: 9_500
+            activeSnoozeUntilMillis: 9_500,
+            fallbackAnchorMillis: 9_100
         )
         WarmAlarmStore.shared.save(data)
         let loaded = WarmAlarmStore.shared.load(id: 99)!
@@ -65,6 +66,7 @@ final class WarmAlarmStoreTests: XCTestCase {
         XCTAssertEqual(loaded.snoozeDurationMillis, 300_000)
         XCTAssertEqual(loaded.payload, "{\"key\":\"value\"}")
         XCTAssertEqual(loaded.activeSnoozeUntilMillis, 9_500)
+        XCTAssertEqual(loaded.fallbackAnchorMillis, 9_100)
     }
 
     func testRoundtripNilOptionals() {
@@ -78,16 +80,23 @@ final class WarmAlarmStoreTests: XCTestCase {
         XCTAssertNil(loaded.snoozeDurationMillis)
         XCTAssertNil(loaded.payload)
         XCTAssertNil(loaded.activeSnoozeUntilMillis)
+        XCTAssertNil(loaded.fallbackAnchorMillis)
     }
 
     func testAddingActiveSnoozePreservesRecurringScheduleTime() {
-        let schedule = makeData(id: 42, scheduledAt: 1_000, recurrenceWeekdays: [1, 3, 5])
+        let schedule = makeData(
+            id: 42,
+            scheduledAt: 1_000,
+            recurrenceWeekdays: [1, 3, 5],
+            fallbackAnchorMillis: 1_500
+        )
 
         let snoozed = schedule.withActiveSnooze(untilMillis: 3_000)
 
         XCTAssertEqual(snoozed.scheduledAtMillis, 1_000)
         XCTAssertEqual(snoozed.recurrenceWeekdays, [1, 3, 5])
         XCTAssertEqual(snoozed.activeSnoozeUntilMillis, 3_000)
+        XCTAssertEqual(snoozed.fallbackAnchorMillis, 1_500)
         XCTAssertEqual(snoozed.snapshotScheduledAtMillis(nowMillis: 2_000), 3_000)
     }
 
@@ -150,7 +159,8 @@ final class WarmAlarmStoreTests: XCTestCase {
         id: Int64,
         title: String = "Alarm",
         scheduledAt: Int64 = 0,
-        recurrenceWeekdays: [Int64]? = nil
+        recurrenceWeekdays: [Int64]? = nil,
+        fallbackAnchorMillis: Int64? = nil
     ) -> WarmAlarmScheduleData {
         WarmAlarmScheduleData(
             id: id, scheduledAtMillis: scheduledAt,
@@ -162,7 +172,8 @@ final class WarmAlarmStoreTests: XCTestCase {
             snoozeDurationMillis: nil, payload: nil,
             volumeEnforced: nil, fadeSteps: nil,
             keepNotificationAfterAlarmEnds: nil,
-            activeSnoozeUntilMillis: nil
+            activeSnoozeUntilMillis: nil,
+            fallbackAnchorMillis: fallbackAnchorMillis
         )
     }
 }
