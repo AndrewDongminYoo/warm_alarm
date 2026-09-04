@@ -30,6 +30,10 @@ final class WarmAlarmForegroundOccurrenceTracker: @unchecked Sendable {
         lock.unlock()
     }
 
+    func stop(alarmId: Int64) {
+        mark(alarmId: alarmId)
+    }
+
     func clearAll() {
         lock.lock()
         handledAlarmIds.removeAll()
@@ -130,7 +134,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
     func handleStop(alarmId: Int64, deliveredIdentifier: String? = nil) {
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
-        foregroundOccurrenceTracker.clear(alarmId: alarmId)
+        foregroundOccurrenceTracker.stop(alarmId: alarmId)
         stopAudio()
         removePendingFallbackRequests(for: alarmId)
         // Dismiss ends only this occurrence for a recurring alarm; the repeating
