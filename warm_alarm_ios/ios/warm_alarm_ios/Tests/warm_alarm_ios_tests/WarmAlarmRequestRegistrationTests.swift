@@ -747,6 +747,42 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertTrue(requests.isEmpty)
     }
 
+    func testRecoveryAdvancesPastAnExpiredSnoozeAfterTimeZoneChange() {
+        var schedulingCalendar = Calendar(identifier: .gregorian)
+        schedulingCalendar.timeZone = TimeZone(identifier: "America/New_York")!
+        let anchor = millis(2030, 3, 11, 7, 0, calendar: schedulingCalendar)
+        let wire = makeWireSchedule(
+            scheduledAtMillis: anchor,
+            recurrenceWeekdays: [1]
+        )
+        let schedule = WarmAlarmScheduleData.from(
+            wire: wire,
+            fallbackAnchorMillis: anchor,
+            calendar: schedulingCalendar
+        ).withActiveSnooze(
+            untilMillis: anchor,
+            fallbackAnchorMillis: anchor
+        )
+        var recoveryCalendar = Calendar(identifier: .gregorian)
+        recoveryCalendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+
+        let requests = WarmAlarmPlugin.makeRecoveryRequests(
+            for: schedule,
+            nowMillis: millis(2030, 3, 11, 7, 0, calendar: recoveryCalendar) + 45_000,
+            pendingIdentifiers: ["42#1"],
+            content: UNMutableNotificationContent(),
+            calendar: recoveryCalendar
+        )
+
+        XCTAssertEqual(requests.map(\.identifier), [
+            "42#fallback#2",
+            "42#fallback#3",
+            "42#fallback#4",
+            "42#fallback#5",
+            "42#fallback#6",
+        ])
+    }
+
     func testRecoveryKeepsSnoozedPrimaryRelativeToFallbacks() {
         let anchor = Int64(1_900_000_000_000)
         let schedule = WarmAlarmScheduleData.from(

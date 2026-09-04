@@ -914,7 +914,9 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         calendar: Calendar
     ) -> Int64? {
         guard let persistedAnchorMillis = schedule.fallbackAnchorMillis else { return nil }
-        guard schedule.activeSnoozeUntilMillis == nil,
+        let hasActiveSnoozeFallbacks = schedule.activeSnoozeUntilMillis != nil
+            && fallbackFireAtMillis(anchorMillis: persistedAnchorMillis, index: fallbackCount) > nowMillis
+        guard !hasActiveSnoozeFallbacks,
               let weekdays = schedule.recurrenceWeekdays, !weekdays.isEmpty,
               let hour = schedule.recurrenceHour,
               let minute = schedule.recurrenceMinute else {
