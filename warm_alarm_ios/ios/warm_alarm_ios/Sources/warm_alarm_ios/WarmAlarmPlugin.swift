@@ -320,12 +320,13 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             requestGroups,
             prepare: { group in
                 let registrationNowMillis = Int64(Date().timeIntervalSince1970 * 1_000)
-                let requests = Self.makeRecoveryRequests(
+                let requests = Self.refreshSelectedRecoveryRequests(
                     for: group.schedule,
                     nowMillis: registrationNowMillis,
                     pendingIdentifiers: pendingIdentifiers,
-                    content: group.content
-                ).filter { selectedIdentifiers.contains($0.identifier) }
+                    content: group.content,
+                    selectedIdentifiers: selectedIdentifiers
+                )
                 return (schedule: group.schedule, content: group.content, requests: requests)
             },
             recover: { group, completion in
@@ -399,6 +400,23 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                     )
                 }
         )
+    }
+
+    static func refreshSelectedRecoveryRequests(
+        for schedule: WarmAlarmScheduleData,
+        nowMillis: Int64,
+        pendingIdentifiers: Set<String>,
+        content: UNNotificationContent,
+        selectedIdentifiers: Set<String>,
+        calendar: Calendar = .current
+    ) -> [UNNotificationRequest] {
+        makeRecoveryRequests(
+            for: schedule,
+            nowMillis: nowMillis,
+            pendingIdentifiers: pendingIdentifiers,
+            content: content,
+            calendar: calendar
+        ).filter { selectedIdentifiers.contains($0.identifier) }
     }
 
     private static func makeRecoveryRequest(
