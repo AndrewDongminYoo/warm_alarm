@@ -577,7 +577,9 @@ final class WarmAlarmRequestTests: XCTestCase {
     func testRecoveryRestoresOnlyStillFutureFallbacksWithRemainingIntervals() {
         let anchor = Int64(1_900_000_000_000)
         let schedule = WarmAlarmScheduleData.from(
-            wire: makeWireSchedule(scheduledAtMillis: anchor),
+            wire: makeWireSchedule(scheduledAtMillis: anchor)
+        ).withActiveSnooze(
+            untilMillis: anchor,
             fallbackAnchorMillis: anchor
         )
         let content = UNMutableNotificationContent()
@@ -606,6 +608,39 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertEqual(triggers.count, 5)
         XCTAssertTrue(triggers.allSatisfy { !$0.repeats })
         XCTAssertEqual(triggers.map(\.timeInterval), [15, 45, 75, 105, 135])
+    }
+
+    func testRecoveryKeepsScheduledFallbacksAlignedToCalendar() {
+        let anchor = Int64(1_900_000_000_000)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: anchor),
+            fallbackAnchorMillis: anchor
+        )
+        let calendar = utcCalendar()
+
+        let requests = WarmAlarmPlugin.makeRecoveryRequests(
+            for: schedule,
+            nowMillis: anchor + 45_000,
+            pendingIdentifiers: ["42#fallback#1"],
+            content: UNMutableNotificationContent(),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(requests.map(\.identifier), [
+            "42#fallback#2",
+            "42#fallback#3",
+            "42#fallback#4",
+            "42#fallback#5",
+            "42#fallback#6",
+        ])
+        let triggers = requests.compactMap { $0.trigger as? UNCalendarNotificationTrigger }
+        XCTAssertEqual(triggers.count, 5)
+        XCTAssertTrue(triggers.allSatisfy { !$0.repeats })
+        XCTAssertEqual(
+            triggers.compactMap { calendar.date(from: $0.dateComponents) }
+                .map { Int64($0.timeIntervalSince1970 * 1_000) },
+            [anchor + 60_000, anchor + 90_000, anchor + 120_000, anchor + 150_000, anchor + 180_000]
+        )
     }
 
     func testRecoveryCapacityPreservesEveryMissingCoreBeforeFallbacks() {
