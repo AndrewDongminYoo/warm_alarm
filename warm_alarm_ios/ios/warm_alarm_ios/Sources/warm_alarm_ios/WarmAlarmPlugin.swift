@@ -412,7 +412,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         )
     }
 
-    private static func addRequestsAtomically(
+    static func addRequestsAtomically(
         _ requests: [UNNotificationRequest],
         center: UNUserNotificationCenter,
         completion: @escaping (Error?) -> Void
@@ -578,7 +578,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                     identifier: "\(schedule.id)#\(iso)", content: content, trigger: trigger)
             }
             return recurringRequests + makeFallbackRequests(
-                for: schedule,
+                alarmId: schedule.id,
                 content: content,
                 anchorMillis: fallbackAnchorMillis,
                 calendar: calendar
@@ -590,7 +590,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         let primaryRequest = UNNotificationRequest(
             identifier: String(schedule.id), content: content, trigger: trigger)
         return [primaryRequest] + makeFallbackRequests(
-            for: schedule,
+            alarmId: schedule.id,
             content: content,
             anchorMillis: fallbackAnchorMillis,
             calendar: calendar
@@ -737,12 +737,12 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     }
 
     private static func makeFallbackRequests(
-        for schedule: WarmAlarmScheduleWire,
+        alarmId: Int64,
         content: UNNotificationContent,
         anchorMillis: Int64,
         calendar: Calendar
     ) -> [UNNotificationRequest] {
-        fallbackIdentifiers(for: schedule.id).enumerated().map { index, identifier in
+        fallbackIdentifiers(for: alarmId).enumerated().map { index, identifier in
             let scheduledAtMillis = fallbackFireAtMillis(anchorMillis: anchorMillis, index: index + 1)
             let requestDate = Date(timeIntervalSince1970: Double(scheduledAtMillis) / 1000.0)
             let components = calendar.dateComponents(
