@@ -184,12 +184,6 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
                 return
             }
             if let error {
-                let isRecurring = !(schedule?.recurrenceWeekdays?.isEmpty ?? true)
-                if isRecurring, let schedule {
-                    WarmAlarmStore.shared.save(schedule.clearingFallbackAnchor())
-                } else {
-                    WarmAlarmStore.shared.remove(id: alarmId)
-                }
                 self.emitFailure(alarmId: alarmId, message: error.localizedDescription)
             } else {
                 self.emitEvent(WarmAlarmEventWire(
@@ -396,35 +390,47 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         )
         let content = makeContent(from: updated)
         let center = UNUserNotificationCenter.current()
-        center.getPendingNotificationRequests { pendingRequests in
-            let requests = WarmAlarmPlugin.makeSnoozeRequests(
-                for: updated,
-                fireAtMillis: fireAtMillis,
-                nowMillis: self.nowMillis(),
-                content: content
-            )
-            let pendingIdentifiers = Set(pendingRequests.map(\.identifier))
-            guard let selection = WarmAlarmPlugin.selectSnoozeRequestsWithinPendingLimit(
-                requests,
-                pendingIdentifiers: pendingIdentifiers
-            ) else {
-                completion(PigeonError(
-                    code: "pending-notification-limit",
-                    message: "iOS has no notification slot for the snoozed alarm.",
-                    details: nil
-                ))
-                return
-            }
-            WarmAlarmPlugin.addRequestsAtomically(
-                selection.requests,
-                center: center
-            ) { error in
-                if error == nil {
-                    WarmAlarmStore.shared.save(updated)
+        WarmAlarmSnoozeRegistration.perform(
+            persistIntent: {
+                WarmAlarmStore.shared.save(updated)
+            },
+            register: { registrationCompletion in
+                center.getPendingNotificationRequests { pendingRequests in
+                    let requests = WarmAlarmPlugin.makeSnoozeRequests(
+                        for: updated,
+                        fireAtMillis: fireAtMillis,
+                        nowMillis: self.nowMillis(),
+                        content: content
+                    )
+                    let pendingIdentifiers = Set(pendingRequests.map(\.identifier))
+                    guard let selection = WarmAlarmPlugin.selectSnoozeRequestsWithinPendingLimit(
+                        requests,
+                        pendingIdentifiers: pendingIdentifiers
+                    ) else {
+                        registrationCompletion(PigeonError(
+                            code: "pending-notification-limit",
+                            message: "iOS has no notification slot for the snoozed alarm.",
+                            details: nil
+                        ))
+                        return
+                    }
+                    WarmAlarmPlugin.addRequestsAtomically(
+                        selection.requests,
+                        center: center,
+                        completion: registrationCompletion
+                    )
                 }
-                completion(error)
-            }
-        }
+            },
+            rollback: {
+                let isRecurring = !(existing.recurrenceWeekdays?.isEmpty ?? true)
+                if isRecurring {
+                    WarmAlarmStore.shared.save(existing.clearingFallbackAnchor())
+                } else {
+                    WarmAlarmStore.shared.remove(id: existing.id)
+                }
+            },
+            completion: completion
+        )
     }
 
     private func removePendingFallbackRequests(for alarmId: Int64) {

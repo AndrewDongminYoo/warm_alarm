@@ -56,6 +56,25 @@ enum WarmAlarmRequestRegistration {
     }
 }
 
+enum WarmAlarmSnoozeRegistration {
+    static func perform(
+        persistIntent: @escaping () -> Void,
+        register: (@escaping (Error?) -> Void) -> Void,
+        rollback: @escaping () -> Void,
+        completion: @escaping (Error?) -> Void
+    ) {
+        persistIntent()
+        register { error in
+            if let error {
+                rollback()
+                completion(error)
+                return
+            }
+            completion(nil)
+        }
+    }
+}
+
 final class WarmAlarmMutationQueue {
     typealias Mutation = (@escaping () -> Void) -> Void
 
