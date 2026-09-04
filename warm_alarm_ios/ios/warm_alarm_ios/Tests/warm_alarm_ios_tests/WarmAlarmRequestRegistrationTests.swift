@@ -781,12 +781,12 @@ final class WarmAlarmRequestTests: XCTestCase {
     func testStopSuppressesLateFallbackUntilNextPrimaryOccurrence() {
         let tracker = WarmAlarmForegroundOccurrenceTracker()
 
-        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, isFallback: false))
-        tracker.stop(alarmId: 42)
+        XCTAssertTrue(tracker.handleIfAllowed(alarmId: 42, isFallback: false, perform: {}))
+        tracker.stop(alarmId: 42, perform: {})
 
-        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, isFallback: true))
-        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, isFallback: false))
-        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, isFallback: true))
+        XCTAssertFalse(tracker.handleIfAllowed(alarmId: 42, isFallback: true, perform: {}))
+        XCTAssertTrue(tracker.handleIfAllowed(alarmId: 42, isFallback: false, perform: {}))
+        XCTAssertFalse(tracker.handleIfAllowed(alarmId: 42, isFallback: true, perform: {}))
     }
 
     func testForegroundOccurrenceTrackerAtomicallyHandlesOneConcurrentFallback() {
@@ -802,6 +802,39 @@ final class WarmAlarmRequestTests: XCTestCase {
         }
 
         XCTAssertEqual(handledCount, 1)
+    }
+
+    func testStopWaitsForAdmittedFallbackWorkBeforeCompleting() {
+        let tracker = WarmAlarmForegroundOccurrenceTracker()
+        let fallbackEntered = DispatchSemaphore(value: 0)
+        let releaseFallback = DispatchSemaphore(value: 0)
+        let fallbackCompleted = DispatchSemaphore(value: 0)
+        let stopStarted = DispatchSemaphore(value: 0)
+        let stopCompleted = DispatchSemaphore(value: 0)
+
+        DispatchQueue.global().async {
+            _ = tracker.handleIfAllowed(alarmId: 42, isFallback: true) {
+                fallbackEntered.signal()
+                releaseFallback.wait()
+            }
+            fallbackCompleted.signal()
+        }
+        XCTAssertEqual(fallbackEntered.wait(timeout: .now() + 1), .success)
+
+        DispatchQueue.global().async {
+            stopStarted.signal()
+            tracker.stop(alarmId: 42, perform: {})
+            stopCompleted.signal()
+        }
+        XCTAssertEqual(stopStarted.wait(timeout: .now() + 1), .success)
+        let stopResultBeforeRelease = stopCompleted.wait(timeout: .now() + 0.1)
+
+        releaseFallback.signal()
+        XCTAssertEqual(fallbackCompleted.wait(timeout: .now() + 1), .success)
+        if stopResultBeforeRelease == .timedOut {
+            XCTAssertEqual(stopCompleted.wait(timeout: .now() + 1), .success)
+        }
+        XCTAssertEqual(stopResultBeforeRelease, .timedOut)
     }
 
     func testRecoveryRequestsDeduplicateRepeatedWeekdays() {
