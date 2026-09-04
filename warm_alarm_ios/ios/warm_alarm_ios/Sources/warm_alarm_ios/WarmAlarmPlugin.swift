@@ -320,12 +320,15 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             requestGroups,
             prepare: { group in
                 let registrationNowMillis = Int64(Date().timeIntervalSince1970 * 1_000)
+                let groupSelectedIdentifiers = selectedIdentifiers.intersection(
+                    group.requests.map(\.identifier)
+                )
                 let requests = Self.refreshSelectedRecoveryRequests(
                     for: group.schedule,
                     nowMillis: registrationNowMillis,
                     pendingIdentifiers: pendingIdentifiers,
                     content: group.content,
-                    selectedIdentifiers: selectedIdentifiers
+                    selectedIdentifiers: groupSelectedIdentifiers
                 )
                 return (schedule: group.schedule, content: group.content, requests: requests)
             },
@@ -410,13 +413,13 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         selectedIdentifiers: Set<String>,
         calendar: Calendar = .current
     ) -> [UNNotificationRequest] {
-        makeRecoveryRequests(
+        Array(makeRecoveryRequests(
             for: schedule,
             nowMillis: nowMillis,
             pendingIdentifiers: pendingIdentifiers,
             content: content,
             calendar: calendar
-        ).filter { selectedIdentifiers.contains($0.identifier) }
+        ).prefix(selectedIdentifiers.count))
     }
 
     private static func makeRecoveryRequest(
@@ -438,6 +441,14 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                     trigger: UNTimeIntervalNotificationTrigger(timeInterval: delay, repeats: false)
                 )
             }
+        } else if identifier == String(schedule.id),
+                  let activeSnoozeUntilMillis = schedule.activeSnoozeUntilMillis {
+            let delay = max(1.0, Double(activeSnoozeUntilMillis - nowMillis) / 1_000.0)
+            return UNNotificationRequest(
+                identifier: identifier,
+                content: content,
+                trigger: UNTimeIntervalNotificationTrigger(timeInterval: delay, repeats: false)
+            )
         } else {
             fireAtMillis = WarmAlarmRecurrence.recoveryFireAtMillis(
                 identifier: identifier,

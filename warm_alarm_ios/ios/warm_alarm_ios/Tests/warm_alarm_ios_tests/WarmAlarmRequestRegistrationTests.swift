@@ -596,6 +596,52 @@ final class WarmAlarmRequestTests: XCTestCase {
         )
     }
 
+    func testRecoveryKeepsSnoozedPrimaryRelativeToFallbacks() {
+        let anchor = Int64(1_900_000_000_000)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: anchor)
+        ).withActiveSnooze(
+            untilMillis: anchor,
+            fallbackAnchorMillis: anchor
+        )
+
+        let requests = WarmAlarmPlugin.makeRecoveryRequests(
+            for: schedule,
+            nowMillis: anchor - 60_000,
+            pendingIdentifiers: Set(WarmAlarmPlugin.fallbackIdentifiers(for: 42)),
+            content: UNMutableNotificationContent(),
+            calendar: utcCalendar()
+        )
+
+        XCTAssertEqual(requests.map(\.identifier), ["42"])
+        let trigger = requests.first?.trigger as? UNTimeIntervalNotificationTrigger
+        XCTAssertEqual(trigger?.timeInterval, 60)
+        XCTAssertEqual(trigger?.repeats, false)
+    }
+
+    func testRecoveryBackfillsAnExpiredSelectedFallbackWithinItsSlot() {
+        let anchor = Int64(1_900_000_000_000)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: anchor)
+        ).withActiveSnooze(
+            untilMillis: anchor,
+            fallbackAnchorMillis: anchor
+        )
+
+        let requests = WarmAlarmPlugin.refreshSelectedRecoveryRequests(
+            for: schedule,
+            nowMillis: anchor + 31_000,
+            pendingIdentifiers: [],
+            content: UNMutableNotificationContent(),
+            selectedIdentifiers: ["42#fallback#1"],
+            calendar: utcCalendar()
+        )
+
+        XCTAssertEqual(requests.map(\.identifier), ["42#fallback#2"])
+        let trigger = requests.first?.trigger as? UNTimeIntervalNotificationTrigger
+        XCTAssertEqual(trigger?.timeInterval, 29)
+    }
+
     func testRecoveryCapacityPreservesEveryMissingCoreBeforeFallbacks() {
         let anchor = Int64(1_900_000_000_000)
         let pending = Set((0..<60).map { "existing-\($0)" })
