@@ -38,13 +38,13 @@ enum WarmAlarmSnoozeRegistration {
         rollback: @escaping () -> Void,
         completion: @escaping (Error?) -> Void
     ) {
+        persistIntent()
         register { error in
             if let error {
                 rollback()
                 completion(error)
                 return
             }
-            persistIntent()
             completion(nil)
         }
     }

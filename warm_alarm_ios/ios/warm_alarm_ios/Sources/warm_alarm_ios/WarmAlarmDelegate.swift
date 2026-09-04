@@ -184,12 +184,6 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
                 return
             }
             if let error {
-                let isRecurring = !(schedule?.recurrenceWeekdays?.isEmpty ?? true)
-                if isRecurring, let schedule {
-                    WarmAlarmStore.shared.save(schedule.clearingFallbackAnchor())
-                } else {
-                    WarmAlarmStore.shared.remove(id: alarmId)
-                }
                 self.emitFailure(alarmId: alarmId, message: error.localizedDescription)
             } else {
                 self.emitEvent(WarmAlarmEventWire(
@@ -427,7 +421,14 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
                     )
                 }
             },
-            rollback: {},
+            rollback: {
+                let isRecurring = !(existing.recurrenceWeekdays?.isEmpty ?? true)
+                if isRecurring {
+                    WarmAlarmStore.shared.save(existing.clearingFallbackAnchor())
+                } else {
+                    WarmAlarmStore.shared.remove(id: existing.id)
+                }
+            },
             completion: completion
         )
     }

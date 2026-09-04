@@ -80,6 +80,53 @@ final class WarmAlarmRequestRegistrationTests: XCTestCase {
     }
 }
 
+final class WarmAlarmSnoozeRegistrationTests: XCTestCase {
+    func testPersistsIntentBeforeRegistrationStarts() {
+        var steps = [String]()
+
+        WarmAlarmSnoozeRegistration.perform(
+            persistIntent: {
+                steps.append("persist")
+            },
+            register: { _ in
+                steps.append("register")
+            },
+            rollback: {
+                XCTFail("An unfinished registration must not roll back the intent")
+            },
+            completion: { _ in
+                XCTFail("An unfinished registration must not complete")
+            }
+        )
+
+        XCTAssertEqual(steps, ["persist", "register"])
+    }
+
+    func testRollsBackIntentWhenRegistrationReportsFailure() {
+        let expectedError = NSError(domain: "WarmAlarmTests", code: 4)
+        var steps = [String]()
+
+        WarmAlarmSnoozeRegistration.perform(
+            persistIntent: {
+                steps.append("persist")
+            },
+            register: { completion in
+                steps.append("register")
+                completion(expectedError)
+            },
+            rollback: {
+                steps.append("rollback")
+            },
+            completion: { error in
+                XCTAssertEqual((error as NSError?)?.domain, expectedError.domain)
+                steps.append("completion")
+            }
+        )
+
+        XCTAssertEqual(steps, ["persist", "register", "rollback", "completion"])
+    }
+}
+
 final class WarmAlarmRequestTests: XCTestCase {
     func testListsEveryFallbackIdentifierForCancellation() {
         XCTAssertEqual(
