@@ -31,6 +31,14 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             completionHandler([.alert, .sound])
             return
         }
+        guard Self.shouldHandleForegroundNotification(
+            identifier: notification.request.identifier,
+            alarmId: alarmId,
+            currentlyPlayingAlarmId: currentlyPlayingAlarmId
+        ) else {
+            completionHandler([])
+            return
+        }
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
         startAudio(alarmId: alarmId, for: schedule)
         emitEvent(WarmAlarmEventWire(
@@ -78,7 +86,12 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         }
         if schedule?.keepNotificationAfterAlarmEnds != true {
             UNUserNotificationCenter.current().removeDeliveredNotifications(
-                withIdentifiers: [deliveredIdentifier ?? String(alarmId)])
+                withIdentifiers: Self.deliveredIdentifiersToRemove(
+                    alarmId: alarmId,
+                    recurrenceWeekdays: schedule?.recurrenceWeekdays,
+                    deliveredIdentifier: deliveredIdentifier
+                )
+            )
         }
         emitEvent(WarmAlarmEventWire(
             alarmId: alarmId, type: .stopped, occurredAtMillis: nowMillis(), payload: schedule?.payload))
@@ -90,7 +103,12 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
         if schedule?.keepNotificationAfterAlarmEnds != true {
             UNUserNotificationCenter.current().removeDeliveredNotifications(
-                withIdentifiers: [deliveredIdentifier ?? String(alarmId)])
+                withIdentifiers: Self.deliveredIdentifiersToRemove(
+                    alarmId: alarmId,
+                    recurrenceWeekdays: schedule?.recurrenceWeekdays,
+                    deliveredIdentifier: deliveredIdentifier
+                )
+            )
         }
         let snoozeDurationMillis = schedule?.snoozeDurationMillis ?? (5 * 60 * 1000)
         let fireAt = nowMillis() + snoozeDurationMillis
@@ -105,6 +123,30 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     }
 
     // MARK: - Called by WarmAlarmPlugin
+
+    static func shouldHandleForegroundNotification(
+        identifier: String,
+        alarmId: Int64,
+        currentlyPlayingAlarmId: Int64?
+    ) -> Bool {
+        currentlyPlayingAlarmId != alarmId
+            || !WarmAlarmPlugin.isFallbackIdentifier(identifier, for: alarmId)
+    }
+
+    static func deliveredIdentifiersToRemove(
+        alarmId: Int64,
+        recurrenceWeekdays: [Int64]?,
+        deliveredIdentifier: String?
+    ) -> [String] {
+        var identifiers = WarmAlarmPlugin.requestIdentifiers(
+            for: alarmId,
+            recurrenceWeekdays: recurrenceWeekdays
+        )
+        if let deliveredIdentifier, !identifiers.contains(deliveredIdentifier) {
+            identifiers.append(deliveredIdentifier)
+        }
+        return identifiers
+    }
 
     func stopIfPlaying(alarmId: Int64) {
         guard currentlyPlayingAlarmId == alarmId else { return }

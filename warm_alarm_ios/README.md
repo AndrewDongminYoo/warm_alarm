@@ -46,13 +46,17 @@ timer.
 
 ### Recurrence
 
-Weekly recurrence is delivered natively: one `UNCalendarNotificationTrigger(repeats: true)` is
-registered per selected weekday, matching `DateComponents(weekday, hour, minute)`, keyed
-`"{id}#{isoWeekday}"`. The series recurs without any re-arm and survives app termination. ISO
-weekdays (1 = Mon … 7 = Sun) are mapped to Apple's Calendar weekdays (1 = Sun … 7 = Sat).
-Dismissing an alarm ends only the current occurrence; `cancelAlarm(id)` removes every per-weekday
-request and tears down the series. **Note:** each recurring alarm consumes up to 7 of iOS's 64
-pending-notification slots.
+Weekly recurrence uses one native `UNCalendarNotificationTrigger(repeats: true)` for each selected weekday.
+Each request matches `DateComponents(weekday, hour, minute)` and uses the key `"{id}#{isoWeekday}"`.
+The series recurs without a re-arm and survives app termination.
+ISO weekdays (1 = Mon … 7 = Sun) are mapped to Apple's Calendar weekdays (1 = Sun … 7 = Sat).
+Dismissing an alarm ends only the current occurrence.
+`cancelAlarm(id)` removes every weekday request and tears down the series.
+Each alarm also uses up to six slots for its finite fallback chain.
+Before scheduling, the plugin counts all pending app requests against the iOS limit of 64 requests.
+The plugin keeps every primary or weekday request and adds the longest fallback prefix that fits.
+The schedule result contains a warning if the plugin omits a fallback.
+Scheduling fails without replacing the prior schedule if the primary or weekday requests do not fit.
 
 ### Kill warning
 
