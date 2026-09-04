@@ -690,7 +690,7 @@ final class WarmAlarmRequestTests: XCTestCase {
 
     func testRecoveryDetectsDateLineChangeWhenRecurringHourIsUnchanged() {
         var schedulingCalendar = Calendar(identifier: .gregorian)
-        schedulingCalendar.timeZone = TimeZone(identifier: "Pacific/Kiritimati")!
+        schedulingCalendar.timeZone = TimeZone(secondsFromGMT: 14 * 60 * 60)!
         let anchor = millis(2030, 3, 11, 7, 0, calendar: schedulingCalendar)
         let wire = makeWireSchedule(
             scheduledAtMillis: anchor,
@@ -702,7 +702,7 @@ final class WarmAlarmRequestTests: XCTestCase {
             calendar: schedulingCalendar
         )
         var recoveryCalendar = Calendar(identifier: .gregorian)
-        recoveryCalendar.timeZone = TimeZone(identifier: "Pacific/Honolulu")!
+        recoveryCalendar.timeZone = TimeZone(secondsFromGMT: -10 * 60 * 60)!
 
         let requests = WarmAlarmPlugin.makeRecoveryRequests(
             for: schedule,
@@ -868,6 +868,38 @@ final class WarmAlarmRequestTests: XCTestCase {
             "42#fallback#2",
         ])
         XCTAssertEqual(selection?.omittedFallbackCount, 10)
+    }
+
+    func testRecoveryOrdersTimeZoneShiftedSchedulesByReconstructedOccurrence() {
+        var schedulingCalendar = Calendar(identifier: .gregorian)
+        schedulingCalendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        let laterWire = makeWireSchedule(
+            id: 42,
+            scheduledAtMillis: millis(2030, 3, 5, 7, 0, calendar: schedulingCalendar),
+            recurrenceWeekdays: [2]
+        )
+        let imminentWire = makeWireSchedule(
+            id: 84,
+            scheduledAtMillis: millis(2030, 3, 11, 7, 0, calendar: schedulingCalendar),
+            recurrenceWeekdays: [1]
+        )
+        let schedules = [laterWire, imminentWire].map {
+            WarmAlarmScheduleData.from(
+                wire: $0,
+                fallbackAnchorMillis: $0.scheduledAtMillis,
+                calendar: schedulingCalendar
+            )
+        }
+        var recoveryCalendar = Calendar(identifier: .gregorian)
+        recoveryCalendar.timeZone = TimeZone(identifier: "America/New_York")!
+
+        let sorted = WarmAlarmPlugin.sortedRecoverableSchedules(
+            schedules,
+            nowMillis: millis(2030, 3, 11, 6, 0, calendar: recoveryCalendar),
+            calendar: recoveryCalendar
+        )
+
+        XCTAssertEqual(sorted.map(\.id), [84, 42])
     }
 
     func testForegroundOccurrenceTrackerScopesSuppressionToResettableOccurrence() {

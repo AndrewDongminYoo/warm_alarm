@@ -405,10 +405,14 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
 
     private static func recoveryOrderingAnchorMillis(
         for schedule: WarmAlarmScheduleData,
-        nowMillis _: Int64,
-        calendar _: Calendar
+        nowMillis: Int64,
+        calendar: Calendar
     ) -> Int64 {
-        schedule.fallbackAnchorMillis ?? schedule.scheduledAtMillis
+        recoveryFallbackAnchorMillis(
+            for: schedule,
+            nowMillis: nowMillis,
+            calendar: calendar
+        ) ?? schedule.snapshotScheduledAtMillis(nowMillis: nowMillis, calendar: calendar)
     }
 
     static func makeRecoveryRequests(
