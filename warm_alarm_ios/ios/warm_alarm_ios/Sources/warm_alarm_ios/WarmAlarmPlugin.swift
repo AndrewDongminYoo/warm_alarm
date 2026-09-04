@@ -140,17 +140,20 @@ struct WarmAlarmRequestSelection {
 
 public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     private let delegate: WarmAlarmDelegate
+    private let notificationMutationQueue: WarmAlarmMutationQueue
     private static let killWarningNotifId = "warm_alarm_kill_warning_notif"
     private static let killWarningDefaultsKey = "warm_alarm_kill_warning"
     private static let fallbackCount = 6
     private static let fallbackIntervalMillis: Int64 = 30_000
     private static let pendingNotificationLimit = 64
     private var lifecycleObservers: [NSObjectProtocol] = []
-    // ponytail: serializes all Apple notification mutations; split by alarm ID only if contention is measured.
-    private let notificationMutationQueue = WarmAlarmMutationQueue(label: "warm_alarm.notification_mutation")
 
-    init(delegate: WarmAlarmDelegate) {
+    init(
+        delegate: WarmAlarmDelegate,
+        notificationMutationQueue: WarmAlarmMutationQueue
+    ) {
         self.delegate = delegate
+        self.notificationMutationQueue = notificationMutationQueue
         super.init()
         setupLifecycleObservers()
     }
@@ -190,8 +193,16 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     public static func register(with registrar: FlutterPluginRegistrar) {
         let binaryMessenger = registrar.messenger()
         let eventsApi = WarmAlarmEventsApi(binaryMessenger: binaryMessenger)
-        let delegate = WarmAlarmDelegate(eventsApi: eventsApi)
-        let instance = WarmAlarmPlugin(delegate: delegate)
+        // ponytail: serializes all Apple notification mutations; split by alarm ID only if contention is measured.
+        let notificationMutationQueue = WarmAlarmMutationQueue(label: "warm_alarm.notification_mutation")
+        let delegate = WarmAlarmDelegate(
+            eventsApi: eventsApi,
+            notificationMutationQueue: notificationMutationQueue
+        )
+        let instance = WarmAlarmPlugin(
+            delegate: delegate,
+            notificationMutationQueue: notificationMutationQueue
+        )
 
         UNUserNotificationCenter.current().delegate = delegate
         WarmAlarmDelegate.registerCategories()

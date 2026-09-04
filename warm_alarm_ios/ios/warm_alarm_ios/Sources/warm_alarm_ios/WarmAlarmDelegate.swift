@@ -10,13 +10,18 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     static let snoozeActionIdentifier = "SNOOZE"
 
     private let eventsApi: WarmAlarmEventsApi
+    private let notificationMutationQueue: WarmAlarmMutationQueue
     private var audioPlayer: AVAudioPlayer?
     private(set) var currentlyPlayingAlarmId: Int64?
     private var fadeWorkItems: [DispatchWorkItem] = []
     private var volumeEnforcerTimer: Timer?
 
-    init(eventsApi: WarmAlarmEventsApi) {
+    init(
+        eventsApi: WarmAlarmEventsApi,
+        notificationMutationQueue: WarmAlarmMutationQueue
+    ) {
         self.eventsApi = eventsApi
+        self.notificationMutationQueue = notificationMutationQueue
     }
 
     // MARK: - UNUserNotificationCenterDelegate
