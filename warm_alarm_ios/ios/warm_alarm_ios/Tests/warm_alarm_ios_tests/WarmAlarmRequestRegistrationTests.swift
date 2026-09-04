@@ -688,6 +688,40 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertEqual(fallbackTriggers.map(\.dateComponents.second), [0, 30, 0, 30, 0])
     }
 
+    func testRecoveryDetectsDateLineChangeWhenRecurringHourIsUnchanged() {
+        var schedulingCalendar = Calendar(identifier: .gregorian)
+        schedulingCalendar.timeZone = TimeZone(identifier: "Pacific/Kiritimati")!
+        let anchor = millis(2030, 3, 11, 7, 0, calendar: schedulingCalendar)
+        let wire = makeWireSchedule(
+            scheduledAtMillis: anchor,
+            recurrenceWeekdays: [1]
+        )
+        let schedule = WarmAlarmScheduleData.from(
+            wire: wire,
+            fallbackAnchorMillis: anchor,
+            calendar: schedulingCalendar
+        )
+        var recoveryCalendar = Calendar(identifier: .gregorian)
+        recoveryCalendar.timeZone = TimeZone(identifier: "Pacific/Honolulu")!
+
+        let requests = WarmAlarmPlugin.makeRecoveryRequests(
+            for: schedule,
+            nowMillis: millis(2030, 3, 10, 7, 0, calendar: recoveryCalendar) + 45_000,
+            pendingIdentifiers: ["42#1"],
+            content: UNMutableNotificationContent(),
+            calendar: recoveryCalendar
+        )
+
+        XCTAssertEqual(requests.map(\.identifier), WarmAlarmPlugin.fallbackIdentifiers(for: 42))
+        let firstFallback = requests.first?.trigger as? UNCalendarNotificationTrigger
+        XCTAssertEqual(firstFallback?.dateComponents.year, 2030)
+        XCTAssertEqual(firstFallback?.dateComponents.month, 3)
+        XCTAssertEqual(firstFallback?.dateComponents.day, 11)
+        XCTAssertEqual(firstFallback?.dateComponents.hour, 7)
+        XCTAssertEqual(firstFallback?.dateComponents.minute, 0)
+        XCTAssertEqual(firstFallback?.dateComponents.second, 30)
+    }
+
     func testRecoveryDoesNotAdvanceAnExpiredRecurringFallbackChainWithoutTimeZoneChange() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!

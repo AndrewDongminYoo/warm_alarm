@@ -896,8 +896,10 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             return persistedAnchorMillis
         }
         let persistedAnchorDate = Date(timeIntervalSince1970: Double(persistedAnchorMillis) / 1_000)
-        let persistedTime = calendar.dateComponents([.hour, .minute], from: persistedAnchorDate)
-        guard persistedTime.hour != hour || persistedTime.minute != minute else {
+        let persistedTime = calendar.dateComponents([.weekday, .hour, .minute], from: persistedAnchorDate)
+        let appleWeekdays = Set(weekdays.map(WarmAlarmRecurrence.appleWeekday))
+        let persistedWeekdayMatches = persistedTime.weekday.map(appleWeekdays.contains) ?? false
+        guard !persistedWeekdayMatches || persistedTime.hour != hour || persistedTime.minute != minute else {
             return persistedAnchorMillis
         }
         let fallbackWindowMillis = Int64(fallbackCount) * fallbackIntervalMillis
