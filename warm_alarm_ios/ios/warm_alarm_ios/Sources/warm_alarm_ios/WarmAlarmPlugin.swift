@@ -447,7 +447,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     /// id. A recurring alarm produces one repeating `UNCalendarNotificationTrigger`
     /// per selected weekday, keyed by `"{id}#{isoWeekday}"`, so the series survives
     /// app termination without needing a re-arm on fire.
-    private static func makeRequests(
+    static func makeRequests(
         for schedule: WarmAlarmScheduleWire,
         content: UNNotificationContent
     ) -> [UNNotificationRequest] {
