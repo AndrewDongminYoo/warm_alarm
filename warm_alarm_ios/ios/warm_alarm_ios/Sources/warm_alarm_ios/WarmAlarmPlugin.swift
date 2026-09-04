@@ -273,8 +273,13 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                     finish()
                     return
                 }
-                let recoverableAlarms = Self.sortedRecoverableSchedules(
+                let migratedSchedules = Self.migrateRecurringWallTimes(
                     storedSchedules,
+                    pendingRequests: pending,
+                    save: { WarmAlarmStore.shared.save($0) }
+                )
+                let recoverableAlarms = Self.sortedRecoverableSchedules(
+                    migratedSchedules,
                     nowMillis: nowMillis
                 )
                 self.recoverAlarms(
@@ -385,6 +390,14 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         }
         guard let anchor = schedule.fallbackAnchorMillis else { return false }
         return fallbackFireAtMillis(anchorMillis: anchor, index: fallbackCount) > nowMillis
+    }
+
+    static func migrateRecurringWallTimes(
+        _ schedules: [WarmAlarmScheduleData],
+        pendingRequests _: [UNNotificationRequest],
+        save _: (WarmAlarmScheduleData) -> Void
+    ) -> [WarmAlarmScheduleData] {
+        schedules
     }
 
     static func sortedRecoverableSchedules(
