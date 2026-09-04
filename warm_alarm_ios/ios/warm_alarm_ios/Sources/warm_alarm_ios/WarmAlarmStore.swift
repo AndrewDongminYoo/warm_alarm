@@ -141,19 +141,34 @@ extension WarmAlarmScheduleData {
         fallbackAnchorMillis: Int64? = nil
     ) -> WarmAlarmScheduleData {
         copying(
+            recurrenceHour: recurrenceHour,
+            recurrenceMinute: recurrenceMinute,
             activeSnoozeUntilMillis: untilMillis,
+            fallbackAnchorMillis: fallbackAnchorMillis
+        )
+    }
+
+    func withRecurrenceTime(hour: Int, minute: Int) -> WarmAlarmScheduleData {
+        copying(
+            recurrenceHour: hour,
+            recurrenceMinute: minute,
+            activeSnoozeUntilMillis: activeSnoozeUntilMillis,
             fallbackAnchorMillis: fallbackAnchorMillis
         )
     }
 
     func clearingFallbackAnchor() -> WarmAlarmScheduleData {
         copying(
+            recurrenceHour: recurrenceHour,
+            recurrenceMinute: recurrenceMinute,
             activeSnoozeUntilMillis: activeSnoozeUntilMillis,
             fallbackAnchorMillis: nil
         )
     }
 
     private func copying(
+        recurrenceHour: Int?,
+        recurrenceMinute: Int?,
         activeSnoozeUntilMillis: Int64?,
         fallbackAnchorMillis: Int64?
     ) -> WarmAlarmScheduleData {
@@ -165,8 +180,7 @@ extension WarmAlarmScheduleData {
             loop: loop, volume: volume, vibrate: vibrate,
             fadeInDurationMillis: fadeInDurationMillis,
             recurrenceWeekdays: recurrenceWeekdays,
-            recurrenceHour: recurrenceHour,
-            recurrenceMinute: recurrenceMinute,
+            recurrenceHour: recurrenceHour, recurrenceMinute: recurrenceMinute,
             snoozeDurationMillis: snoozeDurationMillis,
             payload: payload,
             volumeEnforced: volumeEnforced,

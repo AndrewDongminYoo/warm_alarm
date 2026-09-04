@@ -938,6 +938,44 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertEqual(sorted.map(\.id), [84, 42])
     }
 
+    func testMigrationPersistsRecurringWallTimeFromPendingTrigger() throws {
+        let legacyJSON = """
+        {
+          "id": 42,
+          "scheduledAtMillis": 1900000000000,
+          "notificationTitle": "Wake up",
+          "notificationBody": "Alarm",
+          "recurrenceWeekdays": [1]
+        }
+        """
+        let schedule = try JSONDecoder().decode(
+            WarmAlarmScheduleData.self,
+            from: Data(legacyJSON.utf8)
+        )
+        var components = DateComponents()
+        components.weekday = 2
+        components.hour = 7
+        components.minute = 30
+        let pendingRequest = UNNotificationRequest(
+            identifier: "42#1",
+            content: UNMutableNotificationContent(),
+            trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+        )
+        var saved: [WarmAlarmScheduleData] = []
+
+        let migrated = WarmAlarmPlugin.migrateRecurringWallTimes(
+            [schedule],
+            pendingRequests: [pendingRequest],
+            save: { saved.append($0) }
+        )
+
+        XCTAssertEqual(migrated.first?.recurrenceHour, 7)
+        XCTAssertEqual(migrated.first?.recurrenceMinute, 30)
+        XCTAssertEqual(saved.map(\.id), [42])
+        XCTAssertEqual(saved.first?.recurrenceHour, 7)
+        XCTAssertEqual(saved.first?.recurrenceMinute, 30)
+    }
+
     func testForegroundOccurrenceTrackerScopesSuppressionToResettableOccurrence() {
         let tracker = WarmAlarmForegroundOccurrenceTracker()
 

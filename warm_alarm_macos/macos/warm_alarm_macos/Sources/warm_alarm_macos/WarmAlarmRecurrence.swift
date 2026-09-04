@@ -51,13 +51,31 @@ enum WarmAlarmRecurrence {
     ) -> Int64? {
         guard !weekdays.isEmpty else { return nil }
         let scheduledDate = Date(timeIntervalSince1970: Double(scheduledAtMillis) / 1_000)
-        let afterDate = Date(timeIntervalSince1970: Double(afterMillis) / 1_000)
         let time = calendar.dateComponents([.hour, .minute], from: scheduledDate)
+        guard let hour = time.hour, let minute = time.minute else { return nil }
+        return nextOccurrenceMillis(
+            hour: hour,
+            minute: minute,
+            weekdays: weekdays,
+            afterMillis: afterMillis,
+            calendar: calendar
+        )
+    }
+
+    static func nextOccurrenceMillis(
+        hour: Int,
+        minute: Int,
+        weekdays: [Int64],
+        afterMillis: Int64,
+        calendar: Calendar = .current
+    ) -> Int64? {
+        guard !weekdays.isEmpty else { return nil }
+        let afterDate = Date(timeIntervalSince1970: Double(afterMillis) / 1_000)
         return weekdays.compactMap { isoWeekday -> Date? in
             var components = DateComponents()
             components.weekday = appleWeekday(fromIso: isoWeekday)
-            components.hour = time.hour
-            components.minute = time.minute
+            components.hour = hour
+            components.minute = minute
             return calendar.nextDate(after: afterDate, matching: components, matchingPolicy: .nextTime)
         }.min().map { Int64($0.timeIntervalSince1970 * 1_000) }
     }

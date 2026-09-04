@@ -262,12 +262,8 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 return
             }
             let nowMillis = Int64(Date().timeIntervalSince1970 * 1000)
-            let stored = WarmAlarmStore.shared.loadAll()
-            let recoverableAlarms = Self.sortedRecoverableSchedules(
-                Array(stored.values),
-                nowMillis: nowMillis
-            )
-            guard !recoverableAlarms.isEmpty else {
+            let storedSchedules = Array(WarmAlarmStore.shared.loadAll().values)
+            guard storedSchedules.contains(where: { Self.shouldRecover(schedule: $0, nowMillis: nowMillis) }) else {
                 WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
                 return
             }
@@ -277,6 +273,15 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                     finish()
                     return
                 }
+                let migratedSchedules = Self.migrateRecurringWallTimes(
+                    storedSchedules,
+                    pendingRequests: pending,
+                    save: { WarmAlarmStore.shared.save($0) }
+                )
+                let recoverableAlarms = Self.sortedRecoverableSchedules(
+                    migratedSchedules,
+                    nowMillis: nowMillis
+                )
                 self.recoverAlarms(
                     recoverableAlarms,
                     pendingIdentifiers: Set(pending.map { $0.identifier }),
@@ -385,6 +390,31 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         }
         guard let anchor = schedule.fallbackAnchorMillis else { return false }
         return fallbackFireAtMillis(anchorMillis: anchor, index: fallbackCount) > nowMillis
+    }
+
+    static func migrateRecurringWallTimes(
+        _ schedules: [WarmAlarmScheduleData],
+        pendingRequests: [UNNotificationRequest],
+        save: (WarmAlarmScheduleData) -> Void
+    ) -> [WarmAlarmScheduleData] {
+        schedules.map { schedule in
+            guard schedule.recurrenceHour == nil || schedule.recurrenceMinute == nil,
+                  let weekdays = schedule.recurrenceWeekdays, !weekdays.isEmpty else {
+                return schedule
+            }
+            let recurringIdentifiers = Set(weekdays.map { "\(schedule.id)#\($0)" })
+            guard let trigger = pendingRequests.first(where: {
+                recurringIdentifiers.contains($0.identifier)
+                    && ($0.trigger as? UNCalendarNotificationTrigger)?.repeats == true
+            })?.trigger as? UNCalendarNotificationTrigger,
+                  let hour = trigger.dateComponents.hour,
+                  let minute = trigger.dateComponents.minute else {
+                return schedule
+            }
+            let migrated = schedule.withRecurrenceTime(hour: hour, minute: minute)
+            save(migrated)
+            return migrated
+        }
     }
 
     static func sortedRecoverableSchedules(

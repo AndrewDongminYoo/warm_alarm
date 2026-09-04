@@ -19,6 +19,8 @@ struct WarmAlarmScheduleData: Codable {
     let vibrate: Bool
     let fadeInDurationMillis: Int64?
     let recurrenceWeekdays: [Int64]?
+    let recurrenceHour: Int?
+    let recurrenceMinute: Int?
     let snoozeDurationMillis: Int64?
     let payload: String?
     let volumeEnforced: Bool?
@@ -32,7 +34,7 @@ struct WarmAlarmScheduleData: Codable {
         case id, scheduledAtMillis, notificationTitle, notificationBody
         case stopActionTitle, snoozeActionTitle, filePath, assetPath
         case loop, volume, vibrate, fadeInDurationMillis
-        case recurrenceWeekdays, snoozeDurationMillis, payload
+        case recurrenceWeekdays, recurrenceHour, recurrenceMinute, snoozeDurationMillis, payload
         case volumeEnforced, fadeSteps, keepNotificationAfterAlarmEnds, activeSnoozeUntilMillis
     }
 }
@@ -43,7 +45,16 @@ extension WarmAlarmScheduleData {
         calendar: Calendar = .current
     ) -> Int64 {
         let nextRecurrence = recurrenceWeekdays.flatMap { weekdays in
-            WarmAlarmRecurrence.nextOccurrenceMillis(
+            if let recurrenceHour, let recurrenceMinute {
+                return WarmAlarmRecurrence.nextOccurrenceMillis(
+                    hour: recurrenceHour,
+                    minute: recurrenceMinute,
+                    weekdays: weekdays,
+                    afterMillis: nowMillis,
+                    calendar: calendar
+                )
+            }
+            return WarmAlarmRecurrence.nextOccurrenceMillis(
                 scheduledAtMillis: scheduledAtMillis,
                 weekdays: weekdays,
                 afterMillis: nowMillis,
@@ -72,6 +83,8 @@ extension WarmAlarmScheduleData {
         vibrate = try c.decodeIfPresent(Bool.self, forKey: .vibrate) ?? false
         fadeInDurationMillis = try c.decodeIfPresent(Int64.self, forKey: .fadeInDurationMillis)
         recurrenceWeekdays = try c.decodeIfPresent([Int64].self, forKey: .recurrenceWeekdays)
+        recurrenceHour = try c.decodeIfPresent(Int.self, forKey: .recurrenceHour)
+        recurrenceMinute = try c.decodeIfPresent(Int.self, forKey: .recurrenceMinute)
         snoozeDurationMillis = try c.decodeIfPresent(Int64.self, forKey: .snoozeDurationMillis)
         payload = try c.decodeIfPresent(String.self, forKey: .payload)
         volumeEnforced = try c.decodeIfPresent(Bool.self, forKey: .volumeEnforced)
@@ -81,8 +94,19 @@ extension WarmAlarmScheduleData {
         activeSnoozeUntilMillis = try c.decodeIfPresent(Int64.self, forKey: .activeSnoozeUntilMillis)
     }
 
-    static func from(wire: WarmAlarmScheduleWire) -> WarmAlarmScheduleData {
-        WarmAlarmScheduleData(
+    static func from(
+        wire: WarmAlarmScheduleWire,
+        calendar: Calendar = .current
+    ) -> WarmAlarmScheduleData {
+        let recurrenceTime = if wire.recurrence?.weekdays.isEmpty == false {
+            calendar.dateComponents(
+                [.hour, .minute],
+                from: Date(timeIntervalSince1970: Double(wire.scheduledAtMillis) / 1_000)
+            )
+        } else {
+            DateComponents()
+        }
+        return WarmAlarmScheduleData(
             id: wire.id,
             scheduledAtMillis: wire.scheduledAtMillis,
             notificationTitle: wire.notification.title,
@@ -96,6 +120,8 @@ extension WarmAlarmScheduleData {
             vibrate: wire.audio.vibrate,
             fadeInDurationMillis: wire.audio.fadeInDurationMillis,
             recurrenceWeekdays: wire.recurrence?.weekdays,
+            recurrenceHour: recurrenceTime.hour,
+            recurrenceMinute: recurrenceTime.minute,
             snoozeDurationMillis: wire.snooze?.durationMillis,
             payload: wire.payload,
             volumeEnforced: wire.audio.volumeEnforced,
@@ -106,6 +132,26 @@ extension WarmAlarmScheduleData {
     }
 
     func withActiveSnooze(untilMillis: Int64) -> WarmAlarmScheduleData {
+        copying(
+            recurrenceHour: recurrenceHour,
+            recurrenceMinute: recurrenceMinute,
+            activeSnoozeUntilMillis: untilMillis
+        )
+    }
+
+    func withRecurrenceTime(hour: Int, minute: Int) -> WarmAlarmScheduleData {
+        copying(
+            recurrenceHour: hour,
+            recurrenceMinute: minute,
+            activeSnoozeUntilMillis: activeSnoozeUntilMillis
+        )
+    }
+
+    private func copying(
+        recurrenceHour: Int?,
+        recurrenceMinute: Int?,
+        activeSnoozeUntilMillis: Int64?
+    ) -> WarmAlarmScheduleData {
         WarmAlarmScheduleData(
             id: id, scheduledAtMillis: scheduledAtMillis,
             notificationTitle: notificationTitle, notificationBody: notificationBody,
@@ -114,12 +160,14 @@ extension WarmAlarmScheduleData {
             loop: loop, volume: volume, vibrate: vibrate,
             fadeInDurationMillis: fadeInDurationMillis,
             recurrenceWeekdays: recurrenceWeekdays,
+            recurrenceHour: recurrenceHour,
+            recurrenceMinute: recurrenceMinute,
             snoozeDurationMillis: snoozeDurationMillis,
             payload: payload,
             volumeEnforced: volumeEnforced,
             fadeSteps: fadeSteps,
             keepNotificationAfterAlarmEnds: keepNotificationAfterAlarmEnds,
-            activeSnoozeUntilMillis: untilMillis
+            activeSnoozeUntilMillis: activeSnoozeUntilMillis
         )
     }
 }
