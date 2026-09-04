@@ -100,6 +100,23 @@ final class WarmAlarmStoreTests: XCTestCase {
         XCTAssertEqual(snoozed.snapshotScheduledAtMillis(nowMillis: 2_000), 3_000)
     }
 
+    func testAddingActiveSnoozeCanReplaceFallbackAnchor() {
+        let schedule = makeData(
+            id: 42,
+            scheduledAt: 1_000,
+            recurrenceWeekdays: [1, 3, 5],
+            fallbackAnchorMillis: 1_500
+        )
+
+        let snoozed = schedule.withActiveSnooze(
+            untilMillis: 3_000,
+            fallbackAnchorMillis: 3_000
+        )
+
+        XCTAssertEqual(snoozed.activeSnoozeUntilMillis, 3_000)
+        XCTAssertEqual(snoozed.fallbackAnchorMillis, 3_000)
+    }
+
     func testClearingFallbackAnchorPreservesRecurringSchedule() {
         let schedule = makeData(
             id: 42,
