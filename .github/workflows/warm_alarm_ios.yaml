@@ -38,6 +38,43 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Assert every Swift test belongs to RunnerTests
+        run: |
+          set -euo pipefail
+          project_file=warm_alarm/example/ios/Runner.xcodeproj/project.pbxproj
+          test_directory=warm_alarm_ios/ios/warm_alarm_ios/Tests/warm_alarm_ios_tests
+          project_json=$(plutil -convert json -o - "$project_file")
+          sources_phase_id=$(printf '%s' "$project_json" | jq -er '
+            .objects as $objects
+            | [
+                $objects
+                | to_entries[]
+                | select(.value.isa == "PBXNativeTarget" and .value.name == "RunnerTests")
+                | .value.buildPhases[]
+                | select($objects[.].isa == "PBXSourcesBuildPhase")
+              ]
+            | if length == 1 then .[0] else error("expected one RunnerTests sources phase") end
+          ')
+          project_test_files=$(printf '%s' "$project_json" | jq -r --arg phase "$sources_phase_id" '
+            .objects as $objects
+            | $objects[$phase].files[]
+            | $objects[.].fileRef
+            | $objects[.].path
+          ' | sort -u)
+          test_files=$(find "$test_directory" -maxdepth 1 -type f -name '*.swift' -exec basename {} \; | sort -u)
+          if [ -z "$test_files" ]; then
+            echo "No Swift test sources found in $test_directory" >&2
+            exit 1
+          fi
+          missing_files=$(comm -23 \
+            <(printf '%s\n' "$test_files") \
+            <(printf '%s\n' "$project_test_files"))
+          if [ -n "$missing_files" ]; then
+            echo "Swift tests missing from RunnerTests:" >&2
+            echo "$missing_files" >&2
+            exit 1
+          fi
+
       - uses: subosito/flutter-action@v2.23.0
         with:
           channel: stable
