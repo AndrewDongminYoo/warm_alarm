@@ -198,6 +198,29 @@ final class WarmAlarmStoreTests: XCTestCase {
         XCTAssertEqual(schedule.recurrenceMinute, 30)
     }
 
+    func testRecurringSnapshotPreservesWallTimeAfterTimeZoneChange() {
+        var schedulingCalendar = Calendar(identifier: .gregorian)
+        schedulingCalendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        let wire = WarmAlarmScheduleWire(
+            id: 42,
+            scheduledAtMillis: millis(2030, 3, 11, 7, 0, calendar: schedulingCalendar),
+            notification: WarmAlarmNotificationWire(
+                title: "Wake up", body: "Alarm", keepNotificationAfterAlarmEnds: false),
+            audio: WarmAlarmAudioWire(loop: true, vibrate: true, volumeEnforced: false),
+            recurrence: WarmAlarmRecurrenceWire(weekdays: [1])
+        )
+        let schedule = WarmAlarmScheduleData.from(wire: wire, calendar: schedulingCalendar)
+        var snapshotCalendar = Calendar(identifier: .gregorian)
+        snapshotCalendar.timeZone = TimeZone(identifier: "America/New_York")!
+
+        let snapshotAtMillis = schedule.snapshotScheduledAtMillis(
+            nowMillis: millis(2030, 3, 11, 6, 0, calendar: snapshotCalendar),
+            calendar: snapshotCalendar
+        )
+
+        XCTAssertEqual(snapshotAtMillis, millis(2030, 3, 11, 7, 0, calendar: snapshotCalendar))
+    }
+
     private func utcCalendar() -> Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!

@@ -47,7 +47,16 @@ extension WarmAlarmScheduleData {
         calendar: Calendar = .current
     ) -> Int64 {
         let nextRecurrence = recurrenceWeekdays.flatMap { weekdays in
-            WarmAlarmRecurrence.nextOccurrenceMillis(
+            if let recurrenceHour, let recurrenceMinute {
+                return WarmAlarmRecurrence.nextOccurrenceMillis(
+                    hour: recurrenceHour,
+                    minute: recurrenceMinute,
+                    weekdays: weekdays,
+                    afterMillis: nowMillis,
+                    calendar: calendar
+                )
+            }
+            return WarmAlarmRecurrence.nextOccurrenceMillis(
                 scheduledAtMillis: scheduledAtMillis,
                 weekdays: weekdays,
                 afterMillis: nowMillis,
