@@ -28,6 +28,36 @@ final class WarmAlarmRequestRegistrationTests: XCTestCase {
         XCTAssertEqual(added, ["42#1", "42#3"])
     }
 
+    func testSubmitsEveryRequestBeforeWaitingForCallbacks() {
+        var added = [String]()
+        var callbacks = [(Error?) -> Void]()
+        var didComplete = false
+
+        WarmAlarmRequestRegistration.addAtomically(
+            ["42", "42#fallback#1"],
+            identifier: { $0 },
+            add: { identifier, completion in
+                added.append(identifier)
+                callbacks.append(completion)
+            },
+            rollback: { _ in
+                XCTFail("Successful registration must not roll back requests")
+            },
+            completion: { error in
+                XCTAssertNil(error)
+                didComplete = true
+            }
+        )
+
+        XCTAssertEqual(added, ["42", "42#fallback#1"])
+        guard callbacks.count == 2 else { return }
+        XCTAssertFalse(didComplete)
+        callbacks[0](nil)
+        XCTAssertFalse(didComplete)
+        callbacks[1](nil)
+        XCTAssertTrue(didComplete)
+    }
+
     func testRollsBackEveryRecurringIdentifierWhenFirstRequestFails() {
         let completed = expectation(description: "registration fails")
         let expectedError = NSError(domain: "WarmAlarmTests", code: 1)
@@ -544,7 +574,7 @@ final class WarmAlarmRequestTests: XCTestCase {
         ))
     }
 
-    func testRecoveryRestoresOnlyStillFutureFallbacksAsOneShots() {
+    func testRecoveryRestoresOnlyStillFutureFallbacksWithRemainingIntervals() {
         let anchor = Int64(1_900_000_000_000)
         let schedule = WarmAlarmScheduleData.from(
             wire: makeWireSchedule(scheduledAtMillis: anchor),
@@ -572,14 +602,10 @@ final class WarmAlarmRequestTests: XCTestCase {
             "42#fallback#5",
             "42#fallback#6",
         ])
-        let triggers = requests.compactMap { $0.trigger as? UNCalendarNotificationTrigger }
+        let triggers = requests.compactMap { $0.trigger as? UNTimeIntervalNotificationTrigger }
         XCTAssertEqual(triggers.count, 5)
         XCTAssertTrue(triggers.allSatisfy { !$0.repeats })
-        XCTAssertEqual(
-            triggers.compactMap { utcCalendar().date(from: $0.dateComponents) }
-                .map { Int64($0.timeIntervalSince1970 * 1_000) },
-            [anchor + 60_000, anchor + 90_000, anchor + 120_000, anchor + 150_000, anchor + 180_000]
-        )
+        XCTAssertEqual(triggers.map(\.timeInterval), [15, 45, 75, 105, 135])
     }
 
     func testRecoveryCapacityPreservesEveryMissingCoreBeforeFallbacks() {

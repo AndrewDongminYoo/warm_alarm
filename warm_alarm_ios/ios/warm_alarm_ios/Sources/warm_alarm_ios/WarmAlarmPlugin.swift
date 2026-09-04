@@ -11,23 +11,48 @@ enum WarmAlarmRequestRegistration {
         completion: @escaping (Error?) -> Void
     ) {
         let identifiers = requests.map(identifier)
+        guard !requests.isEmpty else {
+            completion(nil)
+            return
+        }
+        let stateLock = NSLock()
+        var remainingCount = requests.count
+        var firstError: Error?
+        var didSubmitAll = false
+        var didComplete = false
 
-        func addNext(at index: Int) {
-            guard index < requests.count else {
-                completion(nil)
+        func completeIfReady() {
+            stateLock.lock()
+            guard didSubmitAll, remainingCount == 0, !didComplete else {
+                stateLock.unlock()
                 return
             }
-            add(requests[index]) { error in
-                if let error {
-                    rollback(identifiers)
-                    completion(error)
-                    return
+            didComplete = true
+            let error = firstError
+            stateLock.unlock()
+
+            if error != nil {
+                rollback(identifiers)
+            }
+            completion(error)
+        }
+
+        for request in requests {
+            add(request) { error in
+                stateLock.lock()
+                remainingCount -= 1
+                if firstError == nil, let error {
+                    firstError = error
                 }
-                addNext(at: index + 1)
+                stateLock.unlock()
+                completeIfReady()
             }
         }
 
-        addNext(at: 0)
+        stateLock.lock()
+        didSubmitAll = true
+        stateLock.unlock()
+        completeIfReady()
     }
 }
 
@@ -391,15 +416,11 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         if let fallbackIndex = fallbackIndex(for: identifier, alarmId: schedule.id),
            let anchor = schedule.fallbackAnchorMillis {
             let fireAtMillis = fallbackFireAtMillis(anchorMillis: anchor, index: fallbackIndex)
-            let fireDate = Date(timeIntervalSince1970: Double(fireAtMillis) / 1000.0)
-            let components = calendar.dateComponents(
-                [.year, .month, .day, .hour, .minute, .second],
-                from: fireDate
-            )
+            let delay = max(1.0, Double(fireAtMillis - nowMillis) / 1_000.0)
             return UNNotificationRequest(
                 identifier: identifier,
                 content: content,
-                trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+                trigger: UNTimeIntervalNotificationTrigger(timeInterval: delay, repeats: false)
             )
         }
         let fireAtMillis = WarmAlarmRecurrence.recoveryFireAtMillis(
