@@ -315,20 +315,24 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             )))
             return
         }
-        let selectedIdentifiers = Set(selection.requests.map(\.identifier))
+        var nextGroupIndex = 0
+        var remainingRequestCount = selection.requests.count
         WarmAlarmRecovery.recoverAll(
             requestGroups,
             prepare: { group in
                 let registrationNowMillis = Int64(Date().timeIntervalSince1970 * 1_000)
-                let groupSelectedIdentifiers = selectedIdentifiers.intersection(
-                    group.requests.map(\.identifier)
-                )
-                let requests = Self.refreshSelectedRecoveryRequests(
-                    for: group.schedule,
-                    nowMillis: registrationNowMillis,
-                    pendingIdentifiers: pendingIdentifiers,
-                    content: group.content,
-                    selectedIdentifiers: groupSelectedIdentifiers
+                let remainingRequestGroups = requestGroups.dropFirst(nextGroupIndex).map { candidate in
+                    Self.makeRecoveryRequests(
+                        for: candidate.schedule,
+                        nowMillis: registrationNowMillis,
+                        pendingIdentifiers: pendingIdentifiers,
+                        content: candidate.content
+                    )
+                }
+                nextGroupIndex += 1
+                let requests = Self.selectNextRecoveryRequestsWithinLimit(
+                    remainingRequestGroups,
+                    remainingRequestCount: remainingRequestCount
                 )
                 return (schedule: group.schedule, content: group.content, requests: requests)
             },
@@ -339,9 +343,13 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 }
                 Self.addRequestsAtomically(
                     group.requests,
-                    center: center,
-                    completion: completion
-                )
+                    center: center
+                ) { error in
+                    if error == nil {
+                        remainingRequestCount -= group.requests.count
+                    }
+                    completion(error)
+                }
             },
             completion: completion
         )
@@ -405,21 +413,16 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         )
     }
 
-    static func refreshSelectedRecoveryRequests(
-        for schedule: WarmAlarmScheduleData,
-        nowMillis: Int64,
-        pendingIdentifiers: Set<String>,
-        content: UNNotificationContent,
-        selectedIdentifiers: Set<String>,
-        calendar: Calendar = .current
+    static func selectNextRecoveryRequestsWithinLimit(
+        _ requestGroups: [[UNNotificationRequest]],
+        remainingRequestCount: Int
     ) -> [UNNotificationRequest] {
-        Array(makeRecoveryRequests(
-            for: schedule,
-            nowMillis: nowMillis,
-            pendingIdentifiers: pendingIdentifiers,
-            content: content,
-            calendar: calendar
-        ).prefix(selectedIdentifiers.count))
+        guard let currentRequests = requestGroups.first else { return [] }
+        let futureCoreCount = coreRequestCount(in: requestGroups.dropFirst().flatMap { $0 })
+        let currentCoreRequests = currentRequests.filter { !isFallbackIdentifier($0.identifier) }
+        let currentFallbackRequests = currentRequests.filter { isFallbackIdentifier($0.identifier) }
+        let fallbackCount = max(0, remainingRequestCount - futureCoreCount - currentCoreRequests.count)
+        return currentCoreRequests + Array(currentFallbackRequests.prefix(fallbackCount))
     }
 
     private static func makeRecoveryRequest(

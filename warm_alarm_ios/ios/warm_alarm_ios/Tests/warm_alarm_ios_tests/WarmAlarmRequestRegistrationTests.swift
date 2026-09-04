@@ -628,18 +628,63 @@ final class WarmAlarmRequestTests: XCTestCase {
             fallbackAnchorMillis: anchor
         )
 
-        let requests = WarmAlarmPlugin.refreshSelectedRecoveryRequests(
+        let refreshedRequests = WarmAlarmPlugin.makeRecoveryRequests(
             for: schedule,
             nowMillis: anchor + 31_000,
             pendingIdentifiers: [],
             content: UNMutableNotificationContent(),
-            selectedIdentifiers: ["42#fallback#1"],
             calendar: utcCalendar()
+        )
+        let requests = WarmAlarmPlugin.selectNextRecoveryRequestsWithinLimit(
+            [refreshedRequests],
+            remainingRequestCount: 1
         )
 
         XCTAssertEqual(requests.map(\.identifier), ["42#fallback#2"])
         let trigger = requests.first?.trigger as? UNTimeIntervalNotificationTrigger
         XCTAssertEqual(trigger?.timeInterval, 29)
+    }
+
+    func testRecoveryReallocatesVacatedSlotsAcrossAlarmGroups() {
+        let content = UNMutableNotificationContent()
+        let laterFallback = UNNotificationRequest(
+            identifier: "84#fallback#2",
+            content: content,
+            trigger: nil
+        )
+
+        XCTAssertEqual(
+            WarmAlarmPlugin.selectNextRecoveryRequestsWithinLimit(
+                [[], [laterFallback]],
+                remainingRequestCount: 1
+            ).map(\.identifier),
+            []
+        )
+        XCTAssertEqual(
+            WarmAlarmPlugin.selectNextRecoveryRequestsWithinLimit(
+                [[laterFallback]],
+                remainingRequestCount: 1
+            ).map(\.identifier),
+            ["84#fallback#2"]
+        )
+    }
+
+    func testRecoveryReservesRemainingSlotsForFutureCoreRequests() {
+        let content = UNMutableNotificationContent()
+        let currentFallback = UNNotificationRequest(
+            identifier: "42#fallback#2",
+            content: content,
+            trigger: nil
+        )
+        let futureCore = UNNotificationRequest(identifier: "84", content: content, trigger: nil)
+
+        XCTAssertEqual(
+            WarmAlarmPlugin.selectNextRecoveryRequestsWithinLimit(
+                [[currentFallback], [futureCore]],
+                remainingRequestCount: 1
+            ).map(\.identifier),
+            []
+        )
     }
 
     func testRecoveryCapacityPreservesEveryMissingCoreBeforeFallbacks() {
