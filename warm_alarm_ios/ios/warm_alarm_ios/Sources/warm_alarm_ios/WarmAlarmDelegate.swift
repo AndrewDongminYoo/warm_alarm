@@ -31,7 +31,7 @@ final class WarmAlarmForegroundOccurrenceTracker: @unchecked Sendable {
     }
 
     func stop(alarmId: Int64) {
-        clear(alarmId: alarmId)
+        mark(alarmId: alarmId)
     }
 
     func clearAll() {

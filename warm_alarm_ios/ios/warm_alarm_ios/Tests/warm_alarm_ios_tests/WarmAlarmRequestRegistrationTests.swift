@@ -626,6 +626,17 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, isFallback: true))
     }
 
+    func testStopSuppressesLateFallbackUntilNextPrimaryOccurrence() {
+        let tracker = WarmAlarmForegroundOccurrenceTracker()
+
+        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, isFallback: false))
+        tracker.stop(alarmId: 42)
+
+        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, isFallback: true))
+        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, isFallback: false))
+        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, isFallback: true))
+    }
+
     func testForegroundOccurrenceTrackerAtomicallyHandlesOneConcurrentFallback() {
         let tracker = WarmAlarmForegroundOccurrenceTracker()
         let resultLock = NSLock()
