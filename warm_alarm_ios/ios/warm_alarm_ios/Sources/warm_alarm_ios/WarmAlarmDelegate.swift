@@ -68,6 +68,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     func handleStop(alarmId: Int64, deliveredIdentifier: String? = nil) {
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
         stopAudio()
+        removePendingFallbackRequests(for: alarmId)
         // Dismiss ends only this occurrence for a recurring alarm; the repeating
         // triggers stay armed, so keep the stored schedule. cancelAlarm tears down
         // the series.
@@ -85,6 +86,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
     func handleSnooze(alarmId: Int64, deliveredIdentifier: String? = nil) {
         stopAudio()
+        removePendingFallbackRequests(for: alarmId)
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
         if schedule?.keepNotificationAfterAlarmEnds != true {
             UNUserNotificationCenter.current().removeDeliveredNotifications(
@@ -253,6 +255,11 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         let request = UNNotificationRequest(
             identifier: String(alarmId), content: content, trigger: trigger)
         UNUserNotificationCenter.current().add(request) { _ in }
+    }
+
+    private func removePendingFallbackRequests(for alarmId: Int64) {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(
+            withIdentifiers: WarmAlarmPlugin.fallbackIdentifiers(for: alarmId))
     }
 
     // MARK: - Helpers

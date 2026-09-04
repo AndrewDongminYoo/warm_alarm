@@ -136,6 +136,8 @@ enum WarmAlarmRecovery {
 public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     private let delegate: WarmAlarmDelegate
     private static let killWarningNotifId = "warm_alarm_kill_warning_notif"
+    private static let fallbackCount = 6
+    private static let fallbackIntervalMillis: Int64 = 30_000
     private var lifecycleObservers: [NSObjectProtocol] = []
     // ponytail: serializes all Apple notification mutations; split by alarm ID only if contention is measured.
     private let notificationMutationQueue = WarmAlarmMutationQueue(label: "warm_alarm.notification_mutation")
@@ -443,10 +445,11 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
 
     /// Builds the notification request(s) for a schedule.
     ///
-    /// A non-recurring alarm produces a single one-shot request keyed by the alarm
-    /// id. A recurring alarm produces one repeating `UNCalendarNotificationTrigger`
-    /// per selected weekday, keyed by `"{id}#{isoWeekday}"`, so the series survives
-    /// app termination without needing a re-arm on fire.
+    /// A non-recurring alarm produces one primary request.
+    /// A recurring alarm produces one repeating `UNCalendarNotificationTrigger`
+    /// per selected weekday, keyed by `"{id}#{isoWeekday}"`.
+    /// Every schedule also produces six one-shot fallback requests.
+    /// Each fallback fires 30 seconds after the previous request.
     static func makeRequests(
         for schedule: WarmAlarmScheduleWire,
         content: UNNotificationContent
@@ -454,7 +457,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         let fireDate = Date(timeIntervalSince1970: Double(schedule.scheduledAtMillis) / 1000.0)
         if let weekdays = schedule.recurrence?.weekdays, !weekdays.isEmpty {
             let time = Calendar.current.dateComponents([.hour, .minute], from: fireDate)
-            return weekdays.map { iso in
+            let recurringRequests = weekdays.map { iso in
                 var components = DateComponents()
                 components.weekday = WarmAlarmRecurrence.appleWeekday(fromIso: iso)
                 components.hour = time.hour
@@ -463,11 +466,38 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 return UNNotificationRequest(
                     identifier: "\(schedule.id)#\(iso)", content: content, trigger: trigger)
             }
+            return recurringRequests + makeFallbackRequests(for: schedule, content: content)
         }
         let components = Calendar.current.dateComponents(
             [.year, .month, .day, .hour, .minute, .second], from: fireDate)
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-        return [UNNotificationRequest(identifier: String(schedule.id), content: content, trigger: trigger)]
+        let primaryRequest = UNNotificationRequest(
+            identifier: String(schedule.id), content: content, trigger: trigger)
+        return [primaryRequest] + makeFallbackRequests(for: schedule, content: content)
+    }
+
+    static func fallbackIdentifiers(for alarmId: Int64) -> [String] {
+        (1...fallbackCount).map { "\(alarmId)#fallback#\($0)" }
+    }
+
+    static func requestIdentifiers(for alarmId: Int64, recurrenceWeekdays: [Int64]?) -> [String] {
+        [String(alarmId)]
+            + (recurrenceWeekdays ?? []).map { "\(alarmId)#\($0)" }
+            + fallbackIdentifiers(for: alarmId)
+    }
+
+    private static func makeFallbackRequests(
+        for schedule: WarmAlarmScheduleWire,
+        content: UNNotificationContent
+    ) -> [UNNotificationRequest] {
+        fallbackIdentifiers(for: schedule.id).enumerated().map { index, identifier in
+            let scheduledAtMillis = schedule.scheduledAtMillis + Int64(index + 1) * fallbackIntervalMillis
+            let requestDate = Date(timeIntervalSince1970: Double(scheduledAtMillis) / 1000.0)
+            let components = Calendar.current.dateComponents(
+                [.year, .month, .day, .hour, .minute, .second], from: requestDate)
+            let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+            return UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+        }
     }
 
     func scheduleAlarm(
@@ -479,14 +509,13 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 finish()
                 return
             }
-            // Clear any prior requests for this id (one-shot "{id}" plus per-weekday
-            // "{id}#{weekday}") so re-scheduling with a different weekday set does not
-            // leave orphaned repeating triggers armed.
+            // Clear the prior primary, recurrence, and fallback requests for this alarm.
+            // This prevents a changed schedule from leaving old requests armed.
             let center = UNUserNotificationCenter.current()
-            var staleIdentifiers = [String(schedule.id)]
-            if let previousWeekdays = WarmAlarmStore.shared.load(id: schedule.id)?.recurrenceWeekdays {
-                staleIdentifiers += previousWeekdays.map { "\(schedule.id)#\($0)" }
-            }
+            let staleIdentifiers = Self.requestIdentifiers(
+                for: schedule.id,
+                recurrenceWeekdays: WarmAlarmStore.shared.load(id: schedule.id)?.recurrenceWeekdays
+            )
             center.removePendingNotificationRequests(withIdentifiers: staleIdentifiers)
 
             WarmAlarmStore.shared.save(.from(wire: schedule))
@@ -529,12 +558,11 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 return
             }
             self.delegate.stopIfPlaying(alarmId: id)
-            // Cancelling tears down the whole series: the one-shot id plus every
-            // per-weekday repeating request ("{id}#{isoWeekday}").
-            var identifiers = [String(id)]
-            if let weekdays = WarmAlarmStore.shared.load(id: id)?.recurrenceWeekdays {
-                identifiers += weekdays.map { "\(id)#\($0)" }
-            }
+            // Cancelling removes the primary, recurrence, and fallback requests.
+            let identifiers = Self.requestIdentifiers(
+                for: id,
+                recurrenceWeekdays: WarmAlarmStore.shared.load(id: id)?.recurrenceWeekdays
+            )
             WarmAlarmStore.shared.remove(id: id)
             let center = UNUserNotificationCenter.current()
             center.removePendingNotificationRequests(withIdentifiers: identifiers)
