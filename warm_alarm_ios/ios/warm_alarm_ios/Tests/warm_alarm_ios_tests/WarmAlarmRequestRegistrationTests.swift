@@ -484,26 +484,21 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertEqual(selection?.omittedFallbackCount, 10)
     }
 
-    func testForegroundHandlingRunsOnlyForAnInactiveAlarm() {
+    func testForegroundFallbackHandlingUsesOccurrenceStateInsteadOfAudioState() {
         XCTAssertFalse(WarmAlarmDelegate.shouldHandleForegroundNotification(
             identifier: "42#fallback#2",
             alarmId: 42,
-            currentlyPlayingAlarmId: 42
+            hasHandledForegroundOccurrence: true
         ))
         XCTAssertTrue(WarmAlarmDelegate.shouldHandleForegroundNotification(
             identifier: "42#fallback#2",
             alarmId: 42,
-            currentlyPlayingAlarmId: 84
-        ))
-        XCTAssertTrue(WarmAlarmDelegate.shouldHandleForegroundNotification(
-            identifier: "42#fallback#2",
-            alarmId: 42,
-            currentlyPlayingAlarmId: nil
+            hasHandledForegroundOccurrence: false
         ))
         XCTAssertTrue(WarmAlarmDelegate.shouldHandleForegroundNotification(
             identifier: "42",
             alarmId: 42,
-            currentlyPlayingAlarmId: 42
+            hasHandledForegroundOccurrence: true
         ))
     }
 

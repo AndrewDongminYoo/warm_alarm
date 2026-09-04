@@ -3,7 +3,7 @@ import XCTest
 @testable import warm_alarm_ios
 
 final class WarmAlarmMutationQueueTests: XCTestCase {
-    func testDefersCancellationUntilRegistrationFinishes() {
+    func testDefersNotificationActionUntilRegistrationFinishes() {
         let registrationStarted = expectation(description: "registration starts")
         let cancellationStartedEarly = expectation(description: "cancellation does not start early")
         cancellationStartedEarly.isInverted = true

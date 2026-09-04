@@ -13,6 +13,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     private let notificationMutationQueue: WarmAlarmMutationQueue
     private var audioPlayer: AVAudioPlayer?
     private(set) var currentlyPlayingAlarmId: Int64?
+    private var handledForegroundAlarmIds = Set<Int64>()
     private var fadeWorkItems: [DispatchWorkItem] = []
     private var volumeEnforcerTimer: Timer?
 
@@ -39,11 +40,12 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         guard Self.shouldHandleForegroundNotification(
             identifier: notification.request.identifier,
             alarmId: alarmId,
-            currentlyPlayingAlarmId: currentlyPlayingAlarmId
+            hasHandledForegroundOccurrence: handledForegroundAlarmIds.contains(alarmId)
         ) else {
             completionHandler([])
             return
         }
+        handledForegroundAlarmIds.insert(alarmId)
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
         startAudio(alarmId: alarmId, for: schedule)
         emitEvent(WarmAlarmEventWire(
@@ -56,23 +58,42 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        defer { completionHandler() }
         guard let alarmIdString = response.notification.request.content.userInfo["alarmId"] as? String,
-              let alarmId = Int64(alarmIdString) else { return }
+              let alarmId = Int64(alarmIdString) else {
+            completionHandler()
+            return
+        }
 
         let deliveredIdentifier = response.notification.request.identifier
         switch response.actionIdentifier {
         case Self.stopActionIdentifier:
-            handleStop(alarmId: alarmId, deliveredIdentifier: deliveredIdentifier)
+            enqueueNotificationAction({ [weak self] in
+                self?.handleStop(alarmId: alarmId, deliveredIdentifier: deliveredIdentifier)
+            }, completionHandler: completionHandler)
         case Self.snoozeActionIdentifier:
-            handleSnooze(alarmId: alarmId, deliveredIdentifier: deliveredIdentifier)
+            notificationMutationQueue.enqueue { [weak self] finish in
+                guard let self else {
+                    completionHandler()
+                    finish()
+                    return
+                }
+                self.handleSnooze(
+                    alarmId: alarmId,
+                    deliveredIdentifier: deliveredIdentifier
+                ) {
+                    completionHandler()
+                    finish()
+                }
+            }
         case UNNotificationDefaultActionIdentifier:
+            handledForegroundAlarmIds.insert(alarmId)
             let schedule = WarmAlarmStore.shared.load(id: alarmId)
             startAudio(alarmId: alarmId, for: schedule)
             emitEvent(WarmAlarmEventWire(
                 alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis(), payload: schedule?.payload))
+            completionHandler()
         default:
-            break
+            completionHandler()
         }
     }
 
@@ -80,6 +101,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
     func handleStop(alarmId: Int64, deliveredIdentifier: String? = nil) {
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
+        handledForegroundAlarmIds.remove(alarmId)
         stopAudio()
         removePendingFallbackRequests(for: alarmId)
         // Dismiss ends only this occurrence for a recurring alarm; the repeating
@@ -104,7 +126,12 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             alarmId: alarmId, type: .stopped, occurredAtMillis: nowMillis(), payload: schedule?.payload))
     }
 
-    func handleSnooze(alarmId: Int64, deliveredIdentifier: String? = nil) {
+    func handleSnooze(
+        alarmId: Int64,
+        deliveredIdentifier: String? = nil,
+        completion: @escaping () -> Void
+    ) {
+        handledForegroundAlarmIds.remove(alarmId)
         stopAudio()
         removePendingFallbackRequests(for: alarmId)
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
@@ -119,7 +146,12 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         }
         let snoozeDurationMillis = schedule?.snoozeDurationMillis ?? (5 * 60 * 1000)
         let fireAt = nowMillis() + snoozeDurationMillis
-        reschedule(alarmId: alarmId, fireAtMillis: fireAt, existing: schedule)
+        reschedule(
+            alarmId: alarmId,
+            fireAtMillis: fireAt,
+            existing: schedule,
+            completion: completion
+        )
         emitEvent(WarmAlarmEventWire(
             alarmId: alarmId,
             type: .snoozed,
@@ -134,9 +166,9 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     static func shouldHandleForegroundNotification(
         identifier: String,
         alarmId: Int64,
-        currentlyPlayingAlarmId: Int64?
+        hasHandledForegroundOccurrence: Bool
     ) -> Bool {
-        currentlyPlayingAlarmId != alarmId
+        !hasHandledForegroundOccurrence
             || !WarmAlarmPlugin.isFallbackIdentifier(identifier, for: alarmId)
     }
 
@@ -156,11 +188,13 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     }
 
     func stopIfPlaying(alarmId: Int64) {
+        handledForegroundAlarmIds.remove(alarmId)
         guard currentlyPlayingAlarmId == alarmId else { return }
         stopAudio()
     }
 
     func stopAllIfPlaying() {
+        handledForegroundAlarmIds.removeAll()
         guard currentlyPlayingAlarmId != nil else { return }
         stopAudio()
     }
@@ -192,6 +226,17 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         content.userInfo = ["alarmId": String(schedule.id)]
         content.categoryIdentifier = Self.categoryIdentifier
         return content
+    }
+
+    private func enqueueNotificationAction(
+        _ action: @escaping () -> Void,
+        completionHandler: @escaping () -> Void
+    ) {
+        notificationMutationQueue.enqueue { finish in
+            action()
+            completionHandler()
+            finish()
+        }
     }
 
     // MARK: - Category registration
@@ -294,8 +339,16 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
     // MARK: - Reschedule (snooze)
 
-    private func reschedule(alarmId: Int64, fireAtMillis: Int64, existing: WarmAlarmScheduleData?) {
-        guard let existing = existing else { return }
+    private func reschedule(
+        alarmId: Int64,
+        fireAtMillis: Int64,
+        existing: WarmAlarmScheduleData?,
+        completion: @escaping () -> Void
+    ) {
+        guard let existing else {
+            completion()
+            return
+        }
         let updated = existing.withActiveSnooze(untilMillis: fireAtMillis)
         WarmAlarmStore.shared.save(updated)
         let content = makeContent(from: updated)
@@ -303,7 +356,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: delay, repeats: false)
         let request = UNNotificationRequest(
             identifier: String(alarmId), content: content, trigger: trigger)
-        UNUserNotificationCenter.current().add(request) { _ in }
+        UNUserNotificationCenter.current().add(request) { _ in completion() }
     }
 
     private func removePendingFallbackRequests(for alarmId: Int64) {
