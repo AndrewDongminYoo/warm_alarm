@@ -137,6 +137,7 @@ final class WarmAlarmPlatformReply: @unchecked Sendable {
 enum WarmAlarmRecovery {
     static func recoverAll<Alarm>(
         _ alarms: [Alarm],
+        prepare: @escaping (Alarm) -> Alarm = { $0 },
         recover: @escaping (Alarm, @escaping (Error?) -> Void) -> Void,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
@@ -149,7 +150,7 @@ enum WarmAlarmRecovery {
                 }
                 return
             }
-            recover(alarms[index]) { error in
+            recover(prepare(alarms[index])) { error in
                 recoverNext(at: index + 1, firstError: firstError ?? error)
             }
         }
