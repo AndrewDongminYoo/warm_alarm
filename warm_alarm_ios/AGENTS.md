@@ -17,7 +17,7 @@ ios/
       WarmAlarmDelegate.swift                            # UNUserNotificationCenter delegate; Stop/Snooze; AVAudioPlayer; fade; snooze reschedule
       WarmAlarmStore.swift                               # UserDefaults-backed Codable schedule store
       Messages.g.swift                                   # GENERATED Pigeon Swift bindings
-    Tests/warm_alarm_ios_tests/
+    Tests/warm_alarm_ios_tests/                          # XCTest suites; hosted by the example's RunnerTests target
 test/
 ```
 

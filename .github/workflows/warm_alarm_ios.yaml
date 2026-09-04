@@ -12,6 +12,8 @@ on:
       - .github/workflows/pana.yaml
       - .github/workflows/warm_alarm_ios.yaml
       - warm_alarm_ios/**
+      # The RunnerTests harness that runs this package's Swift tests lives in the example host.
+      - warm_alarm/example/ios/**
   push:
     branches:
       - main
@@ -19,12 +21,13 @@ on:
       - .github/workflows/pana.yaml
       - .github/workflows/warm_alarm_ios.yaml
       - warm_alarm_ios/**
+      # The RunnerTests harness that runs this package's Swift tests lives in the example host.
+      - warm_alarm/example/ios/**
 
 jobs:
   build:
     uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/flutter_package.yml@v1
     with:
-      flutter_version: 3.41.9
       coverage_excludes: "**/*.g.dart"
       format_line_length: 120
       working_directory: warm_alarm_ios
@@ -35,11 +38,74 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Assert every Swift test belongs to RunnerTests
+        run: |
+          set -euo pipefail
+          project_file=warm_alarm/example/ios/Runner.xcodeproj/project.pbxproj
+          test_directory=warm_alarm_ios/ios/warm_alarm_ios/Tests/warm_alarm_ios_tests
+          project_json=$(plutil -convert json -o - "$project_file")
+          sources_phase_id=$(printf '%s' "$project_json" | jq -er '
+            .objects as $objects
+            | [
+                $objects
+                | to_entries[]
+                | select(.value.isa == "PBXNativeTarget" and .value.name == "RunnerTests")
+                | .value.buildPhases[]
+                | select($objects[.].isa == "PBXSourcesBuildPhase")
+              ]
+            | if length == 1 then .[0] else error("expected one RunnerTests sources phase") end
+          ')
+          test_group_id=$(printf '%s' "$project_json" | jq -er '
+            [
+              .objects
+              | to_entries[]
+              | select(.value.isa == "PBXGroup" and .value.name == "RunnerTests")
+              | .key
+            ]
+            | if length == 1 then .[0] else error("expected one RunnerTests group") end
+          ')
+          project_test_files=$(printf '%s' "$project_json" | jq -r \
+            --arg phase "$sources_phase_id" \
+            --arg group "$test_group_id" '
+            .objects as $objects
+            | ($objects[$phase].files | map($objects[.].fileRef)) as $source_file_refs
+            | def source_paths($group_id; $prefix):
+                $objects[$group_id].children[]
+                | . as $child_id
+                | $objects[$child_id] as $child
+                | if $child.isa == "PBXGroup" then
+                    source_paths($child_id; if $child.path == null then $prefix else $prefix + [$child.path] end)
+                  elif ($source_file_refs | index($child_id)) != null then
+                    ($prefix + [($child.path // error("source file is missing a path"))]) | join("/")
+                  else
+                    empty
+                  end;
+              source_paths($group; [])
+          ' | sort -u)
+          test_files=$(
+            cd "$test_directory" || exit 1
+            find . -type f -name '*.swift' -print | sed 's#^\./##' | sort -u
+          )
+          if [ -z "$test_files" ]; then
+            echo "No Swift test sources found in $test_directory" >&2
+            exit 1
+          fi
+          missing_files=$(comm -23 \
+            <(printf '%s\n' "$test_files") \
+            <(printf '%s\n' "$project_test_files"))
+          if [ -n "$missing_files" ]; then
+            echo "Swift tests missing from RunnerTests:" >&2
+            echo "$missing_files" >&2
+            exit 1
+          fi
+
       - uses: subosito/flutter-action@v2.23.0
         with:
-          flutter-version: 3.41.9
           channel: stable
           cache: true
+
+      - name: Enable Swift Package Manager
+        run: flutter config --enable-swift-package-manager
 
       - name: Install workspace dependencies
         working-directory: warm_alarm/example
@@ -48,6 +114,38 @@ jobs:
       - name: Build the iOS example host
         working-directory: warm_alarm/example
         run: flutter build ios --simulator --no-codesign
+
+      - name: Assert the plugin resolved as a Swift package
+        run: test -d warm_alarm/example/ios/Flutter/ephemeral/Packages/.packages/warm_alarm_ios
+
+      - name: Select an iOS simulator
+        id: simulator
+        run: |
+          udid=$(xcrun simctl list devices available --json \
+            | jq -r '[.devices[][] | select(.name | startswith("iPhone"))] | last | .udid')
+          if [ -z "$udid" ] || [ "$udid" = "null" ]; then
+            echo "No iPhone simulator is available on this runner" >&2
+            exit 1
+          fi
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      - name: Run the iOS native unit tests
+        working-directory: warm_alarm/example/ios
+        env:
+          SIMULATOR_UDID: ${{ steps.simulator.outputs.udid }}
+        run: |
+          set -euo pipefail
+          result_bundle="$RUNNER_TEMP/RunnerTests.xcresult"
+          xcodebuild test -quiet \
+            -workspace Runner.xcworkspace \
+            -scheme Runner \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
+            -only-testing:RunnerTests \
+            -resultBundlePath "$result_bundle"
+          test_count=$(xcrun xcresulttool get test-results summary \
+            --path "$result_bundle" --format json \
+            | jq -er '.totalTestCount | select(. > 0)')
+          echo "Executed $test_count iOS native tests."
 
   pana:
     uses: ./.github/workflows/pana.yaml
