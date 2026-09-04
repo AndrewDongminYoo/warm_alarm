@@ -347,17 +347,19 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             }
         }
 
-        return expectedIdentifiers
-            .filter { !pendingIdentifiers.contains($0) }
-            .map {
-                makeRecoveryRequest(
-                    identifier: $0,
-                    schedule: schedule,
-                    content: content,
-                    nowMillis: nowMillis,
-                    calendar: calendar
-                )
-            }
+        return deduplicatedRequests(
+            expectedIdentifiers
+                .filter { !pendingIdentifiers.contains($0) }
+                .map {
+                    makeRecoveryRequest(
+                        identifier: $0,
+                        schedule: schedule,
+                        content: content,
+                        nowMillis: nowMillis,
+                        calendar: calendar
+                    )
+                }
+        )
     }
 
     private static func makeRecoveryRequest(
@@ -829,6 +831,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                     return
                 }
 
+                self.delegate.clearHandledForegroundOccurrence(alarmId: schedule.id)
                 center.removePendingNotificationRequests(withIdentifiers: staleIdentifiers)
                 WarmAlarmStore.shared.save(storedSchedule)
                 let capacityWarning = Self.fallbackCapacityWarning(

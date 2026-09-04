@@ -46,7 +46,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     private let notificationMutationQueue: WarmAlarmMutationQueue
     private var audioPlayer: AVAudioPlayer?
     private(set) var currentlyPlayingAlarmId: Int64?
-    private var handledForegroundAlarmIds = Set<Int64>()
+    private let foregroundOccurrenceTracker = WarmAlarmForegroundOccurrenceTracker()
     private var fadeWorkItems: [DispatchWorkItem] = []
     private var volumeEnforcerTimer: Timer?
 
@@ -70,15 +70,11 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             completionHandler([.alert, .sound])
             return
         }
-        guard Self.shouldHandleForegroundNotification(
-            identifier: notification.request.identifier,
-            alarmId: alarmId,
-            hasHandledForegroundOccurrence: handledForegroundAlarmIds.contains(alarmId)
-        ) else {
+        let isFallback = WarmAlarmPlugin.isFallbackIdentifier(notification.request.identifier, for: alarmId)
+        guard foregroundOccurrenceTracker.shouldHandleAndMark(alarmId: alarmId, isFallback: isFallback) else {
             completionHandler([])
             return
         }
-        handledForegroundAlarmIds.insert(alarmId)
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
         startAudio(alarmId: alarmId, for: schedule)
         emitEvent(WarmAlarmEventWire(
@@ -119,7 +115,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
                 }
             }
         case UNNotificationDefaultActionIdentifier:
-            handledForegroundAlarmIds.insert(alarmId)
+            foregroundOccurrenceTracker.mark(alarmId: alarmId)
             let schedule = WarmAlarmStore.shared.load(id: alarmId)
             startAudio(alarmId: alarmId, for: schedule)
             emitEvent(WarmAlarmEventWire(
@@ -134,7 +130,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
     func handleStop(alarmId: Int64, deliveredIdentifier: String? = nil) {
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
-        handledForegroundAlarmIds.remove(alarmId)
+        foregroundOccurrenceTracker.clear(alarmId: alarmId)
         stopAudio()
         removePendingFallbackRequests(for: alarmId)
         // Dismiss ends only this occurrence for a recurring alarm; the repeating
@@ -164,7 +160,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         deliveredIdentifier: String? = nil,
         completion: @escaping () -> Void
     ) {
-        handledForegroundAlarmIds.remove(alarmId)
+        foregroundOccurrenceTracker.clear(alarmId: alarmId)
         stopAudio()
         removePendingFallbackRequests(for: alarmId)
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
@@ -196,13 +192,8 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
     // MARK: - Called by WarmAlarmPlugin
 
-    static func shouldHandleForegroundNotification(
-        identifier: String,
-        alarmId: Int64,
-        hasHandledForegroundOccurrence: Bool
-    ) -> Bool {
-        !hasHandledForegroundOccurrence
-            || !WarmAlarmPlugin.isFallbackIdentifier(identifier, for: alarmId)
+    func clearHandledForegroundOccurrence(alarmId: Int64) {
+        foregroundOccurrenceTracker.clear(alarmId: alarmId)
     }
 
     static func deliveredIdentifiersToRemove(
@@ -221,13 +212,13 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     }
 
     func stopIfPlaying(alarmId: Int64) {
-        handledForegroundAlarmIds.remove(alarmId)
+        foregroundOccurrenceTracker.clear(alarmId: alarmId)
         guard currentlyPlayingAlarmId == alarmId else { return }
         stopAudio()
     }
 
     func stopAllIfPlaying() {
-        handledForegroundAlarmIds.removeAll()
+        foregroundOccurrenceTracker.clearAll()
         guard currentlyPlayingAlarmId != nil else { return }
         stopAudio()
     }

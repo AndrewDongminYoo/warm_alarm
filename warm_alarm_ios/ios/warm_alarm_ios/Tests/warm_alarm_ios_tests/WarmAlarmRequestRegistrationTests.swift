@@ -484,22 +484,52 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertEqual(selection?.omittedFallbackCount, 10)
     }
 
-    func testForegroundFallbackHandlingUsesOccurrenceStateInsteadOfAudioState() {
-        XCTAssertFalse(WarmAlarmDelegate.shouldHandleForegroundNotification(
-            identifier: "42#fallback#2",
-            alarmId: 42,
-            hasHandledForegroundOccurrence: true
-        ))
-        XCTAssertTrue(WarmAlarmDelegate.shouldHandleForegroundNotification(
-            identifier: "42#fallback#2",
-            alarmId: 42,
-            hasHandledForegroundOccurrence: false
-        ))
-        XCTAssertTrue(WarmAlarmDelegate.shouldHandleForegroundNotification(
-            identifier: "42",
-            alarmId: 42,
-            hasHandledForegroundOccurrence: true
-        ))
+    func testForegroundOccurrenceTrackerScopesSuppressionToResettableOccurrence() {
+        let tracker = WarmAlarmForegroundOccurrenceTracker()
+
+        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, isFallback: false))
+        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, isFallback: true))
+
+        tracker.clear(alarmId: 42)
+
+        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, isFallback: true))
+        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, isFallback: true))
+    }
+
+    func testForegroundOccurrenceTrackerAtomicallyHandlesOneConcurrentFallback() {
+        let tracker = WarmAlarmForegroundOccurrenceTracker()
+        let resultLock = NSLock()
+        var handledCount = 0
+
+        DispatchQueue.concurrentPerform(iterations: 100) { _ in
+            guard tracker.shouldHandleAndMark(alarmId: 42, isFallback: true) else { return }
+            resultLock.lock()
+            handledCount += 1
+            resultLock.unlock()
+        }
+
+        XCTAssertEqual(handledCount, 1)
+    }
+
+    func testRecoveryRequestsDeduplicateRepeatedWeekdays() {
+        let anchor = Int64(1_900_000_000_000)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(
+                scheduledAtMillis: anchor,
+                recurrenceWeekdays: [2, 2, 2]
+            ),
+            fallbackAnchorMillis: anchor
+        )
+
+        let requests = WarmAlarmPlugin.makeRecoveryRequests(
+            for: schedule,
+            nowMillis: anchor - 60_000,
+            pendingIdentifiers: Set(WarmAlarmPlugin.fallbackIdentifiers(for: 42)),
+            content: UNMutableNotificationContent(),
+            calendar: utcCalendar()
+        )
+
+        XCTAssertEqual(requests.map(\.identifier), ["42#2"])
     }
 
     func testDismissalRemovesEveryDeliveredIdentifierForTheExactAlarm() {
