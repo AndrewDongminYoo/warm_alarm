@@ -210,15 +210,14 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 return
             }
             let nowMillis = Int64(Date().timeIntervalSince1970 * 1000)
-            let stored = WarmAlarmStore.shared.loadAll()
-            let recoverableAlarms = stored.values.filter { data in
+            let storedSchedules = Array(WarmAlarmStore.shared.loadAll().values)
+            guard storedSchedules.contains(where: { data in
                 WarmAlarmRecurrence.shouldRecover(
                     scheduledAtMillis: data.scheduledAtMillis,
                     weekdays: data.recurrenceWeekdays,
                     activeSnoozeUntilMillis: data.activeSnoozeUntilMillis,
                     nowMillis: nowMillis)
-            }
-            guard !recoverableAlarms.isEmpty else {
+            }) else {
                 WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
                 return
             }
@@ -227,6 +226,18 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 guard let self else {
                     finish()
                     return
+                }
+                let migratedSchedules = Self.migrateRecurringWallTimes(
+                    storedSchedules,
+                    pendingRequests: pending,
+                    save: { WarmAlarmStore.shared.save($0) }
+                )
+                let recoverableAlarms = migratedSchedules.filter { data in
+                    WarmAlarmRecurrence.shouldRecover(
+                        scheduledAtMillis: data.scheduledAtMillis,
+                        weekdays: data.recurrenceWeekdays,
+                        activeSnoozeUntilMillis: data.activeSnoozeUntilMillis,
+                        nowMillis: nowMillis)
                 }
                 self.recoverAlarms(
                     recoverableAlarms,
@@ -238,6 +249,14 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 }
             }
         }
+    }
+
+    static func migrateRecurringWallTimes(
+        _ schedules: [WarmAlarmScheduleData],
+        pendingRequests _: [UNNotificationRequest],
+        save _: (WarmAlarmScheduleData) -> Void
+    ) -> [WarmAlarmScheduleData] {
+        schedules
     }
 
     private func recoverAlarms(
