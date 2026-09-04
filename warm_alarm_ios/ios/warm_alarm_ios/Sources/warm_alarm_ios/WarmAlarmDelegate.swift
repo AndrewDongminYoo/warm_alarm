@@ -9,17 +9,16 @@ final class WarmAlarmForegroundOccurrenceTracker: @unchecked Sendable {
     private var handledAlarmIds = Set<Int64>()
 
     func shouldHandleAndMark(alarmId: Int64, isFallback: Bool) -> Bool {
+        handleIfAllowed(alarmId: alarmId, isFallback: isFallback, perform: {})
+    }
+
+    func handleIfAllowed(alarmId: Int64, isFallback: Bool, perform action: () -> Void) -> Bool {
         lock.lock()
         defer { lock.unlock() }
         if isFallback, handledAlarmIds.contains(alarmId) {
             return false
         }
         handledAlarmIds.insert(alarmId)
-        return true
-    }
-
-    func handleIfAllowed(alarmId: Int64, isFallback: Bool, perform action: () -> Void) -> Bool {
-        guard shouldHandleAndMark(alarmId: alarmId, isFallback: isFallback) else { return false }
         action()
         return true
     }
@@ -37,11 +36,13 @@ final class WarmAlarmForegroundOccurrenceTracker: @unchecked Sendable {
     }
 
     func stop(alarmId: Int64) {
-        mark(alarmId: alarmId)
+        stop(alarmId: alarmId, perform: {})
     }
 
     func stop(alarmId: Int64, perform action: () -> Void) {
-        stop(alarmId: alarmId)
+        lock.lock()
+        defer { lock.unlock() }
+        handledAlarmIds.insert(alarmId)
         action()
     }
 
@@ -175,8 +176,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         deliveredIdentifier: String? = nil,
         completion: @escaping () -> Void
     ) {
-        foregroundOccurrenceTracker.clear(alarmId: alarmId)
-        stopAudio()
+        foregroundOccurrenceTracker.stop(alarmId: alarmId, perform: stopAudio)
         removePendingFallbackRequests(for: alarmId)
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
         if schedule?.keepNotificationAfterAlarmEnds != true {
