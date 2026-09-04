@@ -263,13 +263,10 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             }
             let nowMillis = Int64(Date().timeIntervalSince1970 * 1000)
             let stored = WarmAlarmStore.shared.loadAll()
-            let recoverableAlarms = stored.values
-                .filter { Self.shouldRecover(schedule: $0, nowMillis: nowMillis) }
-                .sorted {
-                    let leftAnchor = $0.fallbackAnchorMillis ?? $0.scheduledAtMillis
-                    let rightAnchor = $1.fallbackAnchorMillis ?? $1.scheduledAtMillis
-                    return leftAnchor == rightAnchor ? $0.id < $1.id : leftAnchor < rightAnchor
-                }
+            let recoverableAlarms = Self.sortedRecoverableSchedules(
+                Array(stored.values),
+                nowMillis: nowMillis
+            )
             guard !recoverableAlarms.isEmpty else {
                 WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
                 return
@@ -388,6 +385,30 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         }
         guard let anchor = schedule.fallbackAnchorMillis else { return false }
         return fallbackFireAtMillis(anchorMillis: anchor, index: fallbackCount) > nowMillis
+    }
+
+    static func sortedRecoverableSchedules(
+        _ schedules: [WarmAlarmScheduleData],
+        nowMillis: Int64,
+        calendar: Calendar = .current
+    ) -> [WarmAlarmScheduleData] {
+        schedules
+            .filter { shouldRecover(schedule: $0, nowMillis: nowMillis) }
+            .sorted {
+                let leftAnchor = recoveryOrderingAnchorMillis(
+                    for: $0, nowMillis: nowMillis, calendar: calendar)
+                let rightAnchor = recoveryOrderingAnchorMillis(
+                    for: $1, nowMillis: nowMillis, calendar: calendar)
+                return leftAnchor == rightAnchor ? $0.id < $1.id : leftAnchor < rightAnchor
+            }
+    }
+
+    private static func recoveryOrderingAnchorMillis(
+        for schedule: WarmAlarmScheduleData,
+        nowMillis _: Int64,
+        calendar _: Calendar
+    ) -> Int64 {
+        schedule.fallbackAnchorMillis ?? schedule.scheduledAtMillis
     }
 
     static func makeRecoveryRequests(
