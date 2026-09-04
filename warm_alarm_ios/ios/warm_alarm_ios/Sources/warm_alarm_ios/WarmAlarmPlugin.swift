@@ -262,12 +262,8 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 return
             }
             let nowMillis = Int64(Date().timeIntervalSince1970 * 1000)
-            let stored = WarmAlarmStore.shared.loadAll()
-            let recoverableAlarms = Self.sortedRecoverableSchedules(
-                Array(stored.values),
-                nowMillis: nowMillis
-            )
-            guard !recoverableAlarms.isEmpty else {
+            let storedSchedules = Array(WarmAlarmStore.shared.loadAll().values)
+            guard storedSchedules.contains(where: { Self.shouldRecover(schedule: $0, nowMillis: nowMillis) }) else {
                 WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
                 return
             }
@@ -277,6 +273,10 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                     finish()
                     return
                 }
+                let recoverableAlarms = Self.sortedRecoverableSchedules(
+                    storedSchedules,
+                    nowMillis: nowMillis
+                )
                 self.recoverAlarms(
                     recoverableAlarms,
                     pendingIdentifiers: Set(pending.map { $0.identifier }),
