@@ -113,6 +113,16 @@ extension WarmAlarmScheduleData {
     }
 
     func withActiveSnooze(untilMillis: Int64) -> WarmAlarmScheduleData {
+        copying(
+            activeSnoozeUntilMillis: untilMillis,
+            fallbackAnchorMillis: fallbackAnchorMillis
+        )
+    }
+
+    private func copying(
+        activeSnoozeUntilMillis: Int64?,
+        fallbackAnchorMillis: Int64?
+    ) -> WarmAlarmScheduleData {
         WarmAlarmScheduleData(
             id: id, scheduledAtMillis: scheduledAtMillis,
             notificationTitle: notificationTitle, notificationBody: notificationBody,
@@ -126,7 +136,7 @@ extension WarmAlarmScheduleData {
             volumeEnforced: volumeEnforced,
             fadeSteps: fadeSteps,
             keepNotificationAfterAlarmEnds: keepNotificationAfterAlarmEnds,
-            activeSnoozeUntilMillis: untilMillis,
+            activeSnoozeUntilMillis: activeSnoozeUntilMillis,
             fallbackAnchorMillis: fallbackAnchorMillis
         )
     }
