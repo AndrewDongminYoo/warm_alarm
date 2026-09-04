@@ -28,6 +28,36 @@ final class WarmAlarmRequestRegistrationTests: XCTestCase {
         XCTAssertEqual(added, ["42#1", "42#3"])
     }
 
+    func testSubmitsEveryRequestBeforeWaitingForCallbacks() {
+        var added = [String]()
+        var callbacks = [(Error?) -> Void]()
+        var didComplete = false
+
+        WarmAlarmRequestRegistration.addAtomically(
+            ["42", "42#fallback#1"],
+            identifier: { $0 },
+            add: { identifier, completion in
+                added.append(identifier)
+                callbacks.append(completion)
+            },
+            rollback: { _ in
+                XCTFail("Successful registration must not roll back requests")
+            },
+            completion: { error in
+                XCTAssertNil(error)
+                didComplete = true
+            }
+        )
+
+        XCTAssertEqual(added, ["42", "42#fallback#1"])
+        guard callbacks.count == 2 else { return }
+        XCTAssertFalse(didComplete)
+        callbacks[0](nil)
+        XCTAssertFalse(didComplete)
+        callbacks[1](nil)
+        XCTAssertTrue(didComplete)
+    }
+
     func testRollsBackEveryRecurringIdentifierWhenFirstRequestFails() {
         let completed = expectation(description: "registration fails")
         let expectedError = NSError(domain: "WarmAlarmTests", code: 1)
@@ -165,7 +195,7 @@ final class WarmAlarmRequestTests: XCTestCase {
         }
     }
 
-    func testBuildsFallbackChainForSnoozedOccurrence() {
+    func testBuildsSnoozeFallbackChainWithRelativeIntervals() {
         let fireAtMillis = Int64(1_900_000_000_000)
         let schedule = WarmAlarmScheduleData.from(
             wire: makeWireSchedule(scheduledAtMillis: fireAtMillis),
@@ -179,8 +209,7 @@ final class WarmAlarmRequestTests: XCTestCase {
             for: schedule,
             fireAtMillis: fireAtMillis,
             nowMillis: fireAtMillis - 60_000,
-            content: content,
-            calendar: utcCalendar()
+            content: content
         )
 
         XCTAssertEqual(requests.map(\.identifier), [
@@ -192,19 +221,9 @@ final class WarmAlarmRequestTests: XCTestCase {
             "42#fallback#5",
             "42#fallback#6",
         ])
-        XCTAssertEqual((requests.first?.trigger as? UNTimeIntervalNotificationTrigger)?.timeInterval, 60)
         XCTAssertEqual(
-            requests.dropFirst().compactMap { ($0.trigger as? UNCalendarNotificationTrigger)?.dateComponents }
-                .compactMap { utcCalendar().date(from: $0) }
-                .map { Int64($0.timeIntervalSince1970 * 1_000) },
-            [
-                fireAtMillis + 30_000,
-                fireAtMillis + 60_000,
-                fireAtMillis + 90_000,
-                fireAtMillis + 120_000,
-                fireAtMillis + 150_000,
-                fireAtMillis + 180_000,
-            ]
+            requests.compactMap { ($0.trigger as? UNTimeIntervalNotificationTrigger)?.timeInterval },
+            [60, 90, 120, 150, 180, 210, 240]
         )
         XCTAssertTrue(requests.allSatisfy { $0.content.userInfo["alarmId"] as? String == "42" })
         XCTAssertTrue(requests.allSatisfy { $0.content.categoryIdentifier == "WARM_ALARM" })
@@ -345,8 +364,7 @@ final class WarmAlarmRequestTests: XCTestCase {
             for: schedule,
             fireAtMillis: fireAtMillis,
             nowMillis: fireAtMillis - 60_000,
-            content: UNMutableNotificationContent(),
-            calendar: utcCalendar()
+            content: UNMutableNotificationContent()
         )
         let fullCoreCapacity = Set((0..<63).map { "existing-\($0)" } + ["42#2"])
 
@@ -509,10 +527,12 @@ final class WarmAlarmRequestTests: XCTestCase {
         ))
     }
 
-    func testRecoveryRestoresOnlyStillFutureFallbacksAsOneShots() {
+    func testRecoveryRestoresOnlyStillFutureFallbacksWithRemainingIntervals() {
         let anchor = Int64(1_900_000_000_000)
         let schedule = WarmAlarmScheduleData.from(
-            wire: makeWireSchedule(scheduledAtMillis: anchor),
+            wire: makeWireSchedule(scheduledAtMillis: anchor)
+        ).withActiveSnooze(
+            untilMillis: anchor,
             fallbackAnchorMillis: anchor
         )
         let content = UNMutableNotificationContent()
@@ -537,13 +557,133 @@ final class WarmAlarmRequestTests: XCTestCase {
             "42#fallback#5",
             "42#fallback#6",
         ])
+        let triggers = requests.compactMap { $0.trigger as? UNTimeIntervalNotificationTrigger }
+        XCTAssertEqual(triggers.count, 5)
+        XCTAssertTrue(triggers.allSatisfy { !$0.repeats })
+        XCTAssertEqual(triggers.map(\.timeInterval), [15, 45, 75, 105, 135])
+    }
+
+    func testRecoveryKeepsScheduledFallbacksAlignedToCalendar() {
+        let anchor = Int64(1_900_000_000_000)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: anchor),
+            fallbackAnchorMillis: anchor
+        )
+        let calendar = utcCalendar()
+
+        let requests = WarmAlarmPlugin.makeRecoveryRequests(
+            for: schedule,
+            nowMillis: anchor + 45_000,
+            pendingIdentifiers: ["42#fallback#1"],
+            content: UNMutableNotificationContent(),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(requests.map(\.identifier), [
+            "42#fallback#2",
+            "42#fallback#3",
+            "42#fallback#4",
+            "42#fallback#5",
+            "42#fallback#6",
+        ])
         let triggers = requests.compactMap { $0.trigger as? UNCalendarNotificationTrigger }
         XCTAssertEqual(triggers.count, 5)
         XCTAssertTrue(triggers.allSatisfy { !$0.repeats })
         XCTAssertEqual(
-            triggers.compactMap { utcCalendar().date(from: $0.dateComponents) }
+            triggers.compactMap { calendar.date(from: $0.dateComponents) }
                 .map { Int64($0.timeIntervalSince1970 * 1_000) },
             [anchor + 60_000, anchor + 90_000, anchor + 120_000, anchor + 150_000, anchor + 180_000]
+        )
+    }
+
+    func testRecoveryKeepsSnoozedPrimaryRelativeToFallbacks() {
+        let anchor = Int64(1_900_000_000_000)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: anchor)
+        ).withActiveSnooze(
+            untilMillis: anchor,
+            fallbackAnchorMillis: anchor
+        )
+
+        let requests = WarmAlarmPlugin.makeRecoveryRequests(
+            for: schedule,
+            nowMillis: anchor - 60_000,
+            pendingIdentifiers: Set(WarmAlarmPlugin.fallbackIdentifiers(for: 42)),
+            content: UNMutableNotificationContent(),
+            calendar: utcCalendar()
+        )
+
+        XCTAssertEqual(requests.map(\.identifier), ["42"])
+        let trigger = requests.first?.trigger as? UNTimeIntervalNotificationTrigger
+        XCTAssertEqual(trigger?.timeInterval, 60)
+        XCTAssertEqual(trigger?.repeats, false)
+    }
+
+    func testRecoveryBackfillsAnExpiredSelectedFallbackWithinItsSlot() {
+        let anchor = Int64(1_900_000_000_000)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: anchor)
+        ).withActiveSnooze(
+            untilMillis: anchor,
+            fallbackAnchorMillis: anchor
+        )
+
+        let refreshedRequests = WarmAlarmPlugin.makeRecoveryRequests(
+            for: schedule,
+            nowMillis: anchor + 31_000,
+            pendingIdentifiers: [],
+            content: UNMutableNotificationContent(),
+            calendar: utcCalendar()
+        )
+        let requests = WarmAlarmPlugin.selectNextRecoveryRequestsWithinLimit(
+            [refreshedRequests],
+            remainingRequestCount: 1
+        )
+
+        XCTAssertEqual(requests.map(\.identifier), ["42#fallback#2"])
+        let trigger = requests.first?.trigger as? UNTimeIntervalNotificationTrigger
+        XCTAssertEqual(trigger?.timeInterval, 29)
+    }
+
+    func testRecoveryReallocatesVacatedSlotsAcrossAlarmGroups() {
+        let content = UNMutableNotificationContent()
+        let laterFallback = UNNotificationRequest(
+            identifier: "84#fallback#2",
+            content: content,
+            trigger: nil
+        )
+
+        XCTAssertEqual(
+            WarmAlarmPlugin.selectNextRecoveryRequestsWithinLimit(
+                [[], [laterFallback]],
+                remainingRequestCount: 1
+            ).map(\.identifier),
+            []
+        )
+        XCTAssertEqual(
+            WarmAlarmPlugin.selectNextRecoveryRequestsWithinLimit(
+                [[laterFallback]],
+                remainingRequestCount: 1
+            ).map(\.identifier),
+            ["84#fallback#2"]
+        )
+    }
+
+    func testRecoveryReservesRemainingSlotsForFutureCoreRequests() {
+        let content = UNMutableNotificationContent()
+        let currentFallback = UNNotificationRequest(
+            identifier: "42#fallback#2",
+            content: content,
+            trigger: nil
+        )
+        let futureCore = UNNotificationRequest(identifier: "84", content: content, trigger: nil)
+
+        XCTAssertEqual(
+            WarmAlarmPlugin.selectNextRecoveryRequestsWithinLimit(
+                [[currentFallback], [futureCore]],
+                remainingRequestCount: 1
+            ).map(\.identifier),
+            []
         )
     }
 

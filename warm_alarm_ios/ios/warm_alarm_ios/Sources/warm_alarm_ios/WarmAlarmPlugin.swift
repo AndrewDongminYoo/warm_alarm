@@ -11,23 +11,48 @@ enum WarmAlarmRequestRegistration {
         completion: @escaping (Error?) -> Void
     ) {
         let identifiers = requests.map(identifier)
+        guard !requests.isEmpty else {
+            completion(nil)
+            return
+        }
+        let stateLock = NSLock()
+        var remainingCount = requests.count
+        var firstError: Error?
+        var didSubmitAll = false
+        var didComplete = false
 
-        func addNext(at index: Int) {
-            guard index < requests.count else {
-                completion(nil)
+        func completeIfReady() {
+            stateLock.lock()
+            guard didSubmitAll, remainingCount == 0, !didComplete else {
+                stateLock.unlock()
                 return
             }
-            add(requests[index]) { error in
-                if let error {
-                    rollback(identifiers)
-                    completion(error)
-                    return
+            didComplete = true
+            let error = firstError
+            stateLock.unlock()
+
+            if error != nil {
+                rollback(identifiers)
+            }
+            completion(error)
+        }
+
+        for request in requests {
+            add(request) { error in
+                stateLock.lock()
+                remainingCount -= 1
+                if firstError == nil, let error {
+                    firstError = error
                 }
-                addNext(at: index + 1)
+                stateLock.unlock()
+                completeIfReady()
             }
         }
 
-        addNext(at: 0)
+        stateLock.lock()
+        didSubmitAll = true
+        stateLock.unlock()
+        completeIfReady()
     }
 }
 
@@ -112,6 +137,7 @@ final class WarmAlarmPlatformReply: @unchecked Sendable {
 enum WarmAlarmRecovery {
     static func recoverAll<Alarm>(
         _ alarms: [Alarm],
+        prepare: @escaping (Alarm) -> Alarm = { $0 },
         recover: @escaping (Alarm, @escaping (Error?) -> Void) -> Void,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
@@ -124,7 +150,7 @@ enum WarmAlarmRecovery {
                 }
                 return
             }
-            recover(alarms[index]) { error in
+            recover(prepare(alarms[index])) { error in
                 recoverNext(at: index + 1, firstError: firstError ?? error)
             }
         }
@@ -256,11 +282,15 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     ) {
         let requestGroups = alarms.map { schedule in
             let content = delegate.makeContent(from: schedule)
-            return Self.makeRecoveryRequests(
-                for: schedule,
-                nowMillis: nowMillis,
-                pendingIdentifiers: pendingIdentifiers,
-                content: content
+            return (
+                schedule: schedule,
+                content: content,
+                requests: Self.makeRecoveryRequests(
+                    for: schedule,
+                    nowMillis: nowMillis,
+                    pendingIdentifiers: pendingIdentifiers,
+                    content: content
+                )
             )
         }
         let reservedSlotCount = Self.killWarningReservedSlotCount(
@@ -268,12 +298,12 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             pendingIdentifiers: pendingIdentifiers
         )
         guard let selection = Self.selectRecoveryRequestsWithinPendingLimit(
-            requestGroups,
+            requestGroups.map { $0.requests },
             pendingIdentifiers: pendingIdentifiers,
             reservedSlotCount: reservedSlotCount,
             limit: Self.pendingNotificationLimit
         ) else {
-            let coreCount = Self.coreRequestCount(in: requestGroups.flatMap { $0 })
+            let coreCount = Self.coreRequestCount(in: requestGroups.flatMap { $0.requests })
             completion(.failure(Self.pendingLimitError(
                 requiredCoreCount: coreCount,
                 availableCount: Self.availableRequestSlotCount(
@@ -285,20 +315,41 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             )))
             return
         }
-        let selectedIdentifiers = Set(selection.requests.map(\.identifier))
+        var nextGroupIndex = 0
+        var remainingRequestCount = selection.requests.count
         WarmAlarmRecovery.recoverAll(
             requestGroups,
-            recover: { requests, completion in
-                let selectedRequests = requests.filter { selectedIdentifiers.contains($0.identifier) }
-                guard !selectedRequests.isEmpty else {
+            prepare: { group in
+                let registrationNowMillis = Int64(Date().timeIntervalSince1970 * 1_000)
+                let remainingRequestGroups = requestGroups.dropFirst(nextGroupIndex).map { candidate in
+                    Self.makeRecoveryRequests(
+                        for: candidate.schedule,
+                        nowMillis: registrationNowMillis,
+                        pendingIdentifiers: pendingIdentifiers,
+                        content: candidate.content
+                    )
+                }
+                nextGroupIndex += 1
+                let requests = Self.selectNextRecoveryRequestsWithinLimit(
+                    remainingRequestGroups,
+                    remainingRequestCount: remainingRequestCount
+                )
+                return (schedule: group.schedule, content: group.content, requests: requests)
+            },
+            recover: { group, completion in
+                guard !group.requests.isEmpty else {
                     completion(nil)
                     return
                 }
                 Self.addRequestsAtomically(
-                    selectedRequests,
-                    center: center,
-                    completion: completion
-                )
+                    group.requests,
+                    center: center
+                ) { error in
+                    if error == nil {
+                        remainingRequestCount -= group.requests.count
+                    }
+                    completion(error)
+                }
             },
             completion: completion
         )
@@ -362,6 +413,18 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         )
     }
 
+    static func selectNextRecoveryRequestsWithinLimit(
+        _ requestGroups: [[UNNotificationRequest]],
+        remainingRequestCount: Int
+    ) -> [UNNotificationRequest] {
+        guard let currentRequests = requestGroups.first else { return [] }
+        let futureCoreCount = coreRequestCount(in: requestGroups.dropFirst().flatMap { $0 })
+        let currentCoreRequests = currentRequests.filter { !isFallbackIdentifier($0.identifier) }
+        let currentFallbackRequests = currentRequests.filter { isFallbackIdentifier($0.identifier) }
+        let fallbackCount = max(0, remainingRequestCount - futureCoreCount - currentCoreRequests.count)
+        return currentCoreRequests + Array(currentFallbackRequests.prefix(fallbackCount))
+    }
+
     private static func makeRecoveryRequest(
         identifier: String,
         schedule: WarmAlarmScheduleData,
@@ -369,28 +432,37 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         nowMillis: Int64,
         calendar: Calendar
     ) -> UNNotificationRequest {
-        if let fallbackIndex = fallbackIndex(for: identifier, alarmId: schedule.id),
-           let anchor = schedule.fallbackAnchorMillis {
-            let fireAtMillis = fallbackFireAtMillis(anchorMillis: anchor, index: fallbackIndex)
-            let fireDate = Date(timeIntervalSince1970: Double(fireAtMillis) / 1000.0)
-            let components = calendar.dateComponents(
-                [.year, .month, .day, .hour, .minute, .second],
-                from: fireDate
-            )
+        let recoveryFallbackIndex = fallbackIndex(for: identifier, alarmId: schedule.id)
+        let fireAtMillis: Int64
+        if let recoveryFallbackIndex, let anchor = schedule.fallbackAnchorMillis {
+            fireAtMillis = fallbackFireAtMillis(anchorMillis: anchor, index: recoveryFallbackIndex)
+            if schedule.activeSnoozeUntilMillis != nil {
+                let delay = max(1.0, Double(fireAtMillis - nowMillis) / 1_000.0)
+                return UNNotificationRequest(
+                    identifier: identifier,
+                    content: content,
+                    trigger: UNTimeIntervalNotificationTrigger(timeInterval: delay, repeats: false)
+                )
+            }
+        } else if identifier == String(schedule.id),
+                  let activeSnoozeUntilMillis = schedule.activeSnoozeUntilMillis {
+            let delay = max(1.0, Double(activeSnoozeUntilMillis - nowMillis) / 1_000.0)
             return UNNotificationRequest(
                 identifier: identifier,
                 content: content,
-                trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+                trigger: UNTimeIntervalNotificationTrigger(timeInterval: delay, repeats: false)
+            )
+        } else {
+            fireAtMillis = WarmAlarmRecurrence.recoveryFireAtMillis(
+                identifier: identifier,
+                scheduledAtMillis: schedule.scheduledAtMillis,
+                activeSnoozeUntilMillis: schedule.activeSnoozeUntilMillis,
+                nowMillis: nowMillis
             )
         }
-        let fireAtMillis = WarmAlarmRecurrence.recoveryFireAtMillis(
-            identifier: identifier,
-            scheduledAtMillis: schedule.scheduledAtMillis,
-            activeSnoozeUntilMillis: schedule.activeSnoozeUntilMillis,
-            nowMillis: nowMillis
-        )
         let fireDate = Date(timeIntervalSince1970: Double(fireAtMillis) / 1000.0)
-        if let separator = identifier.lastIndex(of: "#"),
+        if recoveryFallbackIndex == nil,
+           let separator = identifier.lastIndex(of: "#"),
            let isoWeekday = Int64(identifier[identifier.index(after: separator)...]) {
             let time = calendar.dateComponents([.hour, .minute], from: fireDate)
             var components = DateComponents()
@@ -601,19 +673,18 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         for schedule: WarmAlarmScheduleData,
         fireAtMillis: Int64,
         nowMillis: Int64,
-        content: UNNotificationContent,
-        calendar: Calendar = .current
+        content: UNNotificationContent
     ) -> [UNNotificationRequest] {
         let delay = max(1.0, Double(fireAtMillis - nowMillis) / 1000.0)
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: delay, repeats: false)
         let primaryRequest = UNNotificationRequest(
             identifier: String(schedule.id), content: content, trigger: trigger)
-        return [primaryRequest] + makeFallbackRequests(
-            alarmId: schedule.id,
-            content: content,
-            anchorMillis: fireAtMillis,
-            calendar: calendar
-        )
+        let fallbackRequests = fallbackIdentifiers(for: schedule.id).enumerated().map { index, identifier in
+            let fallbackDelay = delay + Double(index + 1) * Double(fallbackIntervalMillis) / 1_000.0
+            let fallbackTrigger = UNTimeIntervalNotificationTrigger(timeInterval: fallbackDelay, repeats: false)
+            return UNNotificationRequest(identifier: identifier, content: content, trigger: fallbackTrigger)
+        }
+        return [primaryRequest] + fallbackRequests
     }
 
     static func fallbackAnchorMillis(

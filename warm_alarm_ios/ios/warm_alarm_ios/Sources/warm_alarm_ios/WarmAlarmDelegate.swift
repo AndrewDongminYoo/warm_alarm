@@ -395,14 +395,14 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             fallbackAnchorMillis: fireAtMillis
         )
         let content = makeContent(from: updated)
-        let requests = WarmAlarmPlugin.makeSnoozeRequests(
-            for: updated,
-            fireAtMillis: fireAtMillis,
-            nowMillis: nowMillis(),
-            content: content
-        )
         let center = UNUserNotificationCenter.current()
         center.getPendingNotificationRequests { pendingRequests in
+            let requests = WarmAlarmPlugin.makeSnoozeRequests(
+                for: updated,
+                fireAtMillis: fireAtMillis,
+                nowMillis: self.nowMillis(),
+                content: content
+            )
             let pendingIdentifiers = Set(pendingRequests.map(\.identifier))
             guard let selection = WarmAlarmPlugin.selectSnoozeRequestsWithinPendingLimit(
                 requests,
