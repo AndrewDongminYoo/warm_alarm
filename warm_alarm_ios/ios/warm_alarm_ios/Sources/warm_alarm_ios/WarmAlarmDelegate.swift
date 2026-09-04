@@ -4,6 +4,39 @@ import UserNotifications
 
 import Flutter
 
+final class WarmAlarmForegroundOccurrenceTracker: @unchecked Sendable {
+    private let lock = NSLock()
+    private var handledAlarmIds = Set<Int64>()
+
+    func shouldHandleAndMark(alarmId: Int64, isFallback: Bool) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if isFallback, handledAlarmIds.contains(alarmId) {
+            return false
+        }
+        handledAlarmIds.insert(alarmId)
+        return true
+    }
+
+    func mark(alarmId: Int64) {
+        lock.lock()
+        handledAlarmIds.insert(alarmId)
+        lock.unlock()
+    }
+
+    func clear(alarmId: Int64) {
+        lock.lock()
+        handledAlarmIds.remove(alarmId)
+        lock.unlock()
+    }
+
+    func clearAll() {
+        lock.lock()
+        handledAlarmIds.removeAll()
+        lock.unlock()
+    }
+}
+
 final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
     static let categoryIdentifier = "WARM_ALARM"
     static let stopActionIdentifier = "STOP"
