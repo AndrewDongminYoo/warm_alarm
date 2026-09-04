@@ -394,10 +394,27 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
 
     static func migrateRecurringWallTimes(
         _ schedules: [WarmAlarmScheduleData],
-        pendingRequests _: [UNNotificationRequest],
-        save _: (WarmAlarmScheduleData) -> Void
+        pendingRequests: [UNNotificationRequest],
+        save: (WarmAlarmScheduleData) -> Void
     ) -> [WarmAlarmScheduleData] {
-        schedules
+        schedules.map { schedule in
+            guard schedule.recurrenceHour == nil || schedule.recurrenceMinute == nil,
+                  let weekdays = schedule.recurrenceWeekdays, !weekdays.isEmpty else {
+                return schedule
+            }
+            let recurringIdentifiers = Set(weekdays.map { "\(schedule.id)#\($0)" })
+            guard let trigger = pendingRequests.first(where: {
+                recurringIdentifiers.contains($0.identifier)
+                    && ($0.trigger as? UNCalendarNotificationTrigger)?.repeats == true
+            })?.trigger as? UNCalendarNotificationTrigger,
+                  let hour = trigger.dateComponents.hour,
+                  let minute = trigger.dateComponents.minute else {
+                return schedule
+            }
+            let migrated = schedule.withRecurrenceTime(hour: hour, minute: minute)
+            save(migrated)
+            return migrated
+        }
     }
 
     static func sortedRecoverableSchedules(
