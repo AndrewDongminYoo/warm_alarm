@@ -55,13 +55,37 @@ jobs:
               ]
             | if length == 1 then .[0] else error("expected one RunnerTests sources phase") end
           ')
-          project_test_files=$(printf '%s' "$project_json" | jq -r --arg phase "$sources_phase_id" '
+          test_group_id=$(printf '%s' "$project_json" | jq -er '
+            [
+              .objects
+              | to_entries[]
+              | select(.value.isa == "PBXGroup" and .value.name == "RunnerTests")
+              | .key
+            ]
+            | if length == 1 then .[0] else error("expected one RunnerTests group") end
+          ')
+          project_test_files=$(printf '%s' "$project_json" | jq -r \
+            --arg phase "$sources_phase_id" \
+            --arg group "$test_group_id" '
             .objects as $objects
-            | $objects[$phase].files[]
-            | $objects[.].fileRef
-            | $objects[.].path
+            | ($objects[$phase].files | map($objects[.].fileRef)) as $source_file_refs
+            | def source_paths($group_id; $prefix):
+                $objects[$group_id].children[]
+                | . as $child_id
+                | $objects[$child_id] as $child
+                | if $child.isa == "PBXGroup" then
+                    source_paths($child_id; if $child.path == null then $prefix else $prefix + [$child.path] end)
+                  elif ($source_file_refs | index($child_id)) != null then
+                    ($prefix + [($child.path // error("source file is missing a path"))]) | join("/")
+                  else
+                    empty
+                  end;
+              source_paths($group; [])
           ' | sort -u)
-          test_files=$(find "$test_directory" -maxdepth 1 -type f -name '*.swift' -exec basename {} \; | sort -u)
+          test_files=$(
+            cd "$test_directory" || exit 1
+            find . -type f -name '*.swift' -print | sed 's#^\./##' | sort -u
+          )
           if [ -z "$test_files" ]; then
             echo "No Swift test sources found in $test_directory" >&2
             exit 1
