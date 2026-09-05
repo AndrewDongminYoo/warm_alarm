@@ -1621,6 +1621,17 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         return WarmAlarmWarningWire(message: message)
     }
 
+    static func completePendingLimitFailure(
+        alarmId: Int64,
+        error: Error,
+        emitFailure: @escaping (Int64, String) -> Void,
+        completion: @escaping (Result<WarmAlarmScheduleResultWire, Error>) -> Void,
+        finish: @escaping () -> Void
+    ) {
+        emitFailure(alarmId, error.localizedDescription)
+        WarmAlarmPlatformReply.complete(.failure(error), completion: completion, finish: finish)
+    }
+
     func scheduleAlarm(
         schedule: WarmAlarmScheduleWire,
         completion: @escaping (Result<WarmAlarmScheduleResultWire, Error>) -> Void
@@ -1677,8 +1688,13 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                             limit: Self.pendingNotificationLimit
                         )
                     )
-                    self.delegate.emitFailure(alarmId: schedule.id, message: error.localizedDescription)
-                    WarmAlarmPlatformReply.complete(.failure(error), completion: completion, finish: finish)
+                    Self.completePendingLimitFailure(
+                        alarmId: schedule.id,
+                        error: error,
+                        emitFailure: self.delegate.emitFailure,
+                        completion: completion,
+                        finish: finish
+                    )
                     return
                 }
 
