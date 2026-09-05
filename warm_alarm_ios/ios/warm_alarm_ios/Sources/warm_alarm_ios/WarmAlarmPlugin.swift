@@ -1056,6 +1056,18 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         )
         if let weekdays = schedule.recurrence?.weekdays, !weekdays.isEmpty {
             let time = calendar.dateComponents([.hour, .minute], from: fireDate)
+            let requestedDateComponents = calendar.dateComponents(
+                [.year, .month, .day, .hour, .minute],
+                from: fireDate
+            )
+            let requestedAtMillis = calendar.date(from: requestedDateComponents)
+                .map { Int64($0.timeIntervalSince1970 * 1_000) }
+                ?? schedule.scheduledAtMillis
+            let recurringOccurrenceMetadata = WarmAlarmOccurrenceMetadata(
+                token: occurrenceSeriesToken(for: schedule.id),
+                primaryAtMillis: requestedAtMillis,
+                calendar: calendar
+            )
             let recurringRequests = weekdays.map { iso in
                 var components = DateComponents()
                 components.weekday = WarmAlarmRecurrence.appleWeekday(fromIso: iso)
@@ -1064,7 +1076,11 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
                 return UNNotificationRequest(
                     identifier: "\(schedule.id)#\(iso)",
-                    content: contentWithOccurrenceMetadata(content, metadata: occurrenceMetadata, ordinal: 0),
+                    content: contentWithOccurrenceMetadata(
+                        content,
+                        metadata: recurringOccurrenceMetadata,
+                        ordinal: 0
+                    ),
                     trigger: trigger
                 )
             }
@@ -1433,11 +1449,67 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         nowMillis: Int64,
         calendar: Calendar = .current
     ) -> Int64? {
-        recoveryFallbackAnchorMillis(
+        if let content,
+           let notificationOccurrenceMillis = floatingOneShotOccurrenceMillis(
+               for: schedule,
+               content: content,
+               calendar: calendar
+           ) {
+            return notificationOccurrenceMillis
+        }
+        let fallbackAnchorMillis = recoveryFallbackAnchorMillis(
             for: schedule,
             nowMillis: nowMillis,
             calendar: calendar
         )
+        let recurrenceOccurrenceMillis = latestRecurrenceOccurrenceMillis(
+            for: schedule,
+            nowMillis: nowMillis,
+            calendar: calendar
+        )
+        return [fallbackAnchorMillis, recurrenceOccurrenceMillis].compactMap { $0 }.max()
+    }
+
+    private static func floatingOneShotOccurrenceMillis(
+        for schedule: WarmAlarmScheduleData,
+        content: UNNotificationContent,
+        calendar: Calendar
+    ) -> Int64? {
+        guard schedule.recurrenceWeekdays?.isEmpty != false,
+              let metadata = occurrenceMetadata(from: content),
+              metadata.floating,
+              metadata.primaryEpochMillis == (schedule.fallbackAnchorMillis ?? schedule.scheduledAtMillis),
+              let occurrenceDate = metadata.primaryDate(in: calendar) else {
+            return nil
+        }
+        return Int64(occurrenceDate.timeIntervalSince1970 * 1_000)
+    }
+
+    private static func latestRecurrenceOccurrenceMillis(
+        for schedule: WarmAlarmScheduleData,
+        nowMillis: Int64,
+        calendar: Calendar
+    ) -> Int64? {
+        guard let weekdays = schedule.recurrenceWeekdays, !weekdays.isEmpty,
+              let hour = schedule.recurrenceHour,
+              let minute = schedule.recurrenceMinute else {
+            return nil
+        }
+        let now = Date(timeIntervalSince1970: Double(nowMillis) / 1_000)
+        return weekdays.compactMap { isoWeekday -> Date? in
+            var components = DateComponents()
+            components.weekday = WarmAlarmRecurrence.appleWeekday(fromIso: isoWeekday)
+            components.hour = hour
+            components.minute = minute
+            components.second = 0
+            return calendar.nextDate(
+                after: now.addingTimeInterval(0.001),
+                matching: components,
+                matchingPolicy: .strict,
+                repeatedTimePolicy: .first,
+                direction: .backward
+            )
+        }.max().map { Int64($0.timeIntervalSince1970 * 1_000) }
     }
 
     private static func recurringWeekday(for identifier: String, alarmId: Int64) -> Int64? {

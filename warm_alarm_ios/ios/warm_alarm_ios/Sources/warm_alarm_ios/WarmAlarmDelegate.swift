@@ -118,7 +118,14 @@ final class WarmAlarmForegroundOccurrenceTracker: @unchecked Sendable {
     }
 
     private func remember(alarmId: Int64, occurrenceToken: String) -> Bool {
-        guard let occurrenceMillis = occurrenceMillis(from: occurrenceToken),
+        guard let occurrenceMillis = occurrenceMillis(from: occurrenceToken) else {
+            return false
+        }
+        let consumedOccurrenceMillis = max(
+            latestConsumedOccurrenceMillisByAlarmId[alarmId] ?? .min,
+            consumedOccurrenceStore?.load(alarmId: alarmId) ?? .min
+        )
+        guard occurrenceMillis > consumedOccurrenceMillis,
               latestHandledOccurrenceMillisByAlarmId[alarmId].map({ occurrenceMillis > $0 }) ?? true else {
             return false
         }
@@ -290,7 +297,10 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             occurrenceToken: occurrenceToken,
             minimumOccurrenceMillis: actionLowerBound,
             perform: stopAudio
-        ) else { return }
+        ) else {
+            stopAudioIfPlaying(alarmId: alarmId, occurrenceToken: occurrenceToken)
+            return
+        }
         removePendingFallbackRequests(for: alarmId)
         // Dismiss ends only this occurrence for a recurring alarm; the repeating
         // triggers stay armed, so keep the stored schedule. cancelAlarm tears down
@@ -534,6 +544,12 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         currentlyPlayingAlarmId = nil
         currentlyPlayingOccurrenceToken = nil
         deactivateAudioSession()
+    }
+
+    private func stopAudioIfPlaying(alarmId: Int64, occurrenceToken: String) {
+        guard currentlyPlayingAlarmId == alarmId,
+              currentlyPlayingOccurrenceToken == occurrenceToken else { return }
+        stopAudio()
     }
 
     private func configureAudioSession() {

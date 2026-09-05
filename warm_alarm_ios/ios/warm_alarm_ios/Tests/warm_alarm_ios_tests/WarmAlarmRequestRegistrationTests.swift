@@ -433,6 +433,37 @@ final class WarmAlarmRequestTests: XCTestCase {
         }
     }
 
+    func testRecurringPrimaryMetadataKeepsRequestedTimeAcrossDstGap() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        let scheduledAtMillis = millis(2030, 3, 3, 2, 30, calendar: calendar)
+        let schedule = makeWireSchedule(
+            scheduledAtMillis: scheduledAtMillis,
+            recurrenceWeekdays: [7]
+        )
+        let fallbackAnchorMillis = WarmAlarmPlugin.fallbackAnchorMillis(
+            for: schedule,
+            nowMillis: millis(2030, 3, 10, 1, 0, calendar: calendar),
+            calendar: calendar
+        )
+        let requests = WarmAlarmPlugin.makeRequests(
+            for: schedule,
+            content: UNMutableNotificationContent(),
+            fallbackAnchorMillis: fallbackAnchorMillis,
+            calendar: calendar
+        )
+
+        let fallbackTime = calendar.dateComponents(
+            [.hour, .minute],
+            from: Date(timeIntervalSince1970: Double(fallbackAnchorMillis) / 1_000)
+        )
+        XCTAssertEqual(fallbackTime.hour, 3)
+        XCTAssertEqual(fallbackTime.minute, 0)
+        let metadata = occurrenceMetadata(from: requests[0].content)
+        XCTAssertEqual(metadata?["hour"] as? Int, 2)
+        XCTAssertEqual(metadata?["minute"] as? Int, 30)
+    }
+
     func testRecurringFallbackAnchorMovesPastCurrentTime() {
         let calendar = utcCalendar()
         let schedule = makeWireSchedule(
@@ -1814,6 +1845,31 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertEqual(actionCount, 2)
     }
 
+    func testConsumedOccurrenceSuppressesRetainedNotificationAfterTrackerReinitialization() {
+        let suiteName = "WarmAlarmConsumedOccurrenceTests.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            XCTFail("Could not create isolated UserDefaults")
+            return
+        }
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = WarmAlarmConsumedOccurrenceStore(defaults: defaults)
+
+        WarmAlarmForegroundOccurrenceTracker(consumedOccurrenceStore: store).stop(
+            alarmId: 42,
+            occurrenceToken: "series#1000"
+        )
+        let reinitializedTracker = WarmAlarmForegroundOccurrenceTracker(consumedOccurrenceStore: store)
+
+        XCTAssertFalse(reinitializedTracker.shouldHandleAndMark(
+            alarmId: 42,
+            occurrenceToken: "series#1000"
+        ))
+        XCTAssertTrue(reinitializedTracker.shouldHandleAndMark(
+            alarmId: 42,
+            occurrenceToken: "series#2000"
+        ))
+    }
+
     func testStopRejectsOccurrenceBeforePersistedScheduleAnchorAfterTrackerReinitialization() {
         let calendar = utcCalendar()
         let currentAnchorMillis = Int64(2_000)
@@ -1839,6 +1895,126 @@ final class WarmAlarmRequestTests: XCTestCase {
         }
 
         XCTAssertFalse(didRunAction)
+    }
+
+    func testRecurringActionRejectsRetainedOccurrenceAfterFallbackAnchorCleared() {
+        let calendar = utcCalendar()
+        let firstOccurrenceMillis = millis(2030, 1, 7, 7, 0, calendar: calendar)
+        let retainedOccurrenceMillis = millis(2030, 1, 14, 7, 0, calendar: calendar)
+        let latestOccurrenceMillis = millis(2030, 1, 21, 7, 0, calendar: calendar)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(
+                scheduledAtMillis: firstOccurrenceMillis,
+                recurrenceWeekdays: [1]
+            ),
+            fallbackAnchorMillis: firstOccurrenceMillis,
+            calendar: calendar
+        ).clearingFallbackAnchor()
+        let minimumOccurrenceMillis = WarmAlarmPlugin.actionOccurrenceLowerBound(
+            for: schedule,
+            nowMillis: latestOccurrenceMillis + 1_000,
+            calendar: calendar
+        )
+        let suiteName = "WarmAlarmConsumedOccurrenceTests.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            XCTFail("Could not create isolated UserDefaults")
+            return
+        }
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = WarmAlarmConsumedOccurrenceStore(defaults: defaults)
+        WarmAlarmForegroundOccurrenceTracker(consumedOccurrenceStore: store).stop(
+            alarmId: 42,
+            occurrenceToken: "series#\(firstOccurrenceMillis)"
+        )
+        var didRunAction = false
+
+        WarmAlarmForegroundOccurrenceTracker(consumedOccurrenceStore: store).stop(
+            alarmId: 42,
+            occurrenceToken: "series#\(retainedOccurrenceMillis)",
+            minimumOccurrenceMillis: minimumOccurrenceMillis
+        ) {
+            didRunAction = true
+        }
+
+        XCTAssertEqual(minimumOccurrenceMillis, latestOccurrenceMillis)
+        XCTAssertFalse(didRunAction)
+    }
+
+    func testRejectedReplacedOccurrenceStillStopsMatchingPlayingAudio() {
+        let alarmId = Int64(4_242_424_242)
+        let oldOccurrenceMillis = Int64(1_000)
+        let replacementOccurrenceMillis = Int64(2_000)
+        let replacement = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(
+                id: alarmId,
+                scheduledAtMillis: replacementOccurrenceMillis
+            ),
+            fallbackAnchorMillis: replacementOccurrenceMillis,
+            calendar: utcCalendar()
+        )
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(replacement)
+        let eventsApi = RecordingWarmAlarmEventsApi()
+        let delegate = WarmAlarmDelegate(
+            eventsApi: eventsApi,
+            notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.replaced_occurrence"),
+            currentlyPlayingAlarmId: alarmId,
+            currentlyPlayingOccurrenceToken: "series#\(oldOccurrenceMillis)"
+        )
+        defer {
+            delegate.stopIfPlaying(alarmId: alarmId)
+            WarmAlarmStore.shared.remove(id: alarmId)
+        }
+
+        delegate.handleStop(
+            alarmId: alarmId,
+            occurrenceToken: "series#\(oldOccurrenceMillis)"
+        )
+
+        XCTAssertNil(delegate.currentlyPlayingAlarmId)
+        XCTAssertNil(delegate.currentlyPlayingOccurrenceToken)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.fallbackAnchorMillis, replacementOccurrenceMillis)
+        XCTAssertTrue(eventsApi.events.isEmpty)
+    }
+
+    func testFloatingOneShotActionBoundFollowsNotificationAcrossTimeZones() {
+        var schedulingCalendar = Calendar(identifier: .gregorian)
+        schedulingCalendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        var deliveryCalendar = Calendar(identifier: .gregorian)
+        deliveryCalendar.timeZone = TimeZone(identifier: "America/New_York")!
+        let scheduledAtMillis = millis(2030, 4, 1, 7, 0, calendar: schedulingCalendar)
+        let deliveredOccurrenceMillis = millis(2030, 4, 1, 7, 0, calendar: deliveryCalendar)
+        let wire = makeWireSchedule(scheduledAtMillis: scheduledAtMillis)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: wire,
+            fallbackAnchorMillis: scheduledAtMillis,
+            calendar: schedulingCalendar
+        )
+        let primaryRequest = WarmAlarmPlugin.makeRequests(
+            for: wire,
+            content: UNMutableNotificationContent(),
+            fallbackAnchorMillis: scheduledAtMillis,
+            calendar: schedulingCalendar
+        )[0]
+        let occurrenceToken = WarmAlarmPlugin.foregroundOccurrenceToken(
+            content: primaryRequest.content,
+            identifier: primaryRequest.identifier,
+            alarmId: 42,
+            deliveredAtMillis: deliveredOccurrenceMillis,
+            calendar: deliveryCalendar,
+            schedule: schedule
+        )
+
+        XCTAssertEqual(occurrenceToken, "warm-alarm-v1:42#\(deliveredOccurrenceMillis)")
+        XCTAssertEqual(
+            WarmAlarmPlugin.actionOccurrenceLowerBound(
+                for: schedule,
+                content: primaryRequest.content,
+                nowMillis: deliveredOccurrenceMillis,
+                calendar: deliveryCalendar
+            ),
+            deliveredOccurrenceMillis
+        )
     }
 
     func testStoppedOccurrenceDoesNotSuppressFallbackFromNextOccurrence() {
@@ -2116,5 +2292,17 @@ final class WarmAlarmRequestTests: XCTestCase {
             minute: minute
         ))!
         return Int64(date.timeIntervalSince1970 * 1_000)
+    }
+}
+
+private final class RecordingWarmAlarmEventsApi: WarmAlarmEventsApiProtocol {
+    private(set) var events = [WarmAlarmEventWire]()
+
+    func emitEvent(
+        event: WarmAlarmEventWire,
+        completion: @escaping (Result<Void, PigeonError>) -> Void
+    ) {
+        events.append(event)
+        completion(.success(()))
     }
 }
