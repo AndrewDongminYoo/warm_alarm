@@ -186,32 +186,61 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             completionHandler([.alert, .sound])
             return
         }
+        handleForegroundDelivery(
+            alarmId: alarmId,
+            identifier: notification.request.identifier,
+            content: notification.request.content,
+            deliveredAtMillis: Int64(notification.date.timeIntervalSince1970 * 1_000)
+        ) { didHandle in
+            completionHandler(didHandle ? [.alert] : [])
+        }
+    }
+
+    func handleForegroundDelivery(
+        alarmId: Int64,
+        identifier: String,
+        content: UNNotificationContent,
+        deliveredAtMillis: Int64,
+        completion: @escaping (Bool) -> Void
+    ) {
+        completion(performForegroundDelivery(
+            alarmId: alarmId,
+            identifier: identifier,
+            content: content,
+            deliveredAtMillis: deliveredAtMillis
+        ))
+    }
+
+    private func performForegroundDelivery(
+        alarmId: Int64,
+        identifier: String,
+        content: UNNotificationContent,
+        deliveredAtMillis: Int64
+    ) -> Bool {
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
-        guard schedule.map({ WarmAlarmPlugin.notificationContent($0, matches: notification.request.content) })
-            ?? true else {
-            completionHandler([])
-            return
+        guard schedule.map({ WarmAlarmPlugin.notificationContent($0, matches: content) }) ?? true else {
+            return false
         }
         let occurrenceToken = WarmAlarmPlugin.foregroundOccurrenceToken(
-            content: notification.request.content,
-            identifier: notification.request.identifier,
+            content: content,
+            identifier: identifier,
             alarmId: alarmId,
-            deliveredAtMillis: Int64(notification.date.timeIntervalSince1970 * 1_000),
+            deliveredAtMillis: deliveredAtMillis,
             schedule: schedule
         )
-        guard foregroundOccurrenceTracker.handleIfAllowed(
+        return foregroundOccurrenceTracker.handleIfAllowed(
             alarmId: alarmId,
             occurrenceToken: occurrenceToken,
             perform: {
-            startAudio(alarmId: alarmId, occurrenceToken: occurrenceToken, for: schedule)
-            emitEvent(WarmAlarmEventWire(
-                alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis(), payload: schedule?.payload))
+                startAudio(alarmId: alarmId, occurrenceToken: occurrenceToken, for: schedule)
+                emitEvent(WarmAlarmEventWire(
+                    alarmId: alarmId,
+                    type: .fired,
+                    occurredAtMillis: nowMillis(),
+                    payload: schedule?.payload
+                ))
             }
-        ) else {
-            completionHandler([])
-            return
-        }
-        completionHandler([.alert])
+        )
     }
 
     func userNotificationCenter(
@@ -262,25 +291,14 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
                 }
             }
         case UNNotificationDefaultActionIdentifier:
-            guard schedule.map({ WarmAlarmPlugin.notificationContent($0, matches: response.notification.request.content) })
-                ?? true else {
-                completionHandler()
-                return
-            }
-            _ = foregroundOccurrenceTracker.handleIfAllowed(
+            handleForegroundDelivery(
                 alarmId: alarmId,
-                occurrenceToken: occurrenceToken,
-                perform: {
-                    startAudio(alarmId: alarmId, occurrenceToken: occurrenceToken, for: schedule)
-                    emitEvent(WarmAlarmEventWire(
-                        alarmId: alarmId,
-                        type: .fired,
-                        occurredAtMillis: nowMillis(),
-                        payload: schedule?.payload
-                    ))
-                }
-            )
-            completionHandler()
+                identifier: deliveredIdentifier,
+                content: response.notification.request.content,
+                deliveredAtMillis: Int64(response.notification.date.timeIntervalSince1970 * 1_000)
+            ) { _ in
+                completionHandler()
+            }
         default:
             completionHandler()
         }
