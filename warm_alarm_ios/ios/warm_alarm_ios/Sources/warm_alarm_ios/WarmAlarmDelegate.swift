@@ -668,7 +668,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
                 } else {
                     WarmAlarmStore.shared.remove(id: existing.id)
                 }
-                rollbackCompletion()
+                rollbackCompletion(nil)
             },
             completion: completion
         )

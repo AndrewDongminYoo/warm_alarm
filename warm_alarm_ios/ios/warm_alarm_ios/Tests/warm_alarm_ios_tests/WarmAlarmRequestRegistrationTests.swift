@@ -170,7 +170,7 @@ final class WarmAlarmSnoozeRegistrationTests: XCTestCase {
             },
             rollback: { rollbackCompletion in
                 steps.append("rollback")
-                rollbackCompletion()
+                rollbackCompletion(nil)
             },
             completion: { error in
                 XCTAssertEqual((error as NSError?)?.domain, expectedError.domain)
@@ -181,6 +181,28 @@ final class WarmAlarmSnoozeRegistrationTests: XCTestCase {
 
         wait(for: [completed], timeout: 1)
         XCTAssertEqual(steps, ["persist", "register", "rollback", "completion"])
+    }
+
+    func testReportsRollbackFailure() {
+        let registrationError = NSError(domain: "WarmAlarmRegistrationTests", code: 1)
+        let rollbackError = NSError(domain: "WarmAlarmRollbackTests", code: 2)
+        let completed = expectation(description: "snooze rollback failure completes")
+
+        WarmAlarmSnoozeRegistration.perform(
+            persistIntent: {},
+            register: { completion in
+                completion(registrationError)
+            },
+            rollback: { completion in
+                completion(rollbackError)
+            },
+            completion: { error in
+                XCTAssertEqual((error as NSError?)?.domain, rollbackError.domain)
+                completed.fulfill()
+            }
+        )
+
+        wait(for: [completed], timeout: 1)
     }
 }
 

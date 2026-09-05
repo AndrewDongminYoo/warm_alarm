@@ -60,15 +60,15 @@ enum WarmAlarmSnoozeRegistration {
     static func perform(
         persistIntent: @escaping () -> Void,
         register: (@escaping (Error?) -> Void) -> Void,
-        rollback: @escaping (@escaping () -> Void) -> Void,
+        rollback: @escaping (@escaping (Error?) -> Void) -> Void,
         completion: @escaping (Error?) -> Void
     ) {
         persistIntent()
         register { error in
             if let error {
-                rollback {
+                rollback { rollbackError in
                     WarmAlarmPlatformReply.performOnMain {
-                        completion(error)
+                        completion(rollbackError ?? error)
                     }
                 }
                 return
