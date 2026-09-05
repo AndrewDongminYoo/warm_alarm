@@ -1454,11 +1454,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         )
         if let recurrenceOccurrenceMillis,
            let content,
-           let metadata = occurrenceMetadata(from: content),
-           metadata.floating,
-           metadata.token == occurrenceSeriesToken(for: schedule.id),
-           metadata.hour == schedule.recurrenceHour,
-           metadata.minute == schedule.recurrenceMinute {
+           isFloatingRecurringOccurrence(for: schedule, content: content) {
             return recurrenceOccurrenceMillis
         }
         let fallbackAnchorMillis = recoveryFallbackAnchorMillis(
@@ -1467,6 +1463,20 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             calendar: calendar
         )
         return [fallbackAnchorMillis, recurrenceOccurrenceMillis].compactMap { $0 }.max()
+    }
+
+    static func isFloatingRecurringOccurrence(
+        for schedule: WarmAlarmScheduleData,
+        content: UNNotificationContent
+    ) -> Bool {
+        guard schedule.recurrenceWeekdays?.isEmpty == false,
+              let metadata = occurrenceMetadata(from: content) else {
+            return false
+        }
+        return metadata.floating
+            && metadata.token == occurrenceSeriesToken(for: schedule.id)
+            && metadata.hour == schedule.recurrenceHour
+            && metadata.minute == schedule.recurrenceMinute
     }
 
     private static func floatingOneShotOccurrenceMillis(
