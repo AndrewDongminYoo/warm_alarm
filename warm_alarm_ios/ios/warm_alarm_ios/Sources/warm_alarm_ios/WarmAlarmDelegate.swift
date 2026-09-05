@@ -144,7 +144,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     static let stopActionIdentifier = "STOP"
     static let snoozeActionIdentifier = "SNOOZE"
 
-    private let eventsApi: WarmAlarmEventsApi
+    private let eventsApi: WarmAlarmEventsApiProtocol
     private let notificationMutationQueue: WarmAlarmMutationQueue
     private var audioPlayer: AVAudioPlayer?
     private(set) var currentlyPlayingAlarmId: Int64?
@@ -156,11 +156,15 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     private var volumeEnforcerTimer: Timer?
 
     init(
-        eventsApi: WarmAlarmEventsApi,
-        notificationMutationQueue: WarmAlarmMutationQueue
+        eventsApi: WarmAlarmEventsApiProtocol,
+        notificationMutationQueue: WarmAlarmMutationQueue,
+        currentlyPlayingAlarmId: Int64? = nil,
+        currentlyPlayingOccurrenceToken: String? = nil
     ) {
         self.eventsApi = eventsApi
         self.notificationMutationQueue = notificationMutationQueue
+        self.currentlyPlayingAlarmId = currentlyPlayingAlarmId
+        self.currentlyPlayingOccurrenceToken = currentlyPlayingOccurrenceToken
     }
 
     // MARK: - UNUserNotificationCenterDelegate
