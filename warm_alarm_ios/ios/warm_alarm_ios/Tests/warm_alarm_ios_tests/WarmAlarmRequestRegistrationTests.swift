@@ -2072,6 +2072,39 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertEqual(minimumOccurrenceMillis, interveningOccurrenceMillis)
     }
 
+    func testRecurringActionBoundKeepsExpiredSnoozeNotificationWithinItsOccurrence() {
+        let calendar = utcCalendar()
+        let firstOccurrenceMillis = millis(2030, 1, 7, 7, 0, calendar: calendar)
+        let snoozeOccurrenceMillis = firstOccurrenceMillis + 5 * 60 * 1_000
+        let wire = makeWireSchedule(
+            scheduledAtMillis: firstOccurrenceMillis,
+            recurrenceWeekdays: [1]
+        )
+        let schedule = WarmAlarmScheduleData.from(
+            wire: wire,
+            fallbackAnchorMillis: firstOccurrenceMillis,
+            calendar: calendar
+        ).withActiveSnooze(
+            untilMillis: snoozeOccurrenceMillis,
+            fallbackAnchorMillis: snoozeOccurrenceMillis
+        )
+        let snoozeContent = WarmAlarmPlugin.makeSnoozeRequests(
+            for: schedule,
+            fireAtMillis: snoozeOccurrenceMillis,
+            nowMillis: firstOccurrenceMillis,
+            content: UNMutableNotificationContent()
+        )[0].content
+
+        let minimumOccurrenceMillis = WarmAlarmPlugin.actionOccurrenceLowerBound(
+            for: schedule,
+            content: snoozeContent,
+            nowMillis: snoozeOccurrenceMillis + 181_000,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(minimumOccurrenceMillis, snoozeOccurrenceMillis)
+    }
+
     func testStoppingRecurringOccurrencePreservesLaterSnoozeFallbackChain() {
         let alarmId = Int64(4_242_424_244)
         let calendar = utcCalendar()

@@ -1458,6 +1458,14 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
            ) {
             return notificationOccurrenceMillis
         }
+        if let content,
+           let metadata = occurrenceMetadata(from: content),
+           !metadata.floating,
+           metadata.token == schedule.occurrenceSeriesToken,
+           metadata.primaryEpochMillis == schedule.activeSnoozeUntilMillis,
+           metadata.primaryDate(in: calendar) != nil {
+            return metadata.primaryEpochMillis
+        }
         let recurrenceOccurrenceMillis = latestRecurrenceOccurrenceMillis(
             for: schedule,
             nowMillis: nowMillis,
