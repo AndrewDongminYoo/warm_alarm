@@ -2131,6 +2131,57 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertTrue(eventsApi.events.isEmpty)
     }
 
+    func testReplacedGenerationRejectsOldNotificationAtSameOccurrence() {
+        let alarmId = Int64(4_242_424_245)
+        let occurrenceMillis = Int64(1_000)
+        let wire = makeWireSchedule(id: alarmId, scheduledAtMillis: occurrenceMillis)
+        let oldContent = WarmAlarmPlugin.makeRequests(
+            for: wire,
+            content: UNMutableNotificationContent(),
+            fallbackAnchorMillis: occurrenceMillis,
+            calendar: utcCalendar(),
+            occurrenceSeriesToken: "old-generation"
+        )[0].content
+        let replacement = WarmAlarmScheduleData.from(
+            wire: wire,
+            fallbackAnchorMillis: occurrenceMillis,
+            calendar: utcCalendar(),
+            occurrenceSeriesToken: "new-generation"
+        )
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(replacement)
+        let eventsApi = RecordingWarmAlarmEventsApi()
+        let delegate = WarmAlarmDelegate(
+            eventsApi: eventsApi,
+            notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.replaced_generation"),
+            currentlyPlayingAlarmId: alarmId,
+            currentlyPlayingOccurrenceToken: "old-generation#\(occurrenceMillis)"
+        )
+        defer {
+            delegate.stopIfPlaying(alarmId: alarmId)
+            WarmAlarmStore.shared.remove(id: alarmId)
+        }
+
+        delegate.handleStop(
+            alarmId: alarmId,
+            occurrenceToken: "old-generation#\(occurrenceMillis)",
+            content: oldContent
+        )
+
+        XCTAssertNil(delegate.currentlyPlayingAlarmId)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.occurrenceSeriesToken, "new-generation")
+        XCTAssertTrue(eventsApi.events.isEmpty)
+    }
+
+    func testOccurrenceGenerationsAreUniqueForTheSameAlarm() {
+        let first = WarmAlarmPlugin.newOccurrenceSeriesToken(for: 42)
+        let second = WarmAlarmPlugin.newOccurrenceSeriesToken(for: 42)
+
+        XCTAssertTrue(first.hasPrefix("warm-alarm-v1:42:"))
+        XCTAssertTrue(second.hasPrefix("warm-alarm-v1:42:"))
+        XCTAssertNotEqual(first, second)
+    }
+
     func testFloatingOneShotActionBoundFollowsNotificationAcrossTimeZones() {
         var schedulingCalendar = Calendar(identifier: .gregorian)
         schedulingCalendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!

@@ -187,6 +187,11 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             return
         }
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
+        guard schedule.map({ WarmAlarmPlugin.notificationContent($0, matches: notification.request.content) })
+            ?? true else {
+            completionHandler([])
+            return
+        }
         let occurrenceToken = WarmAlarmPlugin.foregroundOccurrenceToken(
             content: notification.request.content,
             identifier: notification.request.identifier,
@@ -257,6 +262,11 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
                 }
             }
         case UNNotificationDefaultActionIdentifier:
+            guard schedule.map({ WarmAlarmPlugin.notificationContent($0, matches: response.notification.request.content) })
+                ?? true else {
+                completionHandler()
+                return
+            }
             _ = foregroundOccurrenceTracker.handleIfAllowed(
                 alarmId: alarmId,
                 occurrenceToken: occurrenceToken,

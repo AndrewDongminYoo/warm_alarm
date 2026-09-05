@@ -1359,6 +1359,18 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         "warm-alarm-v1:\(alarmId)"
     }
 
+    static func newOccurrenceSeriesToken(for alarmId: Int64) -> String {
+        "\(occurrenceSeriesToken(for: alarmId)):\(UUID().uuidString)"
+    }
+
+    static func notificationContent(
+        _ schedule: WarmAlarmScheduleData,
+        matches content: UNNotificationContent
+    ) -> Bool {
+        guard content.userInfo[WarmAlarmOccurrenceMetadata.userInfoKey] != nil else { return true }
+        return occurrenceMetadata(from: content)?.token == schedule.occurrenceSeriesToken
+    }
+
     private static func contentWithOccurrenceMetadata(
         _ content: UNNotificationContent,
         metadata: WarmAlarmOccurrenceMetadata?,
@@ -1441,6 +1453,9 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         nowMillis: Int64,
         calendar: Calendar = .current
     ) -> Int64? {
+        if let content, !notificationContent(schedule, matches: content) {
+            return .max
+        }
         if let content,
            let notificationOccurrenceMillis = floatingOneShotOccurrenceMillis(
                for: schedule,
@@ -1655,19 +1670,22 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 return
             }
             let nowMillis = Int64(Date().timeIntervalSince1970 * 1000)
+            let occurrenceSeriesToken = Self.newOccurrenceSeriesToken(for: schedule.id)
             let fallbackAnchorMillis = Self.fallbackAnchorMillis(
                 for: schedule,
                 nowMillis: nowMillis
             )
             let storedSchedule = WarmAlarmScheduleData.from(
                 wire: schedule,
-                fallbackAnchorMillis: fallbackAnchorMillis
+                fallbackAnchorMillis: fallbackAnchorMillis,
+                occurrenceSeriesToken: occurrenceSeriesToken
             )
             let content = self.delegate.makeContent(from: storedSchedule)
             let requests = Self.makeRequests(
                 for: schedule,
                 content: content,
-                fallbackAnchorMillis: fallbackAnchorMillis
+                fallbackAnchorMillis: fallbackAnchorMillis,
+                occurrenceSeriesToken: occurrenceSeriesToken
             )
             let center = UNUserNotificationCenter.current()
             let staleIdentifiers = Self.requestIdentifiers(
