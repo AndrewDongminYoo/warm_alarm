@@ -95,7 +95,11 @@ final class WarmAlarmMutationQueue {
     }
 
     func enqueueOnMain(_ mutation: @escaping Mutation) {
-        enqueue(mutation)
+        enqueue { finish in
+            WarmAlarmPlatformReply.performOnMain {
+                mutation(finish)
+            }
+        }
     }
 
     private func startNextMutation() {
