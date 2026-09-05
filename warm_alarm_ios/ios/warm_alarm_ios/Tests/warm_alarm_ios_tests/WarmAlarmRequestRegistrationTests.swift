@@ -1071,8 +1071,63 @@ final class WarmAlarmRequestTests: XCTestCase {
         )
 
         let expectedAnchor = millis(2030, 3, 11, 7, 0, calendar: recoveryCalendar)
+        XCTAssertEqual(migrated.first?.scheduledAtMillis, expectedAnchor)
         XCTAssertEqual(migrated.first?.fallbackAnchorMillis, expectedAnchor)
+        XCTAssertEqual(
+            migrated.first?.snapshotScheduledAtMillis(
+                nowMillis: millis(2030, 3, 11, 6, 0, calendar: recoveryCalendar),
+                calendar: recoveryCalendar
+            ),
+            expectedAnchor
+        )
+        XCTAssertEqual(saved.first?.scheduledAtMillis, expectedAnchor)
         XCTAssertEqual(saved.first?.fallbackAnchorMillis, expectedAnchor)
+    }
+
+    func testMigrationMakesWestwardOneShotRecoverableFromSurvivingFallback() {
+        var schedulingCalendar = Calendar(identifier: .gregorian)
+        schedulingCalendar.timeZone = TimeZone(identifier: "America/New_York")!
+        let scheduledAtMillis = millis(2030, 3, 11, 7, 0, calendar: schedulingCalendar)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: scheduledAtMillis),
+            fallbackAnchorMillis: scheduledAtMillis
+        )
+        let fallbackFireAtMillis = scheduledAtMillis + 30_000
+        let fallbackComponents = schedulingCalendar.dateComponents(
+            [.year, .month, .day, .hour, .minute, .second],
+            from: Date(timeIntervalSince1970: Double(fallbackFireAtMillis) / 1_000)
+        )
+        let pendingFallback = UNNotificationRequest(
+            identifier: "42#fallback#1",
+            content: UNMutableNotificationContent(),
+            trigger: UNCalendarNotificationTrigger(dateMatching: fallbackComponents, repeats: false)
+        )
+        var recoveryCalendar = Calendar(identifier: .gregorian)
+        recoveryCalendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        let nowMillis = millis(2030, 3, 11, 6, 0, calendar: recoveryCalendar)
+
+        XCTAssertFalse(WarmAlarmPlugin.shouldRecover(schedule: schedule, nowMillis: nowMillis))
+
+        let migrated = WarmAlarmPlugin.migrateOneShotFallbackAnchors(
+            [schedule],
+            pendingRequests: [pendingFallback],
+            calendar: recoveryCalendar,
+            save: { _ in }
+        )[0]
+
+        XCTAssertTrue(WarmAlarmPlugin.shouldRecover(schedule: migrated, nowMillis: nowMillis))
+        let requests = WarmAlarmPlugin.makeRecoveryRequests(
+            for: migrated,
+            nowMillis: nowMillis,
+            pendingIdentifiers: [pendingFallback.identifier],
+            content: UNMutableNotificationContent(),
+            calendar: recoveryCalendar
+        )
+        XCTAssertEqual(requests.first?.identifier, "42")
+        XCTAssertEqual(migrated.snapshotScheduledAtMillis(
+            nowMillis: nowMillis,
+            calendar: recoveryCalendar
+        ), millis(2030, 3, 11, 7, 0, calendar: recoveryCalendar))
     }
 
     func testForegroundOccurrenceTrackerScopesSuppressionToResettableOccurrence() {

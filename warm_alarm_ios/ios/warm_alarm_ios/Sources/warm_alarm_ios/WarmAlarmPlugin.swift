@@ -271,7 +271,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             }
             let nowMillis = Int64(Date().timeIntervalSince1970 * 1000)
             let storedSchedules = Array(WarmAlarmStore.shared.loadAll().values)
-            guard storedSchedules.contains(where: { Self.shouldRecover(schedule: $0, nowMillis: nowMillis) }) else {
+            guard !storedSchedules.isEmpty else {
                 WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
                 return
             }
@@ -295,6 +295,10 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                     migratedSchedules,
                     nowMillis: nowMillis
                 )
+                guard !recoverableAlarms.isEmpty else {
+                    WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
+                    return
+                }
                 self.recoverAlarms(
                     recoverableAlarms,
                     pendingIdentifiers: Set(pending.map { $0.identifier }),
@@ -456,7 +460,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                   anchorMillis != schedule.fallbackAnchorMillis else {
                 return schedule
             }
-            let migrated = schedule.withFallbackAnchor(anchorMillis)
+            let migrated = schedule.withOneShotAnchor(anchorMillis)
             save(migrated)
             return migrated
         }
