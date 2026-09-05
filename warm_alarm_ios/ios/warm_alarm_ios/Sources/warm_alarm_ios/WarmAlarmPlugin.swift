@@ -940,6 +940,17 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         fallbackIndex(for: identifier, alarmId: alarmId) != nil
     }
 
+    static func foregroundOccurrenceAnchorMillis(
+        identifier: String,
+        alarmId: Int64,
+        deliveredAtMillis: Int64
+    ) -> Int64 {
+        guard let index = fallbackIndex(for: identifier, alarmId: alarmId) else {
+            return deliveredAtMillis
+        }
+        return deliveredAtMillis - Int64(index) * fallbackIntervalMillis
+    }
+
     private static func fallbackIndex(for identifier: String, alarmId: Int64) -> Int? {
         let prefix = "\(alarmId)#fallback#"
         guard identifier.hasPrefix(prefix),
