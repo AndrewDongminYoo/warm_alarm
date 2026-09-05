@@ -191,6 +191,208 @@ struct WarmAlarmRequestSelection {
     let omittedFallbackCount: Int
 }
 
+private struct WarmAlarmOccurrenceMetadata {
+    static let userInfoKey = "_warmAlarmOccurrenceV1"
+
+    let token: String
+    let ordinal: Int
+    let year: Int
+    let month: Int
+    let day: Int
+    let hour: Int
+    let minute: Int
+    let second: Int
+    let calendarIdentifier: String
+    let floating: Bool
+    let timeZoneIdentifier: String
+    let primaryEpochMillis: Int64
+
+    init?(dictionary: [String: Any]) {
+        guard let token = dictionary["token"] as? String, !token.isEmpty,
+              let ordinal = Self.int(dictionary["ordinal"]), (0...6).contains(ordinal),
+              let year = Self.int(dictionary["year"]), year > 0,
+              let month = Self.int(dictionary["month"]), (1...12).contains(month),
+              let day = Self.int(dictionary["day"]), (1...31).contains(day),
+              let hour = Self.int(dictionary["hour"]), (0...23).contains(hour),
+              let minute = Self.int(dictionary["minute"]), (0...59).contains(minute),
+              let second = Self.int(dictionary["second"]), (0...59).contains(second),
+              let calendarIdentifier = dictionary["calendar"] as? String, calendarIdentifier == "gregorian",
+              let floating = dictionary["floating"] as? Bool,
+              let timeZoneIdentifier = dictionary["timeZone"] as? String, !timeZoneIdentifier.isEmpty,
+              let primaryEpochMillis = Self.int64(dictionary["primaryEpochMillis"]) else {
+            return nil
+        }
+        self.token = token
+        self.ordinal = ordinal
+        self.year = year
+        self.month = month
+        self.day = day
+        self.hour = hour
+        self.minute = minute
+        self.second = second
+        self.calendarIdentifier = calendarIdentifier
+        self.floating = floating
+        self.timeZoneIdentifier = timeZoneIdentifier
+        self.primaryEpochMillis = primaryEpochMillis
+    }
+
+    init?(
+        token: String,
+        ordinal: Int = 0,
+        primaryAtMillis: Int64,
+        calendar: Calendar,
+        floating: Bool = true
+    ) {
+        let primaryDate = Date(timeIntervalSince1970: Double(primaryAtMillis) / 1_000)
+        var metadataCalendar = Calendar(identifier: .gregorian)
+        metadataCalendar.timeZone = calendar.timeZone
+        let components = metadataCalendar.dateComponents(
+            [.year, .month, .day, .hour, .minute, .second],
+            from: primaryDate
+        )
+        guard let year = components.year,
+              let month = components.month,
+              let day = components.day,
+              let hour = components.hour,
+              let minute = components.minute,
+              let second = components.second else {
+            return nil
+        }
+        self.token = token
+        self.ordinal = ordinal
+        self.year = year
+        self.month = month
+        self.day = day
+        self.hour = hour
+        self.minute = minute
+        self.second = second
+        calendarIdentifier = "gregorian"
+        self.floating = floating
+        timeZoneIdentifier = calendar.timeZone.identifier
+        primaryEpochMillis = primaryAtMillis
+    }
+
+    func dictionary(ordinal: Int) -> [String: Any] {
+        [
+            "token": token,
+            "ordinal": ordinal,
+            "year": year,
+            "month": month,
+            "day": day,
+            "hour": hour,
+            "minute": minute,
+            "second": second,
+            "calendar": calendarIdentifier,
+            "floating": floating,
+            "timeZone": timeZoneIdentifier,
+            "primaryEpochMillis": primaryEpochMillis,
+        ]
+    }
+
+    func primaryDate(in calendar: Calendar) -> Date? {
+        let epochDate = Date(timeIntervalSince1970: Double(primaryEpochMillis) / 1_000)
+        if !floating {
+            guard let timeZone = TimeZone(identifier: timeZoneIdentifier) else { return nil }
+            var originalCalendar = Calendar(identifier: .gregorian)
+            originalCalendar.timeZone = timeZone
+            let epochComponents = originalCalendar.dateComponents(
+                [.year, .month, .day, .hour, .minute, .second],
+                from: epochDate
+            )
+            guard epochComponents.year == year,
+                  epochComponents.month == month,
+                  epochComponents.day == day,
+                  epochComponents.hour == hour,
+                  epochComponents.minute == minute,
+                  epochComponents.second == second else {
+                return nil
+            }
+            return epochDate
+        }
+        var metadataCalendar = Calendar(identifier: .gregorian)
+        metadataCalendar.timeZone = calendar.timeZone
+        let components = DateComponents(
+            year: year,
+            month: month,
+            day: day,
+            hour: hour,
+            minute: minute,
+            second: second
+        )
+        if calendar.timeZone.identifier == timeZoneIdentifier {
+            let epochComponents = metadataCalendar.dateComponents(
+                [.year, .month, .day, .hour, .minute, .second],
+                from: epochDate
+            )
+            if epochComponents.year == year,
+               epochComponents.month == month,
+               epochComponents.day == day,
+               epochComponents.hour == hour,
+               epochComponents.minute == minute,
+               epochComponents.second == second {
+                return epochDate
+            }
+            return nil
+        }
+        guard let reconstructedDate = metadataCalendar.date(from: components) else {
+            return nil
+        }
+        let reconstructedComponents = metadataCalendar.dateComponents(
+            [.year, .month, .day, .hour, .minute, .second],
+            from: reconstructedDate
+        )
+        guard reconstructedComponents.year == year,
+              reconstructedComponents.month == month,
+              reconstructedComponents.day == day,
+              reconstructedComponents.hour == hour,
+              reconstructedComponents.minute == minute,
+              reconstructedComponents.second == second else {
+            return nil
+        }
+        return reconstructedDate
+    }
+
+    func describesSameOccurrence(as other: WarmAlarmOccurrenceMetadata) -> Bool {
+        token == other.token
+            && year == other.year
+            && month == other.month
+            && day == other.day
+            && hour == other.hour
+            && minute == other.minute
+            && second == other.second
+            && floating == other.floating
+            && calendarIdentifier == other.calendarIdentifier
+            && timeZoneIdentifier == other.timeZoneIdentifier
+            && primaryEpochMillis == other.primaryEpochMillis
+    }
+
+    func scopedToken(for primaryDate: Date) -> String {
+        "\(token)#\(Int64(primaryDate.timeIntervalSince1970 * 1_000))"
+    }
+
+    private static func int(_ value: Any?) -> Int? {
+        guard !(value is Bool) else { return nil }
+        if let value = value as? Int { return value }
+        guard let number = value as? NSNumber,
+              number.doubleValue.isFinite,
+              number.doubleValue.rounded() == number.doubleValue else {
+            return nil
+        }
+        return number.intValue
+    }
+
+    private static func int64(_ value: Any?) -> Int64? {
+        guard !(value is Bool) else { return nil }
+        if let value = value as? Int64 { return value }
+        guard let number = value as? NSNumber,
+              number.doubleValue.isFinite,
+              number.doubleValue.rounded() == number.doubleValue else {
+            return nil
+        }
+        return number.int64Value
+    }
+}
+
 public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     private let delegate: WarmAlarmDelegate
     private let notificationMutationQueue: WarmAlarmMutationQueue
@@ -271,7 +473,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             }
             let nowMillis = Int64(Date().timeIntervalSince1970 * 1000)
             let storedSchedules = Array(WarmAlarmStore.shared.loadAll().values)
-            guard storedSchedules.contains(where: { Self.shouldRecover(schedule: $0, nowMillis: nowMillis) }) else {
+            guard !storedSchedules.isEmpty else {
                 WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
                 return
             }
@@ -281,8 +483,13 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                     finish()
                     return
                 }
-                let migratedSchedules = Self.migrateRecurringWallTimes(
+                let recurringSchedules = Self.migrateRecurringWallTimes(
                     storedSchedules,
+                    pendingRequests: pending,
+                    save: { WarmAlarmStore.shared.save($0) }
+                )
+                let migratedSchedules = Self.migrateOneShotFallbackAnchors(
+                    recurringSchedules,
                     pendingRequests: pending,
                     save: { WarmAlarmStore.shared.save($0) }
                 )
@@ -290,9 +497,13 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                     migratedSchedules,
                     nowMillis: nowMillis
                 )
+                guard !recoverableAlarms.isEmpty else {
+                    WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
+                    return
+                }
                 self.recoverAlarms(
                     recoverableAlarms,
-                    pendingIdentifiers: Set(pending.map { $0.identifier }),
+                    pendingRequests: pending,
                     nowMillis: nowMillis,
                     center: center
                 ) { result in
@@ -304,11 +515,12 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
 
     private func recoverAlarms(
         _ alarms: [WarmAlarmScheduleData],
-        pendingIdentifiers: Set<String>,
+        pendingRequests: [UNNotificationRequest],
         nowMillis: Int64,
         center: UNUserNotificationCenter,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
+        let pendingIdentifiers = Set(pendingRequests.map(\.identifier))
         let requestGroups = alarms.map { schedule in
             let content = delegate.makeContent(from: schedule)
             return (
@@ -318,6 +530,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                     for: schedule,
                     nowMillis: nowMillis,
                     pendingIdentifiers: pendingIdentifiers,
+                    pendingRequests: pendingRequests,
                     content: content
                 )
             )
@@ -355,6 +568,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                         for: candidate.schedule,
                         nowMillis: registrationNowMillis,
                         pendingIdentifiers: pendingIdentifiers,
+                        pendingRequests: pendingRequests,
                         content: candidate.content
                     )
                 }
@@ -425,6 +639,41 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         }
     }
 
+    static func migrateOneShotFallbackAnchors(
+        _ schedules: [WarmAlarmScheduleData],
+        pendingRequests: [UNNotificationRequest],
+        calendar: Calendar = .current,
+        save: (WarmAlarmScheduleData) -> Void
+    ) -> [WarmAlarmScheduleData] {
+        schedules.map { schedule in
+            guard schedule.recurrenceWeekdays?.isEmpty ?? true,
+                  schedule.activeSnoozeUntilMillis == nil else {
+                return schedule
+            }
+            let primaryIdentifier = String(schedule.id)
+            let matchingRequests = notificationRequests(for: schedule.id, in: pendingRequests)
+            let metadataDate = occurrenceMetadata(for: schedule.id, in: matchingRequests)?.primaryDate(in: calendar)
+            let primaryTriggerDate = matchingRequests.lazy.compactMap { request -> Date? in
+                guard request.identifier == primaryIdentifier,
+                      let trigger = request.trigger as? UNCalendarNotificationTrigger,
+                      !trigger.repeats else {
+                    return nil
+                }
+                return calendar.date(from: trigger.dateComponents)
+            }.first
+            guard let primaryDate = metadataDate ?? primaryTriggerDate else {
+                return schedule
+            }
+            let anchorMillis = Int64(primaryDate.timeIntervalSince1970 * 1_000)
+            guard anchorMillis != schedule.fallbackAnchorMillis else {
+                return schedule
+            }
+            let migrated = schedule.withOneShotAnchor(anchorMillis)
+            save(migrated)
+            return migrated
+        }
+    }
+
     static func sortedRecoverableSchedules(
         _ schedules: [WarmAlarmScheduleData],
         nowMillis: Int64,
@@ -457,6 +706,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         for schedule: WarmAlarmScheduleData,
         nowMillis: Int64,
         pendingIdentifiers: Set<String>,
+        pendingRequests: [UNNotificationRequest] = [],
         content: UNNotificationContent,
         calendar: Calendar = .current
     ) -> [UNNotificationRequest] {
@@ -468,6 +718,20 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             for: schedule,
             nowMillis: nowMillis,
             calendar: calendar
+        )
+        let matchingPendingRequests = notificationRequests(for: schedule.id, in: pendingRequests)
+        let primaryAtMillis = fallbackAnchorMillis
+            ?? schedule.activeSnoozeUntilMillis
+            ?? schedule.scheduledAtMillis
+        let occurrenceToken = pendingOccurrenceSeriesToken(
+            for: schedule.id,
+            in: matchingPendingRequests
+        ) ?? occurrenceSeriesToken(for: schedule.id)
+        let chainMetadata = WarmAlarmOccurrenceMetadata(
+            token: occurrenceToken,
+            primaryAtMillis: primaryAtMillis,
+            calendar: calendar,
+            floating: !usesRelativeFallbackTrigger
         )
         var expectedIdentifiers: [String]
         if let weekdays = schedule.recurrenceWeekdays, !weekdays.isEmpty {
@@ -492,17 +756,69 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         return deduplicatedRequests(
             expectedIdentifiers
                 .filter { !pendingIdentifiers.contains($0) }
-                .map {
-                    makeRecoveryRequest(
-                        identifier: $0,
+                .map { identifier in
+                    let occurrenceMetadata = recoveryOccurrenceMetadata(
+                        identifier: identifier,
                         schedule: schedule,
-                        content: content,
+                        nowMillis: nowMillis,
+                        calendar: calendar,
+                        occurrenceToken: occurrenceToken,
+                        chainMetadata: chainMetadata
+                    )
+                    let requestContent = contentWithOccurrenceMetadata(
+                        content,
+                        metadata: occurrenceMetadata,
+                        ordinal: fallbackIndex(for: identifier, alarmId: schedule.id) ?? 0
+                    )
+                    return makeRecoveryRequest(
+                        identifier: identifier,
+                        schedule: schedule,
+                        content: requestContent,
                         nowMillis: nowMillis,
                         calendar: calendar,
                         fallbackAnchorMillis: fallbackAnchorMillis,
                         usesRelativeFallbackTrigger: usesRelativeFallbackTrigger
                     )
                 }
+        )
+    }
+
+    private static func recoveryOccurrenceMetadata(
+        identifier: String,
+        schedule: WarmAlarmScheduleData,
+        nowMillis: Int64,
+        calendar: Calendar,
+        occurrenceToken: String,
+        chainMetadata: WarmAlarmOccurrenceMetadata?
+    ) -> WarmAlarmOccurrenceMetadata? {
+        guard let isoWeekday = recurringWeekday(for: identifier, alarmId: schedule.id) else {
+            return chainMetadata
+        }
+        let scheduledDate = Date(timeIntervalSince1970: Double(schedule.scheduledAtMillis) / 1_000)
+        let scheduledTime = calendar.dateComponents([.hour, .minute], from: scheduledDate)
+        guard let hour = schedule.recurrenceHour ?? scheduledTime.hour,
+              let minute = schedule.recurrenceMinute ?? scheduledTime.minute else {
+            return chainMetadata
+        }
+        var components = DateComponents()
+        components.weekday = WarmAlarmRecurrence.appleWeekday(fromIso: isoWeekday)
+        components.hour = hour
+        components.minute = minute
+        components.second = 0
+        let now = Date(timeIntervalSince1970: Double(nowMillis) / 1_000)
+        guard let primaryDate = calendar.nextDate(
+            after: now,
+            matching: components,
+            matchingPolicy: .strict,
+            repeatedTimePolicy: .first,
+            direction: .forward
+        ) else {
+            return chainMetadata
+        }
+        return WarmAlarmOccurrenceMetadata(
+            token: occurrenceToken,
+            primaryAtMillis: Int64(primaryDate.timeIntervalSince1970 * 1_000),
+            calendar: calendar
         )
     }
 
@@ -733,8 +1049,25 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         calendar: Calendar = .current
     ) -> [UNNotificationRequest] {
         let fireDate = Date(timeIntervalSince1970: Double(schedule.scheduledAtMillis) / 1000.0)
+        let occurrenceMetadata = WarmAlarmOccurrenceMetadata(
+            token: occurrenceSeriesToken(for: schedule.id),
+            primaryAtMillis: fallbackAnchorMillis,
+            calendar: calendar
+        )
         if let weekdays = schedule.recurrence?.weekdays, !weekdays.isEmpty {
             let time = calendar.dateComponents([.hour, .minute], from: fireDate)
+            let requestedDateComponents = calendar.dateComponents(
+                [.year, .month, .day, .hour, .minute],
+                from: fireDate
+            )
+            let requestedAtMillis = calendar.date(from: requestedDateComponents)
+                .map { Int64($0.timeIntervalSince1970 * 1_000) }
+                ?? schedule.scheduledAtMillis
+            let recurringOccurrenceMetadata = WarmAlarmOccurrenceMetadata(
+                token: occurrenceSeriesToken(for: schedule.id),
+                primaryAtMillis: requestedAtMillis,
+                calendar: calendar
+            )
             let recurringRequests = weekdays.map { iso in
                 var components = DateComponents()
                 components.weekday = WarmAlarmRecurrence.appleWeekday(fromIso: iso)
@@ -742,11 +1075,19 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 components.minute = time.minute
                 let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
                 return UNNotificationRequest(
-                    identifier: "\(schedule.id)#\(iso)", content: content, trigger: trigger)
+                    identifier: "\(schedule.id)#\(iso)",
+                    content: contentWithOccurrenceMetadata(
+                        content,
+                        metadata: recurringOccurrenceMetadata,
+                        ordinal: 0
+                    ),
+                    trigger: trigger
+                )
             }
             return recurringRequests + makeFallbackRequests(
                 alarmId: schedule.id,
                 content: content,
+                occurrenceMetadata: occurrenceMetadata,
                 anchorMillis: fallbackAnchorMillis,
                 calendar: calendar
             )
@@ -755,10 +1096,14 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             [.year, .month, .day, .hour, .minute, .second], from: fireDate)
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
         let primaryRequest = UNNotificationRequest(
-            identifier: String(schedule.id), content: content, trigger: trigger)
+            identifier: String(schedule.id),
+            content: contentWithOccurrenceMetadata(content, metadata: occurrenceMetadata, ordinal: 0),
+            trigger: trigger
+        )
         return [primaryRequest] + makeFallbackRequests(
             alarmId: schedule.id,
             content: content,
+            occurrenceMetadata: occurrenceMetadata,
             anchorMillis: fallbackAnchorMillis,
             calendar: calendar
         )
@@ -771,13 +1116,26 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         content: UNNotificationContent
     ) -> [UNNotificationRequest] {
         let delay = max(1.0, Double(fireAtMillis - nowMillis) / 1000.0)
+        let occurrenceMetadata = WarmAlarmOccurrenceMetadata(
+            token: occurrenceSeriesToken(for: schedule.id),
+            primaryAtMillis: fireAtMillis,
+            calendar: .current,
+            floating: false
+        )
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: delay, repeats: false)
         let primaryRequest = UNNotificationRequest(
-            identifier: String(schedule.id), content: content, trigger: trigger)
+            identifier: String(schedule.id),
+            content: contentWithOccurrenceMetadata(content, metadata: occurrenceMetadata, ordinal: 0),
+            trigger: trigger
+        )
         let fallbackRequests = fallbackIdentifiers(for: schedule.id).enumerated().map { index, identifier in
             let fallbackDelay = delay + Double(index + 1) * Double(fallbackIntervalMillis) / 1_000.0
             let fallbackTrigger = UNTimeIntervalNotificationTrigger(timeInterval: fallbackDelay, repeats: false)
-            return UNNotificationRequest(identifier: identifier, content: content, trigger: fallbackTrigger)
+            return UNNotificationRequest(
+                identifier: identifier,
+                content: contentWithOccurrenceMetadata(content, metadata: occurrenceMetadata, ordinal: index + 1),
+                trigger: fallbackTrigger
+            )
         }
         return [primaryRequest] + fallbackRequests
     }
@@ -940,6 +1298,231 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         fallbackIndex(for: identifier, alarmId: alarmId) != nil
     }
 
+    private static func notificationRequests(
+        for alarmId: Int64,
+        in requests: [UNNotificationRequest]
+    ) -> [UNNotificationRequest] {
+        let identifier = String(alarmId)
+        let childPrefix = "\(alarmId)#"
+        return requests.filter {
+            $0.identifier == identifier || $0.identifier.hasPrefix(childPrefix)
+        }
+    }
+
+    private static func occurrenceMetadata(from content: UNNotificationContent) -> WarmAlarmOccurrenceMetadata? {
+        guard let dictionary = content.userInfo[WarmAlarmOccurrenceMetadata.userInfoKey] as? [String: Any] else {
+            return nil
+        }
+        return WarmAlarmOccurrenceMetadata(dictionary: dictionary)
+    }
+
+    private static func occurrenceMetadata(
+        for alarmId: Int64,
+        in requests: [UNNotificationRequest]
+    ) -> WarmAlarmOccurrenceMetadata? {
+        let requestsWithMetadata = notificationRequests(for: alarmId, in: requests).filter {
+            $0.content.userInfo[WarmAlarmOccurrenceMetadata.userInfoKey] != nil
+        }
+        guard !requestsWithMetadata.isEmpty else { return nil }
+
+        var sharedMetadata: WarmAlarmOccurrenceMetadata?
+        for request in requestsWithMetadata {
+            guard let metadata = occurrenceMetadata(from: request.content),
+                  metadata.ordinal == (fallbackIndex(for: request.identifier, alarmId: alarmId) ?? 0) else {
+                return nil
+            }
+            if let sharedMetadata,
+               !sharedMetadata.describesSameOccurrence(as: metadata) {
+                return nil
+            }
+            sharedMetadata = metadata
+        }
+        return sharedMetadata
+    }
+
+    private static func pendingOccurrenceSeriesToken(
+        for alarmId: Int64,
+        in requests: [UNNotificationRequest]
+    ) -> String? {
+        let requestsWithMetadata = notificationRequests(for: alarmId, in: requests).filter {
+            $0.content.userInfo[WarmAlarmOccurrenceMetadata.userInfoKey] != nil
+        }
+        guard !requestsWithMetadata.isEmpty else { return nil }
+
+        var sharedToken: String?
+        for request in requestsWithMetadata {
+            guard let metadata = occurrenceMetadata(from: request.content),
+                  metadata.ordinal == (fallbackIndex(for: request.identifier, alarmId: alarmId) ?? 0) else {
+                return nil
+            }
+            if let sharedToken, sharedToken != metadata.token {
+                return nil
+            }
+            sharedToken = metadata.token
+        }
+        return sharedToken
+    }
+
+    private static func occurrenceSeriesToken(for alarmId: Int64) -> String {
+        "warm-alarm-v1:\(alarmId)"
+    }
+
+    private static func contentWithOccurrenceMetadata(
+        _ content: UNNotificationContent,
+        metadata: WarmAlarmOccurrenceMetadata?,
+        ordinal: Int
+    ) -> UNNotificationContent {
+        guard let metadata,
+              let copy = content.mutableCopy() as? UNMutableNotificationContent else {
+            return content
+        }
+        var userInfo = copy.userInfo
+        userInfo[WarmAlarmOccurrenceMetadata.userInfoKey] = metadata.dictionary(ordinal: ordinal)
+        copy.userInfo = userInfo
+        return copy
+    }
+
+    static func foregroundOccurrenceToken(
+        content: UNNotificationContent? = nil,
+        identifier: String,
+        alarmId: Int64,
+        deliveredAtMillis: Int64,
+        calendar: Calendar = .current,
+        schedule: WarmAlarmScheduleData? = nil
+    ) -> String {
+        if let content,
+           let metadata = occurrenceMetadata(from: content),
+           let metadataPrimaryDate = metadata.primaryDate(in: calendar) {
+            if let isoWeekday = recurringWeekday(for: identifier, alarmId: alarmId) {
+                let deliveredDate = Date(timeIntervalSince1970: Double(deliveredAtMillis) / 1_000)
+                var components = DateComponents()
+                components.weekday = WarmAlarmRecurrence.appleWeekday(fromIso: isoWeekday)
+                components.hour = metadata.hour
+                components.minute = metadata.minute
+                components.second = metadata.second
+                let occurrenceDate = calendar.nextDate(
+                    after: deliveredDate.addingTimeInterval(0.001),
+                    matching: components,
+                    matchingPolicy: .nextTime,
+                    repeatedTimePolicy: .first,
+                    direction: .backward
+                ) ?? metadataPrimaryDate
+                return metadata.scopedToken(for: occurrenceDate)
+            }
+            return metadata.scopedToken(for: metadataPrimaryDate)
+        }
+        if let schedule {
+            let seriesToken = occurrenceSeriesToken(for: alarmId)
+            if let isoWeekday = recurringWeekday(for: identifier, alarmId: alarmId),
+               let hour = schedule.recurrenceHour,
+               let minute = schedule.recurrenceMinute {
+                let deliveredDate = Date(timeIntervalSince1970: Double(deliveredAtMillis) / 1_000)
+                var components = DateComponents()
+                components.weekday = WarmAlarmRecurrence.appleWeekday(fromIso: isoWeekday)
+                components.hour = hour
+                components.minute = minute
+                components.second = 0
+                if let occurrenceDate = calendar.nextDate(
+                    after: deliveredDate.addingTimeInterval(0.001),
+                    matching: components,
+                    matchingPolicy: .nextTime,
+                    repeatedTimePolicy: .first,
+                    direction: .backward
+                ) {
+                    return "\(seriesToken)#\(Int64(occurrenceDate.timeIntervalSince1970 * 1_000))"
+                }
+            }
+            let primaryAtMillis = schedule.fallbackAnchorMillis
+                ?? schedule.activeSnoozeUntilMillis
+                ?? schedule.scheduledAtMillis
+            return "\(seriesToken)#\(primaryAtMillis)"
+        }
+        guard let index = fallbackIndex(for: identifier, alarmId: alarmId) else {
+            return String(deliveredAtMillis)
+        }
+        return String(deliveredAtMillis - Int64(index) * fallbackIntervalMillis)
+    }
+
+    static func actionOccurrenceLowerBound(
+        for schedule: WarmAlarmScheduleData,
+        content: UNNotificationContent? = nil,
+        nowMillis: Int64,
+        calendar: Calendar = .current
+    ) -> Int64? {
+        if let content,
+           let notificationOccurrenceMillis = floatingOneShotOccurrenceMillis(
+               for: schedule,
+               content: content,
+               calendar: calendar
+           ) {
+            return notificationOccurrenceMillis
+        }
+        let fallbackAnchorMillis = recoveryFallbackAnchorMillis(
+            for: schedule,
+            nowMillis: nowMillis,
+            calendar: calendar
+        )
+        let recurrenceOccurrenceMillis = latestRecurrenceOccurrenceMillis(
+            for: schedule,
+            nowMillis: nowMillis,
+            calendar: calendar
+        )
+        return [fallbackAnchorMillis, recurrenceOccurrenceMillis].compactMap { $0 }.max()
+    }
+
+    private static func floatingOneShotOccurrenceMillis(
+        for schedule: WarmAlarmScheduleData,
+        content: UNNotificationContent,
+        calendar: Calendar
+    ) -> Int64? {
+        guard schedule.recurrenceWeekdays?.isEmpty != false,
+              let metadata = occurrenceMetadata(from: content),
+              metadata.floating,
+              metadata.primaryEpochMillis == (schedule.fallbackAnchorMillis ?? schedule.scheduledAtMillis),
+              let occurrenceDate = metadata.primaryDate(in: calendar) else {
+            return nil
+        }
+        return Int64(occurrenceDate.timeIntervalSince1970 * 1_000)
+    }
+
+    private static func latestRecurrenceOccurrenceMillis(
+        for schedule: WarmAlarmScheduleData,
+        nowMillis: Int64,
+        calendar: Calendar
+    ) -> Int64? {
+        guard let weekdays = schedule.recurrenceWeekdays, !weekdays.isEmpty,
+              let hour = schedule.recurrenceHour,
+              let minute = schedule.recurrenceMinute else {
+            return nil
+        }
+        let now = Date(timeIntervalSince1970: Double(nowMillis) / 1_000)
+        return weekdays.compactMap { isoWeekday -> Date? in
+            var components = DateComponents()
+            components.weekday = WarmAlarmRecurrence.appleWeekday(fromIso: isoWeekday)
+            components.hour = hour
+            components.minute = minute
+            components.second = 0
+            return calendar.nextDate(
+                after: now.addingTimeInterval(0.001),
+                matching: components,
+                matchingPolicy: .strict,
+                repeatedTimePolicy: .first,
+                direction: .backward
+            )
+        }.max().map { Int64($0.timeIntervalSince1970 * 1_000) }
+    }
+
+    private static func recurringWeekday(for identifier: String, alarmId: Int64) -> Int64? {
+        let prefix = "\(alarmId)#"
+        guard identifier.hasPrefix(prefix),
+              !identifier.contains("#fallback#"),
+              let isoWeekday = Int64(identifier.dropFirst(prefix.count)),
+              (1...7).contains(isoWeekday) else {
+            return nil
+        }
+        return isoWeekday
+    }
+
     private static func fallbackIndex(for identifier: String, alarmId: Int64) -> Int? {
         let prefix = "\(alarmId)#fallback#"
         guard identifier.hasPrefix(prefix),
@@ -997,6 +1580,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     private static func makeFallbackRequests(
         alarmId: Int64,
         content: UNNotificationContent,
+        occurrenceMetadata: WarmAlarmOccurrenceMetadata?,
         anchorMillis: Int64,
         calendar: Calendar
     ) -> [UNNotificationRequest] {
@@ -1006,7 +1590,15 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             let components = calendar.dateComponents(
                 [.year, .month, .day, .hour, .minute, .second], from: requestDate)
             let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-            return UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+            return UNNotificationRequest(
+                identifier: identifier,
+                content: contentWithOccurrenceMetadata(
+                    content,
+                    metadata: occurrenceMetadata,
+                    ordinal: index + 1
+                ),
+                trigger: trigger
+            )
         }
     }
 

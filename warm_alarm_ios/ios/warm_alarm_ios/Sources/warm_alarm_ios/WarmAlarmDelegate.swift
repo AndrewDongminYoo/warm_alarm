@@ -4,51 +4,144 @@ import UserNotifications
 
 import Flutter
 
-final class WarmAlarmForegroundOccurrenceTracker: @unchecked Sendable {
-    private let lock = NSLock()
-    private var handledAlarmIds = Set<Int64>()
+final class WarmAlarmConsumedOccurrenceStore: @unchecked Sendable {
+    private let defaults: UserDefaults
+    private let key: String
 
-    func shouldHandleAndMark(alarmId: Int64, isFallback: Bool) -> Bool {
-        handleIfAllowed(alarmId: alarmId, isFallback: isFallback, perform: {})
+    init(
+        defaults: UserDefaults = .standard,
+        key: String = "warm_alarm_consumed_occurrences"
+    ) {
+        self.defaults = defaults
+        self.key = key
     }
 
-    func handleIfAllowed(alarmId: Int64, isFallback: Bool, perform action: () -> Void) -> Bool {
+    func load(alarmId: Int64) -> Int64? {
+        (defaults.dictionary(forKey: key)?[String(alarmId)] as? NSNumber)?.int64Value
+    }
+
+    func save(alarmId: Int64, occurrenceMillis: Int64) {
+        var values = defaults.dictionary(forKey: key) ?? [:]
+        values[String(alarmId)] = occurrenceMillis
+        defaults.set(values, forKey: key)
+    }
+
+    func clear(alarmId: Int64) {
+        var values = defaults.dictionary(forKey: key) ?? [:]
+        values.removeValue(forKey: String(alarmId))
+        defaults.set(values, forKey: key)
+    }
+
+    func clearAll() {
+        defaults.removeObject(forKey: key)
+    }
+}
+
+final class WarmAlarmForegroundOccurrenceTracker: @unchecked Sendable {
+    private let lock = NSLock()
+    private var latestHandledOccurrenceMillisByAlarmId = [Int64: Int64]()
+    private var latestConsumedOccurrenceMillisByAlarmId = [Int64: Int64]()
+    private let consumedOccurrenceStore: WarmAlarmConsumedOccurrenceStore?
+
+    init(consumedOccurrenceStore: WarmAlarmConsumedOccurrenceStore? = nil) {
+        self.consumedOccurrenceStore = consumedOccurrenceStore
+    }
+
+    func shouldHandleAndMark(alarmId: Int64, occurrenceToken: String) -> Bool {
+        handleIfAllowed(
+            alarmId: alarmId,
+            occurrenceToken: occurrenceToken,
+            perform: {}
+        )
+    }
+
+    func handleIfAllowed(
+        alarmId: Int64,
+        occurrenceToken: String,
+        perform action: () -> Void
+    ) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        if isFallback, handledAlarmIds.contains(alarmId) {
-            return false
-        }
-        handledAlarmIds.insert(alarmId)
+        guard remember(alarmId: alarmId, occurrenceToken: occurrenceToken) else { return false }
         action()
         return true
     }
 
-    func mark(alarmId: Int64) {
-        lock.lock()
-        handledAlarmIds.insert(alarmId)
-        lock.unlock()
-    }
-
     func clear(alarmId: Int64) {
         lock.lock()
-        handledAlarmIds.remove(alarmId)
+        latestHandledOccurrenceMillisByAlarmId.removeValue(forKey: alarmId)
+        latestConsumedOccurrenceMillisByAlarmId.removeValue(forKey: alarmId)
+        consumedOccurrenceStore?.clear(alarmId: alarmId)
         lock.unlock()
     }
 
-    func stop(alarmId: Int64) {
-        stop(alarmId: alarmId, perform: {})
+    @discardableResult
+    func stop(
+        alarmId: Int64,
+        occurrenceToken: String,
+        minimumOccurrenceMillis: Int64? = nil
+    ) -> Bool {
+        stop(
+            alarmId: alarmId,
+            occurrenceToken: occurrenceToken,
+            minimumOccurrenceMillis: minimumOccurrenceMillis,
+            perform: {}
+        )
     }
 
-    func stop(alarmId: Int64, perform action: () -> Void) {
+    @discardableResult
+    func stop(
+        alarmId: Int64,
+        occurrenceToken: String,
+        minimumOccurrenceMillis: Int64? = nil,
+        perform action: () -> Void
+    ) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        handledAlarmIds.insert(alarmId)
+        guard let occurrenceMillis = occurrenceMillis(from: occurrenceToken),
+              latestHandledOccurrenceMillisByAlarmId[alarmId].map({ occurrenceMillis >= $0 }) ?? true,
+              minimumOccurrenceMillis.map({ occurrenceMillis >= $0 }) ?? true else {
+            return false
+        }
+        let consumedOccurrenceMillis = max(
+            latestConsumedOccurrenceMillisByAlarmId[alarmId] ?? .min,
+            consumedOccurrenceStore?.load(alarmId: alarmId) ?? .min
+        )
+        guard occurrenceMillis > consumedOccurrenceMillis else {
+            return false
+        }
+        latestHandledOccurrenceMillisByAlarmId[alarmId] = occurrenceMillis
+        latestConsumedOccurrenceMillisByAlarmId[alarmId] = occurrenceMillis
+        consumedOccurrenceStore?.save(alarmId: alarmId, occurrenceMillis: occurrenceMillis)
         action()
+        return true
+    }
+
+    private func remember(alarmId: Int64, occurrenceToken: String) -> Bool {
+        guard let occurrenceMillis = occurrenceMillis(from: occurrenceToken) else {
+            return false
+        }
+        let consumedOccurrenceMillis = max(
+            latestConsumedOccurrenceMillisByAlarmId[alarmId] ?? .min,
+            consumedOccurrenceStore?.load(alarmId: alarmId) ?? .min
+        )
+        guard occurrenceMillis > consumedOccurrenceMillis,
+              latestHandledOccurrenceMillisByAlarmId[alarmId].map({ occurrenceMillis > $0 }) ?? true else {
+            return false
+        }
+        latestHandledOccurrenceMillisByAlarmId[alarmId] = occurrenceMillis
+        return true
+    }
+
+    private func occurrenceMillis(from occurrenceToken: String) -> Int64? {
+        Int64(occurrenceToken.split(separator: "#").last ?? "")
     }
 
     func clearAll() {
         lock.lock()
-        handledAlarmIds.removeAll()
+        latestHandledOccurrenceMillisByAlarmId.removeAll()
+        latestConsumedOccurrenceMillisByAlarmId.removeAll()
+        consumedOccurrenceStore?.clearAll()
         lock.unlock()
     }
 }
@@ -58,20 +151,27 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     static let stopActionIdentifier = "STOP"
     static let snoozeActionIdentifier = "SNOOZE"
 
-    private let eventsApi: WarmAlarmEventsApi
+    private let eventsApi: WarmAlarmEventsApiProtocol
     private let notificationMutationQueue: WarmAlarmMutationQueue
     private var audioPlayer: AVAudioPlayer?
     private(set) var currentlyPlayingAlarmId: Int64?
-    private let foregroundOccurrenceTracker = WarmAlarmForegroundOccurrenceTracker()
+    private(set) var currentlyPlayingOccurrenceToken: String?
+    private let foregroundOccurrenceTracker = WarmAlarmForegroundOccurrenceTracker(
+        consumedOccurrenceStore: WarmAlarmConsumedOccurrenceStore()
+    )
     private var fadeWorkItems: [DispatchWorkItem] = []
     private var volumeEnforcerTimer: Timer?
 
     init(
-        eventsApi: WarmAlarmEventsApi,
-        notificationMutationQueue: WarmAlarmMutationQueue
+        eventsApi: WarmAlarmEventsApiProtocol,
+        notificationMutationQueue: WarmAlarmMutationQueue,
+        currentlyPlayingAlarmId: Int64? = nil,
+        currentlyPlayingOccurrenceToken: String? = nil
     ) {
         self.eventsApi = eventsApi
         self.notificationMutationQueue = notificationMutationQueue
+        self.currentlyPlayingAlarmId = currentlyPlayingAlarmId
+        self.currentlyPlayingOccurrenceToken = currentlyPlayingOccurrenceToken
     }
 
     // MARK: - UNUserNotificationCenterDelegate
@@ -86,13 +186,23 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             completionHandler([.alert, .sound])
             return
         }
-        let isFallback = WarmAlarmPlugin.isFallbackIdentifier(notification.request.identifier, for: alarmId)
-        guard foregroundOccurrenceTracker.handleIfAllowed(alarmId: alarmId, isFallback: isFallback, perform: {
-            let schedule = WarmAlarmStore.shared.load(id: alarmId)
-            startAudio(alarmId: alarmId, for: schedule)
+        let schedule = WarmAlarmStore.shared.load(id: alarmId)
+        let occurrenceToken = WarmAlarmPlugin.foregroundOccurrenceToken(
+            content: notification.request.content,
+            identifier: notification.request.identifier,
+            alarmId: alarmId,
+            deliveredAtMillis: Int64(notification.date.timeIntervalSince1970 * 1_000),
+            schedule: schedule
+        )
+        guard foregroundOccurrenceTracker.handleIfAllowed(
+            alarmId: alarmId,
+            occurrenceToken: occurrenceToken,
+            perform: {
+            startAudio(alarmId: alarmId, occurrenceToken: occurrenceToken, for: schedule)
             emitEvent(WarmAlarmEventWire(
                 alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis(), payload: schedule?.payload))
-        }) else {
+            }
+        ) else {
             completionHandler([])
             return
         }
@@ -111,10 +221,23 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         }
 
         let deliveredIdentifier = response.notification.request.identifier
+        let schedule = WarmAlarmStore.shared.load(id: alarmId)
+        let occurrenceToken = WarmAlarmPlugin.foregroundOccurrenceToken(
+            content: response.notification.request.content,
+            identifier: deliveredIdentifier,
+            alarmId: alarmId,
+            deliveredAtMillis: Int64(response.notification.date.timeIntervalSince1970 * 1_000),
+            schedule: schedule
+        )
         switch response.actionIdentifier {
         case Self.stopActionIdentifier:
             enqueueNotificationAction({ [weak self] in
-                self?.handleStop(alarmId: alarmId, deliveredIdentifier: deliveredIdentifier)
+                self?.handleStop(
+                    alarmId: alarmId,
+                    occurrenceToken: occurrenceToken,
+                    deliveredIdentifier: deliveredIdentifier,
+                    content: response.notification.request.content
+                )
             }, completionHandler: completionHandler)
         case Self.snoozeActionIdentifier:
             notificationMutationQueue.enqueueOnMain { [weak self] finish in
@@ -125,18 +248,28 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
                 }
                 self.handleSnooze(
                     alarmId: alarmId,
-                    deliveredIdentifier: deliveredIdentifier
+                    occurrenceToken: occurrenceToken,
+                    deliveredIdentifier: deliveredIdentifier,
+                    content: response.notification.request.content
                 ) {
                     completionHandler()
                     finish()
                 }
             }
         case UNNotificationDefaultActionIdentifier:
-            foregroundOccurrenceTracker.mark(alarmId: alarmId)
-            let schedule = WarmAlarmStore.shared.load(id: alarmId)
-            startAudio(alarmId: alarmId, for: schedule)
-            emitEvent(WarmAlarmEventWire(
-                alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis(), payload: schedule?.payload))
+            _ = foregroundOccurrenceTracker.handleIfAllowed(
+                alarmId: alarmId,
+                occurrenceToken: occurrenceToken,
+                perform: {
+                    startAudio(alarmId: alarmId, occurrenceToken: occurrenceToken, for: schedule)
+                    emitEvent(WarmAlarmEventWire(
+                        alarmId: alarmId,
+                        type: .fired,
+                        occurredAtMillis: nowMillis(),
+                        payload: schedule?.payload
+                    ))
+                }
+            )
             completionHandler()
         default:
             completionHandler()
@@ -145,9 +278,29 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
     // MARK: - Actions
 
-    func handleStop(alarmId: Int64, deliveredIdentifier: String? = nil) {
+    func handleStop(
+        alarmId: Int64,
+        occurrenceToken: String,
+        deliveredIdentifier: String? = nil,
+        content: UNNotificationContent? = nil
+    ) {
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
-        foregroundOccurrenceTracker.stop(alarmId: alarmId, perform: stopAudio)
+        let actionLowerBound = schedule.flatMap {
+            WarmAlarmPlugin.actionOccurrenceLowerBound(
+                for: $0,
+                content: content,
+                nowMillis: nowMillis()
+            )
+        }
+        guard foregroundOccurrenceTracker.stop(
+            alarmId: alarmId,
+            occurrenceToken: occurrenceToken,
+            minimumOccurrenceMillis: actionLowerBound,
+            perform: stopAudio
+        ) else {
+            stopAudioIfPlaying(alarmId: alarmId, occurrenceToken: occurrenceToken)
+            return
+        }
         removePendingFallbackRequests(for: alarmId)
         // Dismiss ends only this occurrence for a recurring alarm; the repeating
         // triggers stay armed, so keep the stored schedule. cancelAlarm tears down
@@ -173,12 +326,29 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
     func handleSnooze(
         alarmId: Int64,
+        occurrenceToken: String,
         deliveredIdentifier: String? = nil,
+        content: UNNotificationContent? = nil,
         completion: @escaping () -> Void
     ) {
-        foregroundOccurrenceTracker.stop(alarmId: alarmId, perform: stopAudio)
-        removePendingFallbackRequests(for: alarmId)
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
+        let actionLowerBound = schedule.flatMap {
+            WarmAlarmPlugin.actionOccurrenceLowerBound(
+                for: $0,
+                content: content,
+                nowMillis: nowMillis()
+            )
+        }
+        guard foregroundOccurrenceTracker.stop(
+            alarmId: alarmId,
+            occurrenceToken: occurrenceToken,
+            minimumOccurrenceMillis: actionLowerBound,
+            perform: stopAudio
+        ) else {
+            completion()
+            return
+        }
+        removePendingFallbackRequests(for: alarmId)
         if schedule?.keepNotificationAfterAlarmEnds != true {
             UNUserNotificationCenter.current().removeDeliveredNotifications(
                 withIdentifiers: Self.deliveredIdentifiersToRemove(
@@ -314,7 +484,11 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         return Bundle.main.url(forResource: "flutter_assets/\(asset)", withExtension: nil)
     }
 
-    private func startAudio(alarmId: Int64, for schedule: WarmAlarmScheduleData?) {
+    private func startAudio(
+        alarmId: Int64,
+        occurrenceToken: String,
+        for schedule: WarmAlarmScheduleData?
+    ) {
         configureAudioSession()
         let player: AVAudioPlayer?
         if let path = schedule?.filePath, !path.isEmpty {
@@ -338,6 +512,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             p.play()
             audioPlayer = p
             currentlyPlayingAlarmId = alarmId
+            currentlyPlayingOccurrenceToken = occurrenceToken
             if let steps = steps { applyFadeSteps(steps, to: p) }
             if schedule?.volumeEnforced == true { startVolumeEnforcer(for: p) }
         }
@@ -367,7 +542,14 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         audioPlayer?.stop()
         audioPlayer = nil
         currentlyPlayingAlarmId = nil
+        currentlyPlayingOccurrenceToken = nil
         deactivateAudioSession()
+    }
+
+    private func stopAudioIfPlaying(alarmId: Int64, occurrenceToken: String) {
+        guard currentlyPlayingAlarmId == alarmId,
+              currentlyPlayingOccurrenceToken == occurrenceToken else { return }
+        stopAudio()
     }
 
     private func configureAudioSession() {

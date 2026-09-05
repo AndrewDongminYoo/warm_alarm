@@ -157,6 +157,16 @@ extension WarmAlarmScheduleData {
         )
     }
 
+    func withOneShotAnchor(_ anchorMillis: Int64) -> WarmAlarmScheduleData {
+        copying(
+            scheduledAtMillis: anchorMillis,
+            recurrenceHour: recurrenceHour,
+            recurrenceMinute: recurrenceMinute,
+            activeSnoozeUntilMillis: activeSnoozeUntilMillis,
+            fallbackAnchorMillis: anchorMillis
+        )
+    }
+
     func clearingFallbackAnchor() -> WarmAlarmScheduleData {
         copying(
             recurrenceHour: recurrenceHour,
@@ -167,13 +177,14 @@ extension WarmAlarmScheduleData {
     }
 
     private func copying(
+        scheduledAtMillis: Int64? = nil,
         recurrenceHour: Int?,
         recurrenceMinute: Int?,
         activeSnoozeUntilMillis: Int64?,
         fallbackAnchorMillis: Int64?
     ) -> WarmAlarmScheduleData {
         WarmAlarmScheduleData(
-            id: id, scheduledAtMillis: scheduledAtMillis,
+            id: id, scheduledAtMillis: scheduledAtMillis ?? self.scheduledAtMillis,
             notificationTitle: notificationTitle, notificationBody: notificationBody,
             stopActionTitle: stopActionTitle, snoozeActionTitle: snoozeActionTitle,
             filePath: filePath, assetPath: assetPath,
