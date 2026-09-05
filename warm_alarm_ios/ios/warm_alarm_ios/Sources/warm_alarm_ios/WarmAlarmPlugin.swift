@@ -59,14 +59,14 @@ enum WarmAlarmRequestRegistration {
 enum WarmAlarmSnoozeRegistration {
     static func perform(
         persistIntent: @escaping () -> Void,
-        register: (@escaping (Error?) -> Void) -> Void,
-        rollback: @escaping (@escaping (Error?) -> Void) -> Void,
+        register: (@escaping (Error?, Bool) -> Void) -> Void,
+        rollback: @escaping (Bool, @escaping (Error?) -> Void) -> Void,
         completion: @escaping (Error?) -> Void
     ) {
         persistIntent()
-        register { error in
+        register { error, didSubmitRequests in
             if let error {
-                rollback { rollbackError in
+                rollback(didSubmitRequests) { rollbackError in
                     WarmAlarmPlatformReply.performOnMain {
                         completion(rollbackError ?? error)
                     }
@@ -1321,6 +1321,68 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 .filter { !notificationContent(schedule, matches: $0.content) }
                 .map(\.identifier)
         })
+    }
+
+    static func pendingSnoozeRequests(
+        for schedule: WarmAlarmScheduleData,
+        in requests: [UNNotificationRequest]
+    ) -> [UNNotificationRequest] {
+        guard let activeSnoozeUntilMillis = schedule.activeSnoozeUntilMillis else {
+            return []
+        }
+        let identifiers = Set([String(schedule.id)] + fallbackIdentifiers(for: schedule.id))
+        return requests.filter { request in
+            guard identifiers.contains(request.identifier),
+                  notificationContent(schedule, matches: request.content),
+                  let metadata = occurrenceMetadata(from: request.content) else {
+                return false
+            }
+            return !metadata.floating && metadata.primaryEpochMillis == activeSnoozeUntilMillis
+        }
+    }
+
+    static func makeSnoozeRollbackRequests(
+        for schedule: WarmAlarmScheduleData,
+        restoring requests: [UNNotificationRequest],
+        nowMillis: Int64,
+        content: UNNotificationContent,
+        calendar: Calendar = .current
+    ) -> [UNNotificationRequest] {
+        let restoringIdentifiers = Set(requests.map(\.identifier))
+        guard let anchorMillis = schedule.fallbackAnchorMillis else { return [] }
+        let metadata = WarmAlarmOccurrenceMetadata(
+            token: schedule.occurrenceSeriesToken,
+            primaryAtMillis: anchorMillis,
+            calendar: calendar,
+            floating: false
+        )
+        var rollbackRequests = [UNNotificationRequest]()
+        let primaryIdentifier = String(schedule.id)
+        if restoringIdentifiers.contains(primaryIdentifier),
+           let activeSnoozeUntilMillis = schedule.activeSnoozeUntilMillis,
+           activeSnoozeUntilMillis > nowMillis {
+            rollbackRequests.append(UNNotificationRequest(
+                identifier: primaryIdentifier,
+                content: contentWithOccurrenceMetadata(content, metadata: metadata, ordinal: 0),
+                trigger: UNTimeIntervalNotificationTrigger(
+                    timeInterval: max(1.0, Double(activeSnoozeUntilMillis - nowMillis) / 1_000.0),
+                    repeats: false
+                )
+            ))
+        }
+        rollbackRequests += fallbackIdentifiers(for: schedule.id).enumerated().compactMap { index, identifier in
+            let fireAtMillis = fallbackFireAtMillis(anchorMillis: anchorMillis, index: index + 1)
+            guard restoringIdentifiers.contains(identifier), fireAtMillis > nowMillis else { return nil }
+            return UNNotificationRequest(
+                identifier: identifier,
+                content: contentWithOccurrenceMetadata(content, metadata: metadata, ordinal: index + 1),
+                trigger: UNTimeIntervalNotificationTrigger(
+                    timeInterval: max(1.0, Double(fireAtMillis - nowMillis) / 1_000.0),
+                    repeats: false
+                )
+            )
+        }
+        return rollbackRequests
     }
 
     private static func occurrenceMetadata(from content: UNNotificationContent) -> WarmAlarmOccurrenceMetadata? {

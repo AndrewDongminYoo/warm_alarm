@@ -147,6 +147,24 @@ final class WarmAlarmStoreTests: XCTestCase {
         XCTAssertNil(cleared.fallbackAnchorMillis)
     }
 
+    func testClearingActiveSnoozeRemovesDeadlineAndFallbackAnchor() {
+        let schedule = makeData(
+            id: 42,
+            scheduledAt: 1_000,
+            recurrenceWeekdays: [1, 3, 5],
+            fallbackAnchorMillis: 1_500
+        ).withActiveSnooze(
+            untilMillis: 3_000,
+            fallbackAnchorMillis: 3_000
+        )
+
+        let cleared = schedule.clearingActiveSnooze()
+
+        XCTAssertEqual(cleared.recurrenceWeekdays, [1, 3, 5])
+        XCTAssertNil(cleared.activeSnoozeUntilMillis)
+        XCTAssertNil(cleared.fallbackAnchorMillis)
+    }
+
     func testExpiredActiveSnoozeDoesNotHideRecurringScheduleTime() {
         let calendar = utcCalendar()
         let schedule = makeData(

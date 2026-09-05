@@ -391,7 +391,6 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             completion()
             return
         }
-        removePendingFallbackRequests(for: alarmId)
         if schedule?.keepNotificationAfterAlarmEnds != true {
             UNUserNotificationCenter.current().removeDeliveredNotifications(
                 withIdentifiers: Self.deliveredIdentifiersToRemove(
@@ -630,12 +629,27 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         )
         let content = makeContent(from: updated)
         let center = UNUserNotificationCenter.current()
+        var previousSnoozeRequests = [UNNotificationRequest]()
+        let discardUncoveredSnooze = {
+            center.removePendingNotificationRequests(
+                withIdentifiers: WarmAlarmPlugin.fallbackIdentifiers(for: existing.id)
+            )
+            if !(existing.recurrenceWeekdays?.isEmpty ?? true) {
+                WarmAlarmStore.shared.save(existing.clearingActiveSnooze())
+            } else {
+                WarmAlarmStore.shared.remove(id: existing.id)
+            }
+        }
         WarmAlarmSnoozeRegistration.perform(
             persistIntent: {
                 WarmAlarmStore.shared.save(updated)
             },
             register: { registrationCompletion in
                 center.getPendingNotificationRequests { pendingRequests in
+                    previousSnoozeRequests = WarmAlarmPlugin.pendingSnoozeRequests(
+                        for: existing,
+                        in: pendingRequests
+                    )
                     let requests = WarmAlarmPlugin.makeSnoozeRequests(
                         for: updated,
                         fireAtMillis: fireAtMillis,
@@ -647,27 +661,66 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
                         requests,
                         pendingIdentifiers: pendingIdentifiers
                     ) else {
-                        registrationCompletion(PigeonError(
-                            code: "pending-notification-limit",
-                            message: "iOS has no notification slot for the snoozed alarm.",
-                            details: nil
-                        ))
+                        registrationCompletion(
+                            PigeonError(
+                                code: "pending-notification-limit",
+                                message: "iOS has no notification slot for the snoozed alarm.",
+                                details: nil
+                            ),
+                            false
+                        )
                         return
                     }
                     WarmAlarmPlugin.addRequestsAtomically(
                         selection.requests,
-                        center: center,
-                        completion: registrationCompletion
-                    )
+                        center: center
+                    ) { error in
+                        if error == nil {
+                            let selectedIdentifiers = Set(selection.requests.map(\.identifier))
+                            let obsoleteFallbackIdentifiers = Set(WarmAlarmPlugin.fallbackIdentifiers(for: existing.id))
+                                .subtracting(selectedIdentifiers)
+                            if !obsoleteFallbackIdentifiers.isEmpty {
+                                center.removePendingNotificationRequests(
+                                    withIdentifiers: Array(obsoleteFallbackIdentifiers)
+                                )
+                            }
+                        }
+                        registrationCompletion(error, true)
+                    }
                 }
             },
-            rollback: { rollbackCompletion in
-                let isRecurring = !(existing.recurrenceWeekdays?.isEmpty ?? true)
-                if isRecurring {
-                    WarmAlarmStore.shared.save(existing.clearingFallbackAnchor())
-                } else {
-                    WarmAlarmStore.shared.remove(id: existing.id)
+            rollback: { didSubmitReplacementRequests, rollbackCompletion in
+                if !previousSnoozeRequests.isEmpty {
+                    guard didSubmitReplacementRequests else {
+                        WarmAlarmStore.shared.save(existing)
+                        rollbackCompletion(nil)
+                        return
+                    }
+                    let rollbackRequests = WarmAlarmPlugin.makeSnoozeRollbackRequests(
+                        for: existing,
+                        restoring: previousSnoozeRequests,
+                        nowMillis: self.nowMillis(),
+                        content: self.makeContent(from: existing)
+                    )
+                    guard !rollbackRequests.isEmpty else {
+                        discardUncoveredSnooze()
+                        rollbackCompletion(nil)
+                        return
+                    }
+                    WarmAlarmPlugin.addRequestsAtomically(
+                        rollbackRequests,
+                        center: center
+                    ) { restorationError in
+                        if restorationError == nil {
+                            WarmAlarmStore.shared.save(existing)
+                        } else {
+                            discardUncoveredSnooze()
+                        }
+                        rollbackCompletion(restorationError)
+                    }
+                    return
                 }
+                discardUncoveredSnooze()
                 rollbackCompletion(nil)
             },
             completion: completion

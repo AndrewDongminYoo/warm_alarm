@@ -118,10 +118,10 @@ final class WarmAlarmSnoozeRegistrationTests: XCTestCase {
             persistIntent: {},
             register: { completion in
                 DispatchQueue.global().async {
-                    completion(nil)
+                    completion(nil, false)
                 }
             },
-            rollback: { _ in
+            rollback: { _, _ in
                 XCTFail("A successful registration must not roll back the intent")
             },
             completion: { error in
@@ -144,7 +144,7 @@ final class WarmAlarmSnoozeRegistrationTests: XCTestCase {
             register: { _ in
                 steps.append("register")
             },
-            rollback: { _ in
+            rollback: { _, _ in
                 XCTFail("An unfinished registration must not roll back the intent")
             },
             completion: { _ in
@@ -166,9 +166,10 @@ final class WarmAlarmSnoozeRegistrationTests: XCTestCase {
             },
             register: { completion in
                 steps.append("register")
-                completion(expectedError)
+                completion(expectedError, false)
             },
-            rollback: { rollbackCompletion in
+            rollback: { didSubmitRequests, rollbackCompletion in
+                XCTAssertFalse(didSubmitRequests)
                 steps.append("rollback")
                 rollbackCompletion(nil)
             },
@@ -191,9 +192,10 @@ final class WarmAlarmSnoozeRegistrationTests: XCTestCase {
         WarmAlarmSnoozeRegistration.perform(
             persistIntent: {},
             register: { completion in
-                completion(registrationError)
+                completion(registrationError, true)
             },
-            rollback: { completion in
+            rollback: { didSubmitRequests, completion in
+                XCTAssertTrue(didSubmitRequests)
                 completion(rollbackError)
             },
             completion: { error in
@@ -1589,6 +1591,99 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertTrue(requests.allSatisfy {
             occurrenceMetadata(from: $0.content)?["token"] as? String == "new-generation"
         })
+    }
+
+    func testSnapshotsRemainingSnoozeFallbacksAfterPrimaryFires() {
+        let snoozeAtMillis = Int64(1_900_000_300_000)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: snoozeAtMillis - 300_000),
+            fallbackAnchorMillis: snoozeAtMillis - 300_000,
+            occurrenceSeriesToken: "current-generation"
+        ).withActiveSnooze(
+            untilMillis: snoozeAtMillis,
+            fallbackAnchorMillis: snoozeAtMillis
+        )
+        let fallbackRequests = Array(WarmAlarmPlugin.makeSnoozeRequests(
+            for: schedule,
+            fireAtMillis: snoozeAtMillis,
+            nowMillis: snoozeAtMillis - 60_000,
+            content: UNMutableNotificationContent()
+        ).dropFirst())
+
+        let snapshot = WarmAlarmPlugin.pendingSnoozeRequests(
+            for: schedule,
+            in: fallbackRequests
+        )
+
+        XCTAssertEqual(snapshot.map(\.identifier), fallbackRequests.map(\.identifier))
+    }
+
+    func testSnoozeRollbackRecalculatesRemainingFallbackDelay() {
+        let snoozeAtMillis = Int64(1_900_000_300_000)
+        let calendar = utcCalendar()
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: snoozeAtMillis - 300_000),
+            fallbackAnchorMillis: snoozeAtMillis - 300_000,
+            calendar: calendar,
+            occurrenceSeriesToken: "current-generation"
+        ).withActiveSnooze(
+            untilMillis: snoozeAtMillis,
+            fallbackAnchorMillis: snoozeAtMillis
+        )
+        let originalRequests = Array(WarmAlarmPlugin.makeSnoozeRequests(
+            for: schedule,
+            fireAtMillis: snoozeAtMillis,
+            nowMillis: snoozeAtMillis - 60_000,
+            content: UNMutableNotificationContent()
+        ).dropFirst())
+
+        let rollbackRequests = WarmAlarmPlugin.makeSnoozeRollbackRequests(
+            for: schedule,
+            restoring: originalRequests,
+            nowMillis: snoozeAtMillis + 30_000,
+            content: UNMutableNotificationContent(),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(rollbackRequests.first?.identifier, "42#fallback#2")
+        XCTAssertEqual(
+            (rollbackRequests.first?.trigger as? UNTimeIntervalNotificationTrigger)?.timeInterval,
+            30
+        )
+    }
+
+    func testSnoozeRollbackDoesNotAdvanceExpiredChainToNextRecurrence() {
+        let calendar = utcCalendar()
+        let snoozeAtMillis = millis(2030, 1, 7, 7, 5, calendar: calendar)
+        let wire = makeWireSchedule(
+            scheduledAtMillis: millis(2030, 1, 7, 7, 0, calendar: calendar),
+            recurrenceWeekdays: [1]
+        )
+        let schedule = WarmAlarmScheduleData.from(
+            wire: wire,
+            fallbackAnchorMillis: wire.scheduledAtMillis,
+            calendar: calendar,
+            occurrenceSeriesToken: "current-generation"
+        ).withActiveSnooze(
+            untilMillis: snoozeAtMillis,
+            fallbackAnchorMillis: snoozeAtMillis
+        )
+        let originalFallbacks = Array(WarmAlarmPlugin.makeSnoozeRequests(
+            for: schedule,
+            fireAtMillis: snoozeAtMillis,
+            nowMillis: snoozeAtMillis - 60_000,
+            content: UNMutableNotificationContent()
+        ).dropFirst())
+
+        let rollbackRequests = WarmAlarmPlugin.makeSnoozeRollbackRequests(
+            for: schedule,
+            restoring: originalFallbacks,
+            nowMillis: snoozeAtMillis + 181_000,
+            content: UNMutableNotificationContent(),
+            calendar: calendar
+        )
+
+        XCTAssertTrue(rollbackRequests.isEmpty)
     }
 
     func testOneShotMigrationIgnoresPendingRequestsFromReplacedGeneration() {

@@ -188,6 +188,15 @@ extension WarmAlarmScheduleData {
         )
     }
 
+    func clearingActiveSnooze() -> WarmAlarmScheduleData {
+        copying(
+            recurrenceHour: recurrenceHour,
+            recurrenceMinute: recurrenceMinute,
+            activeSnoozeUntilMillis: nil,
+            fallbackAnchorMillis: nil
+        )
+    }
+
     private func copying(
         scheduledAtMillis: Int64? = nil,
         recurrenceHour: Int?,
