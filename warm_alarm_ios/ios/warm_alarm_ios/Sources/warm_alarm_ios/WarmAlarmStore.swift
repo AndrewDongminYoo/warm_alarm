@@ -157,6 +157,15 @@ extension WarmAlarmScheduleData {
         )
     }
 
+    func withFallbackAnchor(_ fallbackAnchorMillis: Int64) -> WarmAlarmScheduleData {
+        copying(
+            recurrenceHour: recurrenceHour,
+            recurrenceMinute: recurrenceMinute,
+            activeSnoozeUntilMillis: activeSnoozeUntilMillis,
+            fallbackAnchorMillis: fallbackAnchorMillis
+        )
+    }
+
     func clearingFallbackAnchor() -> WarmAlarmScheduleData {
         copying(
             recurrenceHour: recurrenceHour,
