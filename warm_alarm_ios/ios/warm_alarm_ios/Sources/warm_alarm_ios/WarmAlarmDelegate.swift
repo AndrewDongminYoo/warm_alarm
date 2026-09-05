@@ -8,11 +8,10 @@ final class WarmAlarmForegroundOccurrenceTracker: @unchecked Sendable {
     private let lock = NSLock()
     private var handledOccurrenceTokensByAlarmId = [Int64: String]()
 
-    func shouldHandleAndMark(alarmId: Int64, occurrenceToken: String, isFallback: Bool) -> Bool {
+    func shouldHandleAndMark(alarmId: Int64, occurrenceToken: String) -> Bool {
         handleIfAllowed(
             alarmId: alarmId,
             occurrenceToken: occurrenceToken,
-            isFallback: isFallback,
             perform: {}
         )
     }
@@ -20,23 +19,16 @@ final class WarmAlarmForegroundOccurrenceTracker: @unchecked Sendable {
     func handleIfAllowed(
         alarmId: Int64,
         occurrenceToken: String,
-        isFallback: Bool,
         perform action: () -> Void
     ) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        if isFallback, handledOccurrenceTokensByAlarmId[alarmId] == occurrenceToken {
+        if handledOccurrenceTokensByAlarmId[alarmId] == occurrenceToken {
             return false
         }
         handledOccurrenceTokensByAlarmId[alarmId] = occurrenceToken
         action()
         return true
-    }
-
-    func mark(alarmId: Int64, occurrenceToken: String) {
-        lock.lock()
-        handledOccurrenceTokensByAlarmId[alarmId] = occurrenceToken
-        lock.unlock()
     }
 
     func clear(alarmId: Int64) {
@@ -96,7 +88,6 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             completionHandler([.alert, .sound])
             return
         }
-        let isFallback = WarmAlarmPlugin.isFallbackIdentifier(notification.request.identifier, for: alarmId)
         let occurrenceToken = WarmAlarmPlugin.foregroundOccurrenceToken(
             content: notification.request.content,
             identifier: notification.request.identifier,
@@ -106,7 +97,6 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         guard foregroundOccurrenceTracker.handleIfAllowed(
             alarmId: alarmId,
             occurrenceToken: occurrenceToken,
-            isFallback: isFallback,
             perform: {
             let schedule = WarmAlarmStore.shared.load(id: alarmId)
             startAudio(alarmId: alarmId, for: schedule)
@@ -164,11 +154,20 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
                 }
             }
         case UNNotificationDefaultActionIdentifier:
-            foregroundOccurrenceTracker.mark(alarmId: alarmId, occurrenceToken: occurrenceToken)
-            let schedule = WarmAlarmStore.shared.load(id: alarmId)
-            startAudio(alarmId: alarmId, for: schedule)
-            emitEvent(WarmAlarmEventWire(
-                alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis(), payload: schedule?.payload))
+            _ = foregroundOccurrenceTracker.handleIfAllowed(
+                alarmId: alarmId,
+                occurrenceToken: occurrenceToken,
+                perform: {
+                    let schedule = WarmAlarmStore.shared.load(id: alarmId)
+                    startAudio(alarmId: alarmId, for: schedule)
+                    emitEvent(WarmAlarmEventWire(
+                        alarmId: alarmId,
+                        type: .fired,
+                        occurredAtMillis: nowMillis(),
+                        payload: schedule?.payload
+                    ))
+                }
+            )
             completionHandler()
         default:
             completionHandler()
@@ -177,7 +176,11 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
     // MARK: - Actions
 
-    func handleStop(alarmId: Int64, occurrenceToken: String, deliveredIdentifier: String? = nil) {
+    func handleStop(
+        alarmId: Int64,
+        occurrenceToken: String,
+        deliveredIdentifier: String? = nil
+    ) {
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
         foregroundOccurrenceTracker.stop(
             alarmId: alarmId,

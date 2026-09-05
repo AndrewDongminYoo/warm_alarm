@@ -268,6 +268,41 @@ final class WarmAlarmRequestTests: XCTestCase {
         }
     }
 
+    func testFallbackChainCarriesOneStableOccurrenceTokenWithIsolatedOrdinals() {
+        let scheduledAtMillis = Int64(1_900_000_000_000)
+        let schedule = makeWireSchedule(scheduledAtMillis: scheduledAtMillis)
+        let content = UNMutableNotificationContent()
+        content.userInfo = ["alarmId": "42", "hostPayload": "preserved"]
+
+        let firstRequests = WarmAlarmPlugin.makeRequests(
+            for: schedule,
+            content: content,
+            fallbackAnchorMillis: scheduledAtMillis,
+            calendar: utcCalendar()
+        )
+        let secondRequests = WarmAlarmPlugin.makeRequests(
+            for: schedule,
+            content: content,
+            fallbackAnchorMillis: scheduledAtMillis,
+            calendar: utcCalendar()
+        )
+
+        let firstMetadata = firstRequests.compactMap { occurrenceMetadata(from: $0.content) }
+        let secondMetadata = secondRequests.compactMap { occurrenceMetadata(from: $0.content) }
+        XCTAssertEqual(firstMetadata.count, 7)
+        XCTAssertEqual(Set(firstMetadata.compactMap { $0["token"] as? String }).count, 1)
+        XCTAssertEqual(firstMetadata.compactMap { $0["ordinal"] as? Int }, Array(0...6))
+        XCTAssertTrue(firstRequests.allSatisfy { $0.content.userInfo["alarmId"] as? String == "42" })
+        XCTAssertTrue(firstRequests.allSatisfy { $0.content.userInfo["hostPayload"] as? String == "preserved" })
+        XCTAssertTrue(firstRequests.allSatisfy {
+            PropertyListSerialization.propertyList($0.content.userInfo, isValidFor: .binary)
+        })
+        XCTAssertNotEqual(
+            firstMetadata.first?["token"] as? String,
+            secondMetadata.first?["token"] as? String
+        )
+    }
+
     func testBuildsSnoozeFallbackChainWithRelativeIntervals() {
         let fireAtMillis = Int64(1_900_000_000_000)
         let schedule = WarmAlarmScheduleData.from(
@@ -300,6 +335,10 @@ final class WarmAlarmRequestTests: XCTestCase {
         )
         XCTAssertTrue(requests.allSatisfy { $0.content.userInfo["alarmId"] as? String == "42" })
         XCTAssertTrue(requests.allSatisfy { $0.content.categoryIdentifier == "WARM_ALARM" })
+        let metadata = requests.compactMap { occurrenceMetadata(from: $0.content) }
+        XCTAssertEqual(metadata.count, 7)
+        XCTAssertEqual(Set(metadata.compactMap { $0["token"] as? String }).count, 1)
+        XCTAssertEqual(metadata.compactMap { $0["ordinal"] as? Int }, Array(0...6))
     }
 
     func testBuildsFiniteFallbackChainAlongsideRecurringRequests() {
@@ -1084,7 +1123,7 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertEqual(saved.first?.fallbackAnchorMillis, expectedAnchor)
     }
 
-    func testMigrationMakesWestwardOneShotRecoverableFromSurvivingFallback() {
+    func testMigrationLeavesLegacyFallbackOnlyScheduleUnchanged() {
         var schedulingCalendar = Calendar(identifier: .gregorian)
         schedulingCalendar.timeZone = TimeZone(identifier: "America/New_York")!
         let scheduledAtMillis = millis(2030, 3, 11, 7, 0, calendar: schedulingCalendar)
@@ -1105,8 +1144,133 @@ final class WarmAlarmRequestTests: XCTestCase {
         var recoveryCalendar = Calendar(identifier: .gregorian)
         recoveryCalendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
         let nowMillis = millis(2030, 3, 11, 6, 0, calendar: recoveryCalendar)
+        var saved = [WarmAlarmScheduleData]()
 
         XCTAssertFalse(WarmAlarmPlugin.shouldRecover(schedule: schedule, nowMillis: nowMillis))
+
+        let migrated = WarmAlarmPlugin.migrateOneShotFallbackAnchors(
+            [schedule],
+            pendingRequests: [pendingFallback],
+            calendar: recoveryCalendar,
+            save: { saved.append($0) }
+        )[0]
+
+        XCTAssertEqual(migrated.scheduledAtMillis, schedule.scheduledAtMillis)
+        XCTAssertEqual(migrated.fallbackAnchorMillis, schedule.fallbackAnchorMillis)
+        XCTAssertTrue(saved.isEmpty)
+    }
+
+    func testMigrationLeavesInvalidOccurrenceDateUnchanged() {
+        let calendar = utcCalendar()
+        let scheduledAtMillis = millis(2030, 1, 1, 7, 0, calendar: calendar)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: scheduledAtMillis),
+            fallbackAnchorMillis: scheduledAtMillis
+        )
+        let content = makeOccurrenceContent(
+            token: "invalid-occurrence",
+            ordinal: 1,
+            primaryDate: Date(timeIntervalSince1970: Double(scheduledAtMillis) / 1_000),
+            calendar: calendar
+        )
+        var metadata = occurrenceMetadata(from: content)!
+        metadata["month"] = 2
+        metadata["day"] = 31
+        content.userInfo = ["_warmAlarmOccurrenceV1": metadata]
+        let fallback = UNNotificationRequest(
+            identifier: "42#fallback#1",
+            content: content,
+            trigger: UNCalendarNotificationTrigger(
+                dateMatching: DateComponents(year: 2030, month: 1, day: 1, hour: 7, minute: 0, second: 30),
+                repeats: false
+            )
+        )
+        var saved = [WarmAlarmScheduleData]()
+
+        let migrated = WarmAlarmPlugin.migrateOneShotFallbackAnchors(
+            [schedule],
+            pendingRequests: [fallback],
+            calendar: calendar,
+            save: { saved.append($0) }
+        )[0]
+
+        XCTAssertEqual(migrated.scheduledAtMillis, schedule.scheduledAtMillis)
+        XCTAssertEqual(migrated.fallbackAnchorMillis, schedule.fallbackAnchorMillis)
+        XCTAssertTrue(saved.isEmpty)
+    }
+
+    func testMigrationLeavesConflictingPrimaryEpochUnchanged() {
+        let calendar = utcCalendar()
+        let storedAtMillis = millis(2030, 1, 1, 7, 0, calendar: calendar)
+        let metadataAtMillis = millis(2030, 1, 2, 7, 0, calendar: calendar)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: storedAtMillis),
+            fallbackAnchorMillis: storedAtMillis
+        )
+        let content = makeOccurrenceContent(
+            token: "conflicting-occurrence",
+            ordinal: 1,
+            primaryDate: Date(timeIntervalSince1970: Double(metadataAtMillis) / 1_000),
+            calendar: calendar
+        )
+        var metadata = occurrenceMetadata(from: content)!
+        metadata["primaryEpochMillis"] = metadataAtMillis + 24 * 60 * 60 * 1_000
+        content.userInfo = ["_warmAlarmOccurrenceV1": metadata]
+        let fallback = UNNotificationRequest(
+            identifier: "42#fallback#1",
+            content: content,
+            trigger: UNCalendarNotificationTrigger(
+                dateMatching: DateComponents(year: 2030, month: 1, day: 2, hour: 7, minute: 0, second: 30),
+                repeats: false
+            )
+        )
+        var saved = [WarmAlarmScheduleData]()
+
+        let migrated = WarmAlarmPlugin.migrateOneShotFallbackAnchors(
+            [schedule],
+            pendingRequests: [fallback],
+            calendar: calendar,
+            save: { saved.append($0) }
+        )[0]
+
+        XCTAssertEqual(migrated.scheduledAtMillis, schedule.scheduledAtMillis)
+        XCTAssertEqual(migrated.fallbackAnchorMillis, schedule.fallbackAnchorMillis)
+        XCTAssertTrue(saved.isEmpty)
+    }
+
+    func testMigrationUsesEmbeddedPrimaryWallTimeAcrossDstJump() {
+        var schedulingCalendar = Calendar(identifier: .gregorian)
+        schedulingCalendar.timeZone = TimeZone(identifier: "America/New_York")!
+        let primaryDate = schedulingCalendar.date(from: DateComponents(
+            year: 2030,
+            month: 3,
+            day: 10,
+            hour: 1,
+            minute: 59,
+            second: 50
+        ))!
+        let scheduledAtMillis = Int64(primaryDate.timeIntervalSince1970 * 1_000)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: scheduledAtMillis),
+            fallbackAnchorMillis: scheduledAtMillis
+        )
+        let fallbackDate = primaryDate.addingTimeInterval(30)
+        let fallbackComponents = schedulingCalendar.dateComponents(
+            [.year, .month, .day, .hour, .minute, .second],
+            from: fallbackDate
+        )
+        let pendingFallback = UNNotificationRequest(
+            identifier: "42#fallback#1",
+            content: makeOccurrenceContent(
+                token: "dst-occurrence",
+                ordinal: 1,
+                primaryDate: primaryDate,
+                calendar: schedulingCalendar
+            ),
+            trigger: UNCalendarNotificationTrigger(dateMatching: fallbackComponents, repeats: false)
+        )
+        var recoveryCalendar = Calendar(identifier: .gregorian)
+        recoveryCalendar.timeZone = TimeZone(identifier: "America/Phoenix")!
 
         let migrated = WarmAlarmPlugin.migrateOneShotFallbackAnchors(
             [schedule],
@@ -1115,42 +1279,259 @@ final class WarmAlarmRequestTests: XCTestCase {
             save: { _ in }
         )[0]
 
-        XCTAssertTrue(WarmAlarmPlugin.shouldRecover(schedule: migrated, nowMillis: nowMillis))
+        let expectedPrimaryDate = recoveryCalendar.date(from: DateComponents(
+            year: 2030,
+            month: 3,
+            day: 10,
+            hour: 1,
+            minute: 59,
+            second: 50
+        ))!
+        XCTAssertEqual(migrated.scheduledAtMillis, Int64(expectedPrimaryDate.timeIntervalSince1970 * 1_000))
+        XCTAssertEqual(migrated.fallbackAnchorMillis, Int64(expectedPrimaryDate.timeIntervalSince1970 * 1_000))
+    }
+
+    func testMigrationKeepsGregorianWallTimeWhenPreferredCalendarChanges() {
+        var schedulingCalendar = Calendar(identifier: .gregorian)
+        schedulingCalendar.timeZone = TimeZone(identifier: "America/New_York")!
+        let primaryDate = schedulingCalendar.date(from: DateComponents(
+            year: 2030,
+            month: 3,
+            day: 10,
+            hour: 1,
+            minute: 59,
+            second: 50
+        ))!
+        let scheduledAtMillis = Int64(primaryDate.timeIntervalSince1970 * 1_000)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: scheduledAtMillis),
+            fallbackAnchorMillis: scheduledAtMillis
+        )
+        let fallbackDate = primaryDate.addingTimeInterval(30)
+        let pendingFallback = UNNotificationRequest(
+            identifier: "42#fallback#1",
+            content: makeOccurrenceContent(
+                token: "calendar-occurrence",
+                ordinal: 1,
+                primaryDate: primaryDate,
+                calendar: schedulingCalendar
+            ),
+            trigger: UNCalendarNotificationTrigger(
+                dateMatching: schedulingCalendar.dateComponents(
+                    [.year, .month, .day, .hour, .minute, .second],
+                    from: fallbackDate
+                ),
+                repeats: false
+            )
+        )
+        var recoveryCalendar = Calendar(identifier: .buddhist)
+        recoveryCalendar.timeZone = TimeZone(identifier: "America/Phoenix")!
+
+        let migrated = WarmAlarmPlugin.migrateOneShotFallbackAnchors(
+            [schedule],
+            pendingRequests: [pendingFallback],
+            calendar: recoveryCalendar,
+            save: { _ in }
+        )[0]
+
+        var expectedCalendar = Calendar(identifier: .gregorian)
+        expectedCalendar.timeZone = recoveryCalendar.timeZone
+        let expectedPrimaryDate = expectedCalendar.date(from: DateComponents(
+            year: 2030,
+            month: 3,
+            day: 10,
+            hour: 1,
+            minute: 59,
+            second: 50
+        ))!
+        XCTAssertEqual(migrated.scheduledAtMillis, Int64(expectedPrimaryDate.timeIntervalSince1970 * 1_000))
+        XCTAssertEqual(migrated.fallbackAnchorMillis, Int64(expectedPrimaryDate.timeIntervalSince1970 * 1_000))
+    }
+
+    func testMigrationPreservesRepeatedHourSelectionFromPrimaryEpoch() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        let midnight = calendar.date(from: DateComponents(year: 2030, month: 11, day: 3, hour: 0))!
+        let matchingComponents = DateComponents(hour: 1, minute: 30, second: 0)
+        let firstOccurrence = calendar.nextDate(
+            after: midnight,
+            matching: matchingComponents,
+            matchingPolicy: .nextTime,
+            repeatedTimePolicy: .first,
+            direction: .forward
+        )!
+        let lastOccurrence = calendar.nextDate(
+            after: midnight,
+            matching: matchingComponents,
+            matchingPolicy: .nextTime,
+            repeatedTimePolicy: .last,
+            direction: .forward
+        )!
+        XCTAssertNotEqual(firstOccurrence, lastOccurrence)
+        let firstOccurrenceMillis = Int64(firstOccurrence.timeIntervalSince1970 * 1_000)
+        let lastOccurrenceMillis = Int64(lastOccurrence.timeIntervalSince1970 * 1_000)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: firstOccurrenceMillis),
+            fallbackAnchorMillis: firstOccurrenceMillis
+        )
+        let fallback = UNNotificationRequest(
+            identifier: "42#fallback#1",
+            content: makeOccurrenceContent(
+                token: "repeated-hour-occurrence",
+                ordinal: 1,
+                primaryDate: lastOccurrence,
+                calendar: calendar
+            ),
+            trigger: UNCalendarNotificationTrigger(
+                dateMatching: calendar.dateComponents(
+                    [.year, .month, .day, .hour, .minute, .second],
+                    from: lastOccurrence.addingTimeInterval(30)
+                ),
+                repeats: false
+            )
+        )
+
+        let migrated = WarmAlarmPlugin.migrateOneShotFallbackAnchors(
+            [schedule],
+            pendingRequests: [fallback],
+            calendar: calendar,
+            save: { _ in }
+        )[0]
+
+        XCTAssertEqual(migrated.scheduledAtMillis, lastOccurrenceMillis)
+        XCTAssertEqual(migrated.fallbackAnchorMillis, lastOccurrenceMillis)
+    }
+
+    func testRecoveryRequestsPreserveSurvivingOccurrenceToken() {
+        let anchor = Int64(1_900_000_000_000)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: anchor),
+            fallbackAnchorMillis: anchor
+        )
+        let calendar = utcCalendar()
+        let primaryDate = Date(timeIntervalSince1970: Double(anchor) / 1_000)
+        let fallback = UNNotificationRequest(
+            identifier: "42#fallback#1",
+            content: makeOccurrenceContent(
+                token: "surviving-occurrence",
+                ordinal: 1,
+                primaryDate: primaryDate,
+                calendar: calendar
+            ),
+            trigger: UNCalendarNotificationTrigger(
+                dateMatching: calendar.dateComponents(
+                    [.year, .month, .day, .hour, .minute, .second],
+                    from: primaryDate.addingTimeInterval(30)
+                ),
+                repeats: false
+            )
+        )
+
         let requests = WarmAlarmPlugin.makeRecoveryRequests(
-            for: migrated,
+            for: schedule,
+            nowMillis: anchor - 60_000,
+            pendingIdentifiers: [fallback.identifier],
+            pendingRequests: [fallback],
+            content: UNMutableNotificationContent(),
+            calendar: calendar
+        )
+
+        XCTAssertFalse(requests.isEmpty)
+        XCTAssertTrue(requests.allSatisfy {
+            occurrenceMetadata(from: $0.content)?["token"] as? String == "surviving-occurrence"
+        })
+    }
+
+    func testRecoveryRetainsSeriesTokenWhenRepeatingPrimaryUsesPreviousAnchorMetadata() {
+        var schedulingCalendar = Calendar(identifier: .gregorian)
+        schedulingCalendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        let previousAnchorMillis = millis(2030, 3, 11, 7, 0, calendar: schedulingCalendar)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(
+                scheduledAtMillis: previousAnchorMillis,
+                recurrenceWeekdays: [1]
+            ),
+            fallbackAnchorMillis: previousAnchorMillis,
+            calendar: schedulingCalendar
+        )
+        let repeatingPrimary = UNNotificationRequest(
+            identifier: "42#1",
+            content: makeOccurrenceContent(
+                token: "recurring-series",
+                ordinal: 0,
+                primaryDate: Date(timeIntervalSince1970: Double(previousAnchorMillis) / 1_000),
+                calendar: schedulingCalendar
+            ),
+            trigger: UNCalendarNotificationTrigger(
+                dateMatching: DateComponents(hour: 7, minute: 0, weekday: 2),
+                repeats: true
+            )
+        )
+        var recoveryCalendar = Calendar(identifier: .gregorian)
+        recoveryCalendar.timeZone = TimeZone(identifier: "America/New_York")!
+        let nowMillis = millis(2030, 3, 18, 7, 0, calendar: recoveryCalendar) + 45_000
+        let firstRecovery = WarmAlarmPlugin.makeRecoveryRequests(
+            for: schedule,
             nowMillis: nowMillis,
-            pendingIdentifiers: [pendingFallback.identifier],
+            pendingIdentifiers: [repeatingPrimary.identifier],
+            pendingRequests: [repeatingPrimary],
             content: UNMutableNotificationContent(),
             calendar: recoveryCalendar
         )
-        XCTAssertEqual(requests.first?.identifier, "42")
-        XCTAssertEqual(migrated.snapshotScheduledAtMillis(
+        let survivingFallback = firstRecovery[0]
+
+        let secondRecovery = WarmAlarmPlugin.makeRecoveryRequests(
+            for: schedule,
             nowMillis: nowMillis,
+            pendingIdentifiers: [repeatingPrimary.identifier, survivingFallback.identifier],
+            pendingRequests: [repeatingPrimary, survivingFallback],
+            content: UNMutableNotificationContent(),
             calendar: recoveryCalendar
-        ), millis(2030, 3, 11, 7, 0, calendar: recoveryCalendar))
+        )
+
+        XCTAssertFalse(secondRecovery.isEmpty)
+        XCTAssertTrue(secondRecovery.allSatisfy {
+            occurrenceMetadata(from: $0.content)?["token"] as? String == "recurring-series"
+        })
     }
 
     func testForegroundOccurrenceTrackerScopesSuppressionToResettableOccurrence() {
         let tracker = WarmAlarmForegroundOccurrenceTracker()
 
-        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "first", isFallback: false))
-        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "first", isFallback: true))
+        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "first"))
+        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "first"))
 
         tracker.clear(alarmId: 42)
 
-        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "first", isFallback: true))
-        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "first", isFallback: true))
+        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "first"))
+        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "first"))
+    }
+
+    func testDelayedPrimaryDoesNotRepeatFallbackAlreadyHandledForSameOccurrence() {
+        let tracker = WarmAlarmForegroundOccurrenceTracker()
+
+        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "first"))
+        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "first"))
     }
 
     func testStopSuppressesLateFallbackUntilNextPrimaryOccurrence() {
         let tracker = WarmAlarmForegroundOccurrenceTracker()
 
-        XCTAssertTrue(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "first", isFallback: false, perform: {}))
+        XCTAssertTrue(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "first", perform: {}))
         tracker.stop(alarmId: 42, occurrenceToken: "first", perform: {})
 
-        XCTAssertFalse(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "first", isFallback: true, perform: {}))
-        XCTAssertTrue(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "first", isFallback: false, perform: {}))
-        XCTAssertFalse(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "first", isFallback: true, perform: {}))
+        XCTAssertFalse(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "first", perform: {}))
+        XCTAssertTrue(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "second", perform: {}))
+        XCTAssertFalse(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "second", perform: {}))
+    }
+
+    func testStopOnFallbackAbsorbsDelayedPrimaryBeforeNextOccurrence() {
+        let tracker = WarmAlarmForegroundOccurrenceTracker()
+
+        tracker.stop(alarmId: 42, occurrenceToken: "first", perform: {})
+
+        XCTAssertFalse(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "first", perform: {}))
+        XCTAssertTrue(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "second", perform: {}))
     }
 
     func testStoppedOccurrenceDoesNotSuppressFallbackFromNextOccurrence() {
@@ -1161,7 +1542,6 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertTrue(tracker.handleIfAllowed(
             alarmId: 42,
             occurrenceToken: "second",
-            isFallback: true,
             perform: {}
         ))
     }
@@ -1185,13 +1565,93 @@ final class WarmAlarmRequestTests: XCTestCase {
         )
     }
 
+    func testForegroundOccurrenceTokenIgnoresNotificationDeliveryLatency() {
+        let anchor = Int64(1_900_000_000_000)
+        let requests = WarmAlarmPlugin.makeRequests(
+            for: makeWireSchedule(scheduledAtMillis: anchor),
+            content: UNMutableNotificationContent(),
+            fallbackAnchorMillis: anchor,
+            calendar: utcCalendar()
+        )
+        let primary = requests[0]
+        let fallback = requests[1]
+
+        let primaryToken = WarmAlarmPlugin.foregroundOccurrenceToken(
+            content: primary.content,
+            identifier: primary.identifier,
+            alarmId: 42,
+            deliveredAtMillis: anchor + 1_000
+        )
+        let fallbackToken = WarmAlarmPlugin.foregroundOccurrenceToken(
+            content: fallback.content,
+            identifier: fallback.identifier,
+            alarmId: 42,
+            deliveredAtMillis: anchor + 35_000
+        )
+
+        XCTAssertEqual(primaryToken, fallbackToken)
+    }
+
+    func testRecurringPrimaryUsesAStableTokenForEachWallOccurrence() {
+        let calendar = utcCalendar()
+        let primaryDate = calendar.date(from: DateComponents(
+            year: 2030,
+            month: 1,
+            day: 7,
+            hour: 7,
+            minute: 0
+        ))!
+        let appleWeekday = calendar.component(.weekday, from: primaryDate)
+        let isoWeekday = Int64(appleWeekday == 1 ? 7 : appleWeekday - 1)
+        let anchor = Int64(primaryDate.timeIntervalSince1970 * 1_000)
+        let requests = WarmAlarmPlugin.makeRequests(
+            for: makeWireSchedule(
+                scheduledAtMillis: anchor,
+                recurrenceWeekdays: [isoWeekday]
+            ),
+            content: UNMutableNotificationContent(),
+            fallbackAnchorMillis: anchor,
+            calendar: calendar
+        )
+        let recurringPrimary = requests[0]
+        let fallback = requests[1]
+
+        let initialPrimaryToken = WarmAlarmPlugin.foregroundOccurrenceToken(
+            content: recurringPrimary.content,
+            identifier: recurringPrimary.identifier,
+            alarmId: 42,
+            deliveredAtMillis: anchor + 5_000,
+            calendar: calendar
+        )
+        let initialFallbackToken = WarmAlarmPlugin.foregroundOccurrenceToken(
+            content: fallback.content,
+            identifier: fallback.identifier,
+            alarmId: 42,
+            deliveredAtMillis: anchor + 35_000,
+            calendar: calendar
+        )
+        let nextPrimaryToken = WarmAlarmPlugin.foregroundOccurrenceToken(
+            content: recurringPrimary.content,
+            identifier: recurringPrimary.identifier,
+            alarmId: 42,
+            deliveredAtMillis: anchor + 7 * 24 * 60 * 60 * 1_000 + 5_000,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(initialPrimaryToken, initialFallbackToken)
+        XCTAssertNotEqual(nextPrimaryToken, initialFallbackToken)
+        let tracker = WarmAlarmForegroundOccurrenceTracker()
+        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: initialFallbackToken))
+        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: nextPrimaryToken))
+    }
+
     func testForegroundOccurrenceTrackerAtomicallyHandlesOneConcurrentFallback() {
         let tracker = WarmAlarmForegroundOccurrenceTracker()
         let resultLock = NSLock()
         var handledCount = 0
 
         DispatchQueue.concurrentPerform(iterations: 100) { _ in
-            guard tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "first", isFallback: true) else { return }
+            guard tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "first") else { return }
             resultLock.lock()
             handledCount += 1
             resultLock.unlock()
@@ -1209,7 +1669,7 @@ final class WarmAlarmRequestTests: XCTestCase {
         let stopCompleted = DispatchSemaphore(value: 0)
 
         DispatchQueue.global().async {
-            _ = tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "first", isFallback: true) {
+            _ = tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "first") {
                 fallbackEntered.signal()
                 releaseFallback.wait()
             }
@@ -1297,6 +1757,40 @@ final class WarmAlarmRequestTests: XCTestCase {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         return calendar
+    }
+
+    private func makeOccurrenceContent(
+        token: String,
+        ordinal: Int,
+        primaryDate: Date,
+        calendar: Calendar
+    ) -> UNMutableNotificationContent {
+        let components = calendar.dateComponents(
+            [.year, .month, .day, .hour, .minute, .second],
+            from: primaryDate
+        )
+        let content = UNMutableNotificationContent()
+        content.userInfo = [
+            "_warmAlarmOccurrenceV1": [
+                "token": token,
+                "ordinal": ordinal,
+                "year": components.year!,
+                "month": components.month!,
+                "day": components.day!,
+                "hour": components.hour!,
+                "minute": components.minute!,
+                "second": components.second!,
+                "calendar": "gregorian",
+                "floating": true,
+                "timeZone": calendar.timeZone.identifier,
+                "primaryEpochMillis": Int64(primaryDate.timeIntervalSince1970 * 1_000),
+            ],
+        ]
+        return content
+    }
+
+    private func occurrenceMetadata(from content: UNNotificationContent) -> [String: Any]? {
+        content.userInfo["_warmAlarmOccurrenceV1"] as? [String: Any]
     }
 
     private func millis(
