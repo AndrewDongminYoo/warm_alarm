@@ -358,7 +358,7 @@ private struct WarmAlarmOccurrenceMetadata {
     }
 
     func describesSameOccurrence(as other: WarmAlarmOccurrenceMetadata) -> Bool {
-        token == other.token
+        let sameWallTime = token == other.token
             && year == other.year
             && month == other.month
             && day == other.day
@@ -367,8 +367,20 @@ private struct WarmAlarmOccurrenceMetadata {
             && second == other.second
             && floating == other.floating
             && calendarIdentifier == other.calendarIdentifier
-            && timeZoneIdentifier == other.timeZoneIdentifier
-            && primaryEpochMillis == other.primaryEpochMillis
+        guard sameWallTime else { return false }
+        if !floating {
+            return timeZoneIdentifier == other.timeZoneIdentifier
+                && primaryEpochMillis == other.primaryEpochMillis
+        }
+        return timeZoneIdentifier != other.timeZoneIdentifier
+            || primaryEpochMillis == other.primaryEpochMillis
+    }
+
+    func hasConsistentPrimaryEpoch() -> Bool {
+        guard let timeZone = TimeZone(identifier: timeZoneIdentifier) else { return false }
+        var sourceCalendar = Calendar(identifier: .gregorian)
+        sourceCalendar.timeZone = timeZone
+        return primaryDate(in: sourceCalendar) != nil
     }
 
     func scopedToken(for primaryDate: Date) -> String {
@@ -1404,6 +1416,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         var sharedMetadata: WarmAlarmOccurrenceMetadata?
         for request in requestsWithMetadata {
             guard let metadata = occurrenceMetadata(from: request.content),
+                  metadata.hasConsistentPrimaryEpoch(),
                   metadata.ordinal == (fallbackIndex(for: request.identifier, alarmId: alarmId) ?? 0) else {
                 return nil
             }

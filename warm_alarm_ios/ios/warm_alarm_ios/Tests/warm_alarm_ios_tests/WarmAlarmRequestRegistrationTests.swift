@@ -1257,6 +1257,49 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertEqual(saved.first?.fallbackAnchorMillis, expectedAnchor)
     }
 
+    func testMigrationAcceptsMixedFallbackMetadataAfterSubsequentTimeZoneChange() {
+        var schedulingCalendar = Calendar(identifier: .gregorian)
+        schedulingCalendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        var firstRecoveryCalendar = Calendar(identifier: .gregorian)
+        firstRecoveryCalendar.timeZone = TimeZone(identifier: "America/New_York")!
+        var secondRecoveryCalendar = Calendar(identifier: .gregorian)
+        secondRecoveryCalendar.timeZone = TimeZone(identifier: "Europe/London")!
+        let scheduledAtMillis = millis(2030, 4, 1, 7, 0, calendar: schedulingCalendar)
+        let firstRecoveredAtMillis = millis(2030, 4, 1, 7, 0, calendar: firstRecoveryCalendar)
+        let expectedAnchorMillis = millis(2030, 4, 1, 7, 0, calendar: secondRecoveryCalendar)
+        let wire = makeWireSchedule(scheduledAtMillis: scheduledAtMillis)
+        let initialSchedule = WarmAlarmScheduleData.from(
+            wire: wire,
+            fallbackAnchorMillis: scheduledAtMillis,
+            calendar: schedulingCalendar
+        )
+        let survivingFallback = WarmAlarmPlugin.makeRequests(
+            for: wire,
+            content: UNMutableNotificationContent(),
+            fallbackAnchorMillis: scheduledAtMillis,
+            calendar: schedulingCalendar,
+            occurrenceSeriesToken: initialSchedule.occurrenceSeriesToken
+        )[1]
+        let firstMigratedSchedule = initialSchedule.withOneShotAnchor(firstRecoveredAtMillis)
+        let recoveredFallback = WarmAlarmPlugin.makeRecoveryRequests(
+            for: firstMigratedSchedule,
+            nowMillis: firstRecoveredAtMillis - 60_000,
+            pendingIdentifiers: ["42", "42#fallback#1"],
+            content: UNMutableNotificationContent(),
+            calendar: firstRecoveryCalendar
+        )[0]
+
+        let migrated = WarmAlarmPlugin.migrateOneShotFallbackAnchors(
+            [firstMigratedSchedule],
+            pendingRequests: [survivingFallback, recoveredFallback],
+            calendar: secondRecoveryCalendar,
+            save: { _ in }
+        )[0]
+
+        XCTAssertEqual(migrated.scheduledAtMillis, expectedAnchorMillis)
+        XCTAssertEqual(migrated.fallbackAnchorMillis, expectedAnchorMillis)
+    }
+
     func testMigrationLeavesLegacyFallbackOnlyScheduleUnchanged() {
         var schedulingCalendar = Calendar(identifier: .gregorian)
         schedulingCalendar.timeZone = TimeZone(identifier: "America/New_York")!
