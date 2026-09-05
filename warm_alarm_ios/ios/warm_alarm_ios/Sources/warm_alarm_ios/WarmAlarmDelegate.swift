@@ -225,8 +225,8 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         content: UNNotificationContent,
         deliveredAtMillis: Int64
     ) -> Bool {
-        let schedule = WarmAlarmStore.shared.load(id: alarmId)
-        guard schedule.map({ WarmAlarmPlugin.notificationContent($0, matches: content) }) ?? true else {
+        guard let schedule = WarmAlarmStore.shared.load(id: alarmId),
+              WarmAlarmPlugin.notificationContent(schedule, matches: content) else {
             return false
         }
         let occurrenceToken = WarmAlarmPlugin.foregroundOccurrenceToken(
@@ -245,7 +245,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
                     alarmId: alarmId,
                     type: .fired,
                     occurredAtMillis: nowMillis(),
-                    payload: schedule?.payload
+                    payload: schedule.payload
                 ))
             }
         )

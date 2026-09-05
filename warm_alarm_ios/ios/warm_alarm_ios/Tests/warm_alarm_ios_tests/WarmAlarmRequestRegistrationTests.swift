@@ -2465,6 +2465,58 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertTrue(eventsApi.events.isEmpty)
     }
 
+    func testForegroundDeliveryRejectsCanceledAlarmAfterQueuedCancellation() {
+        let alarmId = Int64(4_242_424_247)
+        let occurrenceMillis = Int64(1_000)
+        let wire = makeWireSchedule(id: alarmId, scheduledAtMillis: occurrenceMillis)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: wire,
+            fallbackAnchorMillis: occurrenceMillis,
+            calendar: utcCalendar()
+        )
+        let content = WarmAlarmPlugin.makeRequests(
+            for: wire,
+            content: UNMutableNotificationContent(),
+            fallbackAnchorMillis: occurrenceMillis,
+            calendar: utcCalendar(),
+            occurrenceSeriesToken: schedule.occurrenceSeriesToken
+        )[1].content
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(schedule)
+        let eventsApi = RecordingWarmAlarmEventsApi()
+        let mutationQueue = WarmAlarmMutationQueue(label: "warm_alarm_tests.foreground_delivery_cancellation")
+        let delegate = WarmAlarmDelegate(
+            eventsApi: eventsApi,
+            notificationMutationQueue: mutationQueue
+        )
+        defer {
+            delegate.stopIfPlaying(alarmId: alarmId)
+            WarmAlarmStore.shared.remove(id: alarmId)
+        }
+        let cancellationCompleted = expectation(description: "cancellation completes")
+        let deliveryCompleted = expectation(description: "delivery completes")
+        var didHandle = true
+
+        mutationQueue.enqueueOnMain { finish in
+            WarmAlarmStore.shared.remove(id: alarmId)
+            cancellationCompleted.fulfill()
+            finish()
+        }
+        delegate.handleForegroundDelivery(
+            alarmId: alarmId,
+            identifier: "\(alarmId)#fallback#1",
+            content: content,
+            deliveredAtMillis: occurrenceMillis
+        ) { handled in
+            didHandle = handled
+            deliveryCompleted.fulfill()
+        }
+
+        wait(for: [cancellationCompleted, deliveryCompleted], timeout: 1)
+        XCTAssertFalse(didHandle)
+        XCTAssertTrue(eventsApi.events.isEmpty)
+    }
+
     func testOccurrenceGenerationsAreUniqueForTheSameAlarm() {
         let first = WarmAlarmPlugin.newOccurrenceSeriesToken(for: 42)
         let second = WarmAlarmPlugin.newOccurrenceSeriesToken(for: 42)
