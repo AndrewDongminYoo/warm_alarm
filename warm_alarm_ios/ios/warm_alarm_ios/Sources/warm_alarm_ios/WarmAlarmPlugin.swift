@@ -1148,20 +1148,10 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         guard let weekdays = schedule.recurrence?.weekdays, !weekdays.isEmpty else {
             return schedule.scheduledAtMillis
         }
-        let scheduledDate = Date(timeIntervalSince1970: Double(schedule.scheduledAtMillis) / 1000.0)
-        let scheduledMinuteComponents = calendar.dateComponents(
-            [.year, .month, .day, .hour, .minute],
-            from: scheduledDate
-        )
-        guard let scheduledMinute = calendar.date(from: scheduledMinuteComponents) else {
-            return schedule.scheduledAtMillis
-        }
-        let now = Date(timeIntervalSince1970: Double(nowMillis) / 1000.0)
-        let searchAfter = now < scheduledMinute ? scheduledMinute.addingTimeInterval(-0.001) : now
         return WarmAlarmRecurrence.nextOccurrenceMillis(
             scheduledAtMillis: schedule.scheduledAtMillis,
             weekdays: weekdays,
-            afterMillis: Int64(searchAfter.timeIntervalSince1970 * 1000.0),
+            afterMillis: nowMillis,
             calendar: calendar
         ) ?? schedule.scheduledAtMillis
     }

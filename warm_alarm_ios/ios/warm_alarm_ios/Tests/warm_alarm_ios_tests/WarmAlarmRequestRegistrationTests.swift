@@ -480,6 +480,22 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertEqual(anchor, millis(2030, 3, 21, 17, 46, calendar: calendar))
     }
 
+    func testRecurringFallbackAnchorMatchesNativeTriggerBeforeFutureScheduledDate() {
+        let calendar = utcCalendar()
+        let schedule = makeWireSchedule(
+            scheduledAtMillis: millis(2030, 1, 28, 7, 0, calendar: calendar),
+            recurrenceWeekdays: [1]
+        )
+
+        let anchor = WarmAlarmPlugin.fallbackAnchorMillis(
+            for: schedule,
+            nowMillis: millis(2030, 1, 6, 8, 0, calendar: calendar),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(anchor, millis(2030, 1, 7, 7, 0, calendar: calendar))
+    }
+
     func testRecurringFallbackAnchorPreservesLocalTimeAcrossDST() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
