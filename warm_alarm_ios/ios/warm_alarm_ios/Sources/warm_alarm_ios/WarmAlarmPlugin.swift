@@ -271,7 +271,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             }
             let nowMillis = Int64(Date().timeIntervalSince1970 * 1000)
             let storedSchedules = Array(WarmAlarmStore.shared.loadAll().values)
-            guard storedSchedules.contains(where: { Self.shouldRecover(schedule: $0, nowMillis: nowMillis) }) else {
+            guard !storedSchedules.isEmpty else {
                 WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
                 return
             }
@@ -281,8 +281,13 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                     finish()
                     return
                 }
-                let migratedSchedules = Self.migrateRecurringWallTimes(
+                let recurringSchedules = Self.migrateRecurringWallTimes(
                     storedSchedules,
+                    pendingRequests: pending,
+                    save: { WarmAlarmStore.shared.save($0) }
+                )
+                let migratedSchedules = Self.migrateOneShotFallbackAnchors(
+                    recurringSchedules,
                     pendingRequests: pending,
                     save: { WarmAlarmStore.shared.save($0) }
                 )
@@ -290,6 +295,10 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                     migratedSchedules,
                     nowMillis: nowMillis
                 )
+                guard !recoverableAlarms.isEmpty else {
+                    WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
+                    return
+                }
                 self.recoverAlarms(
                     recoverableAlarms,
                     pendingIdentifiers: Set(pending.map { $0.identifier }),
@@ -420,6 +429,38 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 return schedule
             }
             let migrated = schedule.withRecurrenceTime(hour: hour, minute: minute)
+            save(migrated)
+            return migrated
+        }
+    }
+
+    static func migrateOneShotFallbackAnchors(
+        _ schedules: [WarmAlarmScheduleData],
+        pendingRequests: [UNNotificationRequest],
+        calendar: Calendar = .current,
+        save: (WarmAlarmScheduleData) -> Void
+    ) -> [WarmAlarmScheduleData] {
+        schedules.map { schedule in
+            guard schedule.recurrenceWeekdays?.isEmpty ?? true,
+                  schedule.activeSnoozeUntilMillis == nil else {
+                return schedule
+            }
+            let primaryIdentifier = String(schedule.id)
+            guard let anchorMillis = pendingRequests.lazy.compactMap({ request -> Int64? in
+                let fallbackIndex = fallbackIndex(for: request.identifier, alarmId: schedule.id)
+                guard request.identifier == primaryIdentifier || fallbackIndex != nil,
+                      let trigger = request.trigger as? UNCalendarNotificationTrigger,
+                      !trigger.repeats,
+                      let fireDate = calendar.date(from: trigger.dateComponents) else {
+                    return nil
+                }
+                let fireAtMillis = Int64(fireDate.timeIntervalSince1970 * 1_000)
+                return fireAtMillis - Int64(fallbackIndex ?? 0) * fallbackIntervalMillis
+            }).first,
+                  anchorMillis != schedule.fallbackAnchorMillis else {
+                return schedule
+            }
+            let migrated = schedule.withOneShotAnchor(anchorMillis)
             save(migrated)
             return migrated
         }
