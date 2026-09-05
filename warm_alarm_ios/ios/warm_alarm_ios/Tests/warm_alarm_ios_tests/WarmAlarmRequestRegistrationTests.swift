@@ -297,7 +297,7 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertTrue(firstRequests.allSatisfy {
             PropertyListSerialization.propertyList($0.content.userInfo, isValidFor: .binary)
         })
-        XCTAssertNotEqual(
+        XCTAssertEqual(
             firstMetadata.first?["token"] as? String,
             secondMetadata.first?["token"] as? String
         )
@@ -1495,53 +1495,202 @@ final class WarmAlarmRequestTests: XCTestCase {
         })
     }
 
+    func testRecoveryAddsStableMetadataWhenOnlyLegacyPrimaryIsPending() {
+        let calendar = utcCalendar()
+        let anchor = Int64(1_900_000_000_000)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: anchor),
+            fallbackAnchorMillis: anchor,
+            calendar: calendar
+        )
+        let legacyPrimary = UNNotificationRequest(
+            identifier: "42",
+            content: UNMutableNotificationContent(),
+            trigger: UNCalendarNotificationTrigger(
+                dateMatching: calendar.dateComponents(
+                    [.year, .month, .day, .hour, .minute, .second],
+                    from: Date(timeIntervalSince1970: Double(anchor) / 1_000)
+                ),
+                repeats: false
+            )
+        )
+
+        let requests = WarmAlarmPlugin.makeRecoveryRequests(
+            for: schedule,
+            nowMillis: anchor - 60_000,
+            pendingIdentifiers: [legacyPrimary.identifier],
+            pendingRequests: [legacyPrimary],
+            content: UNMutableNotificationContent(),
+            calendar: calendar
+        )
+
+        XCTAssertFalse(requests.isEmpty)
+        XCTAssertEqual(requests.compactMap { occurrenceMetadata(from: $0.content) }.count, requests.count)
+        let legacyPrimaryToken = WarmAlarmPlugin.foregroundOccurrenceToken(
+            content: legacyPrimary.content,
+            identifier: legacyPrimary.identifier,
+            alarmId: 42,
+            deliveredAtMillis: anchor + 5_000,
+            calendar: calendar,
+            schedule: schedule
+        )
+        let recoveredFallbackToken = WarmAlarmPlugin.foregroundOccurrenceToken(
+            content: requests[0].content,
+            identifier: requests[0].identifier,
+            alarmId: 42,
+            deliveredAtMillis: anchor + 35_000,
+            calendar: calendar,
+            schedule: schedule
+        )
+        XCTAssertEqual(legacyPrimaryToken, recoveredFallbackToken)
+    }
+
+    func testRecoveryUsesStableMetadataAcrossRecurringAndSnoozeRequests() {
+        let calendar = utcCalendar()
+        let anchor = Int64(1_900_000_000_000)
+        let wire = makeWireSchedule(
+            scheduledAtMillis: anchor,
+            recurrenceWeekdays: [1]
+        )
+        let recurringRequests = WarmAlarmPlugin.makeRequests(
+            for: wire,
+            content: UNMutableNotificationContent(),
+            fallbackAnchorMillis: anchor,
+            calendar: calendar
+        )
+        let snoozeAtMillis = anchor + 60_000
+        let schedule = WarmAlarmScheduleData.from(
+            wire: wire,
+            fallbackAnchorMillis: anchor,
+            calendar: calendar
+        ).withActiveSnooze(
+            untilMillis: snoozeAtMillis,
+            fallbackAnchorMillis: snoozeAtMillis
+        )
+        let snoozeRequests = WarmAlarmPlugin.makeSnoozeRequests(
+            for: schedule,
+            fireAtMillis: snoozeAtMillis,
+            nowMillis: anchor,
+            content: UNMutableNotificationContent()
+        )
+        let pendingRequests = [recurringRequests[0], snoozeRequests[0], snoozeRequests[1]]
+
+        let requests = WarmAlarmPlugin.makeRecoveryRequests(
+            for: schedule,
+            nowMillis: anchor,
+            pendingIdentifiers: Set(pendingRequests.map(\.identifier)),
+            pendingRequests: pendingRequests,
+            content: UNMutableNotificationContent(),
+            calendar: calendar
+        )
+
+        let snoozeToken = occurrenceMetadata(from: snoozeRequests[0].content)?["token"] as? String
+        XCTAssertFalse(requests.isEmpty)
+        XCTAssertTrue(requests.allSatisfy {
+            occurrenceMetadata(from: $0.content)?["token"] as? String == snoozeToken
+        })
+    }
+
+    func testRecoveryReusesInitialTokenWhenNoRequestsRemainPending() {
+        let calendar = utcCalendar()
+        let anchor = Int64(1_900_000_000_000)
+        let wire = makeWireSchedule(scheduledAtMillis: anchor)
+        let initialRequests = WarmAlarmPlugin.makeRequests(
+            for: wire,
+            content: UNMutableNotificationContent(),
+            fallbackAnchorMillis: anchor,
+            calendar: calendar
+        )
+        let schedule = WarmAlarmScheduleData.from(
+            wire: wire,
+            fallbackAnchorMillis: anchor,
+            calendar: calendar
+        )
+
+        let recoveredRequests = WarmAlarmPlugin.makeRecoveryRequests(
+            for: schedule,
+            nowMillis: anchor - 60_000,
+            pendingIdentifiers: [],
+            content: UNMutableNotificationContent(),
+            calendar: calendar
+        )
+
+        let initialToken = occurrenceMetadata(from: initialRequests[0].content)?["token"] as? String
+        XCTAssertFalse(recoveredRequests.isEmpty)
+        XCTAssertTrue(recoveredRequests.allSatisfy {
+            occurrenceMetadata(from: $0.content)?["token"] as? String == initialToken
+        })
+    }
+
     func testForegroundOccurrenceTrackerScopesSuppressionToResettableOccurrence() {
         let tracker = WarmAlarmForegroundOccurrenceTracker()
 
-        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "first"))
-        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "first"))
+        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "series#1000"))
+        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "series#1000"))
 
         tracker.clear(alarmId: 42)
 
-        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "first"))
-        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "first"))
+        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "series#1000"))
+        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "series#1000"))
     }
 
     func testDelayedPrimaryDoesNotRepeatFallbackAlreadyHandledForSameOccurrence() {
         let tracker = WarmAlarmForegroundOccurrenceTracker()
 
-        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "first"))
-        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "first"))
+        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "series#1000"))
+        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "series#1000"))
+    }
+
+    func testOlderOccurrenceRemainsSuppressedAfterNewerOccurrence() {
+        let tracker = WarmAlarmForegroundOccurrenceTracker()
+
+        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "series#1000"))
+        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "series#2000"))
+        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "series#1000"))
+        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "series#2000"))
+    }
+
+    func testOldestOccurrenceRemainsSuppressedAfterMoreThanPendingLimitOccurrences() {
+        let tracker = WarmAlarmForegroundOccurrenceTracker()
+
+        for occurrence in 1...65 {
+            XCTAssertTrue(tracker.shouldHandleAndMark(
+                alarmId: 42,
+                occurrenceToken: "series#\(occurrence)"
+            ))
+        }
+
+        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "series#1"))
     }
 
     func testStopSuppressesLateFallbackUntilNextPrimaryOccurrence() {
         let tracker = WarmAlarmForegroundOccurrenceTracker()
 
-        XCTAssertTrue(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "first", perform: {}))
-        tracker.stop(alarmId: 42, occurrenceToken: "first", perform: {})
+        XCTAssertTrue(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "series#1000", perform: {}))
+        tracker.stop(alarmId: 42, occurrenceToken: "series#1000", perform: {})
 
-        XCTAssertFalse(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "first", perform: {}))
-        XCTAssertTrue(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "second", perform: {}))
-        XCTAssertFalse(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "second", perform: {}))
+        XCTAssertFalse(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "series#1000", perform: {}))
+        XCTAssertTrue(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "series#2000", perform: {}))
+        XCTAssertFalse(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "series#2000", perform: {}))
     }
 
     func testStopOnFallbackAbsorbsDelayedPrimaryBeforeNextOccurrence() {
         let tracker = WarmAlarmForegroundOccurrenceTracker()
 
-        tracker.stop(alarmId: 42, occurrenceToken: "first", perform: {})
+        tracker.stop(alarmId: 42, occurrenceToken: "series#1000", perform: {})
 
-        XCTAssertFalse(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "first", perform: {}))
-        XCTAssertTrue(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "second", perform: {}))
+        XCTAssertFalse(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "series#1000", perform: {}))
+        XCTAssertTrue(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "series#2000", perform: {}))
     }
 
     func testStoppedOccurrenceDoesNotSuppressFallbackFromNextOccurrence() {
         let tracker = WarmAlarmForegroundOccurrenceTracker()
 
-        tracker.stop(alarmId: 42, occurrenceToken: "first", perform: {})
+        tracker.stop(alarmId: 42, occurrenceToken: "series#1000", perform: {})
 
         XCTAssertTrue(tracker.handleIfAllowed(
             alarmId: 42,
-            occurrenceToken: "second",
+            occurrenceToken: "series#2000",
             perform: {}
         ))
     }
@@ -1651,7 +1800,7 @@ final class WarmAlarmRequestTests: XCTestCase {
         var handledCount = 0
 
         DispatchQueue.concurrentPerform(iterations: 100) { _ in
-            guard tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "first") else { return }
+            guard tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "series#1000") else { return }
             resultLock.lock()
             handledCount += 1
             resultLock.unlock()
@@ -1669,7 +1818,7 @@ final class WarmAlarmRequestTests: XCTestCase {
         let stopCompleted = DispatchSemaphore(value: 0)
 
         DispatchQueue.global().async {
-            _ = tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "first") {
+            _ = tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "series#1000") {
                 fallbackEntered.signal()
                 releaseFallback.wait()
             }
@@ -1679,7 +1828,7 @@ final class WarmAlarmRequestTests: XCTestCase {
 
         DispatchQueue.global().async {
             stopStarted.signal()
-            tracker.stop(alarmId: 42, occurrenceToken: "first", perform: {})
+            tracker.stop(alarmId: 42, occurrenceToken: "series#1000", perform: {})
             stopCompleted.signal()
         }
         XCTAssertEqual(stopStarted.wait(timeout: .now() + 1), .success)

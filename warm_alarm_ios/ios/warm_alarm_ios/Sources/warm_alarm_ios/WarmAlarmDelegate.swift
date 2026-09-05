@@ -6,7 +6,7 @@ import Flutter
 
 final class WarmAlarmForegroundOccurrenceTracker: @unchecked Sendable {
     private let lock = NSLock()
-    private var handledOccurrenceTokensByAlarmId = [Int64: String]()
+    private var latestHandledOccurrenceMillisByAlarmId = [Int64: Int64]()
 
     func shouldHandleAndMark(alarmId: Int64, occurrenceToken: String) -> Bool {
         handleIfAllowed(
@@ -23,17 +23,14 @@ final class WarmAlarmForegroundOccurrenceTracker: @unchecked Sendable {
     ) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        if handledOccurrenceTokensByAlarmId[alarmId] == occurrenceToken {
-            return false
-        }
-        handledOccurrenceTokensByAlarmId[alarmId] = occurrenceToken
+        guard remember(alarmId: alarmId, occurrenceToken: occurrenceToken) else { return false }
         action()
         return true
     }
 
     func clear(alarmId: Int64) {
         lock.lock()
-        handledOccurrenceTokensByAlarmId.removeValue(forKey: alarmId)
+        latestHandledOccurrenceMillisByAlarmId.removeValue(forKey: alarmId)
         lock.unlock()
     }
 
@@ -44,13 +41,22 @@ final class WarmAlarmForegroundOccurrenceTracker: @unchecked Sendable {
     func stop(alarmId: Int64, occurrenceToken: String, perform action: () -> Void) {
         lock.lock()
         defer { lock.unlock() }
-        handledOccurrenceTokensByAlarmId[alarmId] = occurrenceToken
+        _ = remember(alarmId: alarmId, occurrenceToken: occurrenceToken)
         action()
+    }
+
+    private func remember(alarmId: Int64, occurrenceToken: String) -> Bool {
+        guard let occurrenceMillis = Int64(occurrenceToken.split(separator: "#").last ?? ""),
+              latestHandledOccurrenceMillisByAlarmId[alarmId].map({ occurrenceMillis > $0 }) ?? true else {
+            return false
+        }
+        latestHandledOccurrenceMillisByAlarmId[alarmId] = occurrenceMillis
+        return true
     }
 
     func clearAll() {
         lock.lock()
-        handledOccurrenceTokensByAlarmId.removeAll()
+        latestHandledOccurrenceMillisByAlarmId.removeAll()
         lock.unlock()
     }
 }
@@ -88,17 +94,18 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             completionHandler([.alert, .sound])
             return
         }
+        let schedule = WarmAlarmStore.shared.load(id: alarmId)
         let occurrenceToken = WarmAlarmPlugin.foregroundOccurrenceToken(
             content: notification.request.content,
             identifier: notification.request.identifier,
             alarmId: alarmId,
-            deliveredAtMillis: Int64(notification.date.timeIntervalSince1970 * 1_000)
+            deliveredAtMillis: Int64(notification.date.timeIntervalSince1970 * 1_000),
+            schedule: schedule
         )
         guard foregroundOccurrenceTracker.handleIfAllowed(
             alarmId: alarmId,
             occurrenceToken: occurrenceToken,
             perform: {
-            let schedule = WarmAlarmStore.shared.load(id: alarmId)
             startAudio(alarmId: alarmId, for: schedule)
             emitEvent(WarmAlarmEventWire(
                 alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis(), payload: schedule?.payload))
@@ -122,11 +129,13 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         }
 
         let deliveredIdentifier = response.notification.request.identifier
+        let schedule = WarmAlarmStore.shared.load(id: alarmId)
         let occurrenceToken = WarmAlarmPlugin.foregroundOccurrenceToken(
             content: response.notification.request.content,
             identifier: deliveredIdentifier,
             alarmId: alarmId,
-            deliveredAtMillis: Int64(response.notification.date.timeIntervalSince1970 * 1_000)
+            deliveredAtMillis: Int64(response.notification.date.timeIntervalSince1970 * 1_000),
+            schedule: schedule
         )
         switch response.actionIdentifier {
         case Self.stopActionIdentifier:
@@ -158,7 +167,6 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
                 alarmId: alarmId,
                 occurrenceToken: occurrenceToken,
                 perform: {
-                    let schedule = WarmAlarmStore.shared.load(id: alarmId)
                     startAudio(alarmId: alarmId, for: schedule)
                     emitEvent(WarmAlarmEventWire(
                         alarmId: alarmId,

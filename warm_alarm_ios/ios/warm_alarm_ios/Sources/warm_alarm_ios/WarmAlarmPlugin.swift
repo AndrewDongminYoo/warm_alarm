@@ -695,25 +695,14 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         let primaryAtMillis = fallbackAnchorMillis
             ?? schedule.activeSnoozeUntilMillis
             ?? schedule.scheduledAtMillis
-        let chainMetadata: WarmAlarmOccurrenceMetadata?
-        if matchingPendingRequests.isEmpty {
-            chainMetadata = WarmAlarmOccurrenceMetadata(
-                token: UUID().uuidString,
-                primaryAtMillis: primaryAtMillis,
-                calendar: calendar
-            )
-        } else if let existingToken = occurrenceSeriesToken(
-            for: schedule.id,
-            in: matchingPendingRequests
-        ) {
-            chainMetadata = WarmAlarmOccurrenceMetadata(
-                token: existingToken,
-                primaryAtMillis: primaryAtMillis,
-                calendar: calendar
-            )
-        } else {
-            chainMetadata = nil
-        }
+        let chainMetadata = WarmAlarmOccurrenceMetadata(
+            token: pendingOccurrenceSeriesToken(
+                for: schedule.id,
+                in: matchingPendingRequests
+            ) ?? occurrenceSeriesToken(for: schedule.id),
+            primaryAtMillis: primaryAtMillis,
+            calendar: calendar
+        )
         var expectedIdentifiers: [String]
         if let weekdays = schedule.recurrenceWeekdays, !weekdays.isEmpty {
             expectedIdentifiers = weekdays.map { "\(schedule.id)#\($0)" }
@@ -984,7 +973,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     ) -> [UNNotificationRequest] {
         let fireDate = Date(timeIntervalSince1970: Double(schedule.scheduledAtMillis) / 1000.0)
         let occurrenceMetadata = WarmAlarmOccurrenceMetadata(
-            token: UUID().uuidString,
+            token: occurrenceSeriesToken(for: schedule.id),
             primaryAtMillis: fallbackAnchorMillis,
             calendar: calendar
         )
@@ -1035,7 +1024,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     ) -> [UNNotificationRequest] {
         let delay = max(1.0, Double(fireAtMillis - nowMillis) / 1000.0)
         let occurrenceMetadata = WarmAlarmOccurrenceMetadata(
-            token: UUID().uuidString,
+            token: occurrenceSeriesToken(for: schedule.id),
             primaryAtMillis: fireAtMillis,
             calendar: .current
         )
@@ -1257,7 +1246,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         return sharedMetadata
     }
 
-    private static func occurrenceSeriesToken(
+    private static func pendingOccurrenceSeriesToken(
         for alarmId: Int64,
         in requests: [UNNotificationRequest]
     ) -> String? {
@@ -1280,6 +1269,10 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         return sharedToken
     }
 
+    private static func occurrenceSeriesToken(for alarmId: Int64) -> String {
+        "warm-alarm-v1:\(alarmId)"
+    }
+
     private static func contentWithOccurrenceMetadata(
         _ content: UNNotificationContent,
         metadata: WarmAlarmOccurrenceMetadata?,
@@ -1300,7 +1293,8 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         identifier: String,
         alarmId: Int64,
         deliveredAtMillis: Int64,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        schedule: WarmAlarmScheduleData? = nil
     ) -> String {
         if let content,
            let metadata = occurrenceMetadata(from: content),
@@ -1322,6 +1316,32 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 return metadata.scopedToken(for: occurrenceDate)
             }
             return metadata.scopedToken(for: metadataPrimaryDate)
+        }
+        if let schedule {
+            let seriesToken = occurrenceSeriesToken(for: alarmId)
+            if let isoWeekday = recurringWeekday(for: identifier, alarmId: alarmId),
+               let hour = schedule.recurrenceHour,
+               let minute = schedule.recurrenceMinute {
+                let deliveredDate = Date(timeIntervalSince1970: Double(deliveredAtMillis) / 1_000)
+                var components = DateComponents()
+                components.weekday = WarmAlarmRecurrence.appleWeekday(fromIso: isoWeekday)
+                components.hour = hour
+                components.minute = minute
+                components.second = 0
+                if let occurrenceDate = calendar.nextDate(
+                    after: deliveredDate.addingTimeInterval(0.001),
+                    matching: components,
+                    matchingPolicy: .nextTime,
+                    repeatedTimePolicy: .first,
+                    direction: .backward
+                ) {
+                    return "\(seriesToken)#\(Int64(occurrenceDate.timeIntervalSince1970 * 1_000))"
+                }
+            }
+            let primaryAtMillis = schedule.fallbackAnchorMillis
+                ?? schedule.activeSnoozeUntilMillis
+                ?? schedule.scheduledAtMillis
+            return "\(seriesToken)#\(primaryAtMillis)"
         }
         guard let index = fallbackIndex(for: identifier, alarmId: alarmId) else {
             return String(deliveredAtMillis)
