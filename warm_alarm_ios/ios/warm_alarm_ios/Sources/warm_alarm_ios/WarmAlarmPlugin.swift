@@ -301,7 +301,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 }
                 self.recoverAlarms(
                     recoverableAlarms,
-                    pendingIdentifiers: Set(pending.map { $0.identifier }),
+                    pendingRequests: pending,
                     nowMillis: nowMillis,
                     center: center
                 ) { result in
@@ -313,11 +313,12 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
 
     private func recoverAlarms(
         _ alarms: [WarmAlarmScheduleData],
-        pendingIdentifiers: Set<String>,
+        pendingRequests: [UNNotificationRequest],
         nowMillis: Int64,
         center: UNUserNotificationCenter,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
+        let pendingIdentifiers = Set(pendingRequests.map(\.identifier))
         let requestGroups = alarms.map { schedule in
             let content = delegate.makeContent(from: schedule)
             return (
@@ -327,6 +328,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                     for: schedule,
                     nowMillis: nowMillis,
                     pendingIdentifiers: pendingIdentifiers,
+                    pendingRequests: pendingRequests,
                     content: content
                 )
             )
@@ -364,6 +366,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                         for: candidate.schedule,
                         nowMillis: registrationNowMillis,
                         pendingIdentifiers: pendingIdentifiers,
+                        pendingRequests: pendingRequests,
                         content: candidate.content
                     )
                 }
@@ -498,9 +501,11 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         for schedule: WarmAlarmScheduleData,
         nowMillis: Int64,
         pendingIdentifiers: Set<String>,
+        pendingRequests: [UNNotificationRequest] = [],
         content: UNNotificationContent,
         calendar: Calendar = .current
     ) -> [UNNotificationRequest] {
+        _ = pendingRequests
         let usesRelativeFallbackTrigger = hasActiveSnoozeFallbacks(
             for: schedule,
             nowMillis: nowMillis
@@ -982,10 +987,12 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     }
 
     static func foregroundOccurrenceToken(
+        content: UNNotificationContent? = nil,
         identifier: String,
         alarmId: Int64,
         deliveredAtMillis: Int64
     ) -> String {
+        _ = content
         guard let index = fallbackIndex(for: identifier, alarmId: alarmId) else {
             return String(deliveredAtMillis)
         }

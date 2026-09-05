@@ -98,6 +98,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         }
         let isFallback = WarmAlarmPlugin.isFallbackIdentifier(notification.request.identifier, for: alarmId)
         let occurrenceToken = WarmAlarmPlugin.foregroundOccurrenceToken(
+            content: notification.request.content,
             identifier: notification.request.identifier,
             alarmId: alarmId,
             deliveredAtMillis: Int64(notification.date.timeIntervalSince1970 * 1_000)
@@ -132,6 +133,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
         let deliveredIdentifier = response.notification.request.identifier
         let occurrenceToken = WarmAlarmPlugin.foregroundOccurrenceToken(
+            content: response.notification.request.content,
             identifier: deliveredIdentifier,
             alarmId: alarmId,
             deliveredAtMillis: Int64(response.notification.date.timeIntervalSince1970 * 1_000)
