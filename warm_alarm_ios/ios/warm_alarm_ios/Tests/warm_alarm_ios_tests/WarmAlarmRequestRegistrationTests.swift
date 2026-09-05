@@ -2341,6 +2341,40 @@ final class WarmAlarmRequestTests: XCTestCase {
         )
     }
 
+    func testRecoveredOneShotActionBoundFollowsNotificationAcrossSubsequentTimeZoneChange() {
+        var schedulingCalendar = Calendar(identifier: .gregorian)
+        schedulingCalendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        var firstRecoveryCalendar = Calendar(identifier: .gregorian)
+        firstRecoveryCalendar.timeZone = TimeZone(identifier: "America/New_York")!
+        var deliveryCalendar = Calendar(identifier: .gregorian)
+        deliveryCalendar.timeZone = TimeZone(identifier: "Europe/London")!
+        let scheduledAtMillis = millis(2030, 4, 1, 7, 0, calendar: schedulingCalendar)
+        let recoveredAtMillis = millis(2030, 4, 1, 7, 0, calendar: firstRecoveryCalendar)
+        let deliveredOccurrenceMillis = millis(2030, 4, 1, 7, 0, calendar: deliveryCalendar)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: scheduledAtMillis),
+            fallbackAnchorMillis: scheduledAtMillis,
+            calendar: schedulingCalendar
+        ).withOneShotAnchor(recoveredAtMillis)
+        let recoveredRequest = WarmAlarmPlugin.makeRecoveryRequests(
+            for: schedule,
+            nowMillis: recoveredAtMillis - 60_000,
+            pendingIdentifiers: [],
+            content: UNMutableNotificationContent(),
+            calendar: firstRecoveryCalendar
+        )[0]
+
+        XCTAssertEqual(
+            WarmAlarmPlugin.actionOccurrenceLowerBound(
+                for: schedule,
+                content: recoveredRequest.content,
+                nowMillis: deliveredOccurrenceMillis,
+                calendar: deliveryCalendar
+            ),
+            deliveredOccurrenceMillis
+        )
+    }
+
     func testStoppedOccurrenceDoesNotSuppressFallbackFromNextOccurrence() {
         let tracker = WarmAlarmForegroundOccurrenceTracker()
 
