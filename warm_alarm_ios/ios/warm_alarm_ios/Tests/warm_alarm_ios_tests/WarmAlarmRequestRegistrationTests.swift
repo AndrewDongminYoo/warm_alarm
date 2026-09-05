@@ -111,6 +111,29 @@ final class WarmAlarmRequestRegistrationTests: XCTestCase {
 }
 
 final class WarmAlarmSnoozeRegistrationTests: XCTestCase {
+    func testCompletesOnMainThreadWhenRegistrationFinishesInBackground() {
+        let completed = expectation(description: "snooze registration completes")
+
+        WarmAlarmSnoozeRegistration.perform(
+            persistIntent: {},
+            register: { completion in
+                DispatchQueue.global().async {
+                    completion(nil)
+                }
+            },
+            rollback: {
+                XCTFail("A successful registration must not roll back the intent")
+            },
+            completion: { error in
+                XCTAssertNil(error)
+                XCTAssertTrue(Thread.isMainThread)
+                completed.fulfill()
+            }
+        )
+
+        wait(for: [completed], timeout: 1)
+    }
+
     func testPersistsIntentBeforeRegistrationStarts() {
         var steps = [String]()
 
@@ -134,6 +157,7 @@ final class WarmAlarmSnoozeRegistrationTests: XCTestCase {
 
     func testRollsBackIntentWhenRegistrationReportsFailure() {
         let expectedError = NSError(domain: "WarmAlarmTests", code: 4)
+        let completed = expectation(description: "snooze registration completes")
         var steps = [String]()
 
         WarmAlarmSnoozeRegistration.perform(
@@ -150,9 +174,11 @@ final class WarmAlarmSnoozeRegistrationTests: XCTestCase {
             completion: { error in
                 XCTAssertEqual((error as NSError?)?.domain, expectedError.domain)
                 steps.append("completion")
+                completed.fulfill()
             }
         )
 
+        wait(for: [completed], timeout: 1)
         XCTAssertEqual(steps, ["persist", "register", "rollback", "completion"])
     }
 }

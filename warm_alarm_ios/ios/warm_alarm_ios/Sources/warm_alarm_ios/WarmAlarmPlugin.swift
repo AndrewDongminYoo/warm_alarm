@@ -67,10 +67,10 @@ enum WarmAlarmSnoozeRegistration {
         register { error in
             if let error {
                 rollback()
-                completion(error)
-                return
             }
-            completion(nil)
+            WarmAlarmPlatformReply.performOnMain {
+                completion(error)
+            }
         }
     }
 }
