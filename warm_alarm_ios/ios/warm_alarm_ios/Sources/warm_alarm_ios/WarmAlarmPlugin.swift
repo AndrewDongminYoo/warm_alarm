@@ -1627,8 +1627,10 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         completion: @escaping (Result<WarmAlarmScheduleResultWire, Error>) -> Void,
         finish: @escaping () -> Void
     ) {
-        emitFailure(alarmId, error.localizedDescription)
-        WarmAlarmPlatformReply.complete(.failure(error), completion: completion, finish: finish)
+        WarmAlarmPlatformReply.performOnMain {
+            emitFailure(alarmId, error.localizedDescription)
+            WarmAlarmPlatformReply.complete(.failure(error), completion: completion, finish: finish)
+        }
     }
 
     func scheduleAlarm(
