@@ -1956,6 +1956,40 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertFalse(didRunAction)
     }
 
+    func testRecurringActionBoundIgnoresLaterActiveSnoozeChain() {
+        let calendar = utcCalendar()
+        let firstOccurrenceMillis = millis(2030, 1, 7, 7, 0, calendar: calendar)
+        let interveningOccurrenceMillis = millis(2030, 1, 14, 7, 0, calendar: calendar)
+        let snoozeOccurrenceMillis = millis(2030, 1, 21, 7, 30, calendar: calendar)
+        let wire = makeWireSchedule(
+            scheduledAtMillis: firstOccurrenceMillis,
+            recurrenceWeekdays: [1]
+        )
+        let schedule = WarmAlarmScheduleData.from(
+            wire: wire,
+            fallbackAnchorMillis: firstOccurrenceMillis,
+            calendar: calendar
+        ).withActiveSnooze(
+            untilMillis: snoozeOccurrenceMillis,
+            fallbackAnchorMillis: snoozeOccurrenceMillis
+        )
+        let recurringContent = WarmAlarmPlugin.makeRequests(
+            for: wire,
+            content: UNMutableNotificationContent(),
+            fallbackAnchorMillis: firstOccurrenceMillis,
+            calendar: calendar
+        )[0].content
+
+        let minimumOccurrenceMillis = WarmAlarmPlugin.actionOccurrenceLowerBound(
+            for: schedule,
+            content: recurringContent,
+            nowMillis: interveningOccurrenceMillis + 1_000,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(minimumOccurrenceMillis, interveningOccurrenceMillis)
+    }
+
     func testRejectedReplacedOccurrenceStillStopsMatchingPlayingAudio() {
         let alarmId = Int64(4_242_424_242)
         let oldOccurrenceMillis = Int64(1_000)

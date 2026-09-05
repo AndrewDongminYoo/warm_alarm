@@ -1447,12 +1447,21 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
            ) {
             return notificationOccurrenceMillis
         }
-        let fallbackAnchorMillis = recoveryFallbackAnchorMillis(
+        let recurrenceOccurrenceMillis = latestRecurrenceOccurrenceMillis(
             for: schedule,
             nowMillis: nowMillis,
             calendar: calendar
         )
-        let recurrenceOccurrenceMillis = latestRecurrenceOccurrenceMillis(
+        if let recurrenceOccurrenceMillis,
+           let content,
+           let metadata = occurrenceMetadata(from: content),
+           metadata.floating,
+           metadata.token == occurrenceSeriesToken(for: schedule.id),
+           metadata.hour == schedule.recurrenceHour,
+           metadata.minute == schedule.recurrenceMinute {
+            return recurrenceOccurrenceMillis
+        }
+        let fallbackAnchorMillis = recoveryFallbackAnchorMillis(
             for: schedule,
             nowMillis: nowMillis,
             calendar: calendar
