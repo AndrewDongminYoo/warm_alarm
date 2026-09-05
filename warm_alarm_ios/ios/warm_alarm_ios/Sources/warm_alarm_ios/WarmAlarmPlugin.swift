@@ -1478,7 +1478,8 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         guard schedule.recurrenceWeekdays?.isEmpty != false,
               let metadata = occurrenceMetadata(from: content),
               metadata.floating,
-              metadata.primaryEpochMillis == (schedule.fallbackAnchorMillis ?? schedule.scheduledAtMillis),
+              metadata.token == occurrenceSeriesToken(for: schedule.id),
+              metadata.primaryEpochMillis == schedule.oneShotOccurrenceEpochMillis,
               let occurrenceDate = metadata.primaryDate(in: calendar) else {
             return nil
         }

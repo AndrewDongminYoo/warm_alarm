@@ -1944,6 +1944,13 @@ final class WarmAlarmRequestTests: XCTestCase {
         let alarmId = Int64(4_242_424_242)
         let oldOccurrenceMillis = Int64(1_000)
         let replacementOccurrenceMillis = Int64(2_000)
+        let oldWire = makeWireSchedule(id: alarmId, scheduledAtMillis: oldOccurrenceMillis)
+        let oldContent = WarmAlarmPlugin.makeRequests(
+            for: oldWire,
+            content: UNMutableNotificationContent(),
+            fallbackAnchorMillis: oldOccurrenceMillis,
+            calendar: utcCalendar()
+        )[0].content
         let replacement = WarmAlarmScheduleData.from(
             wire: makeWireSchedule(
                 id: alarmId,
@@ -1968,9 +1975,59 @@ final class WarmAlarmRequestTests: XCTestCase {
 
         delegate.handleStop(
             alarmId: alarmId,
-            occurrenceToken: "series#\(oldOccurrenceMillis)"
+            occurrenceToken: "series#\(oldOccurrenceMillis)",
+            content: oldContent
         )
 
+        XCTAssertNil(delegate.currentlyPlayingAlarmId)
+        XCTAssertNil(delegate.currentlyPlayingOccurrenceToken)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.fallbackAnchorMillis, replacementOccurrenceMillis)
+        XCTAssertTrue(eventsApi.events.isEmpty)
+    }
+
+    func testRejectedReplacedOccurrenceSnoozeStopsMatchingPlayingAudio() {
+        let alarmId = Int64(4_242_424_243)
+        let oldOccurrenceMillis = Int64(1_000)
+        let replacementOccurrenceMillis = Int64(2_000)
+        let oldWire = makeWireSchedule(id: alarmId, scheduledAtMillis: oldOccurrenceMillis)
+        let oldContent = WarmAlarmPlugin.makeRequests(
+            for: oldWire,
+            content: UNMutableNotificationContent(),
+            fallbackAnchorMillis: oldOccurrenceMillis,
+            calendar: utcCalendar()
+        )[0].content
+        let replacement = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(
+                id: alarmId,
+                scheduledAtMillis: replacementOccurrenceMillis
+            ),
+            fallbackAnchorMillis: replacementOccurrenceMillis,
+            calendar: utcCalendar()
+        )
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(replacement)
+        let eventsApi = RecordingWarmAlarmEventsApi()
+        let delegate = WarmAlarmDelegate(
+            eventsApi: eventsApi,
+            notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.replaced_snooze_occurrence"),
+            currentlyPlayingAlarmId: alarmId,
+            currentlyPlayingOccurrenceToken: "series#\(oldOccurrenceMillis)"
+        )
+        defer {
+            delegate.stopIfPlaying(alarmId: alarmId)
+            WarmAlarmStore.shared.remove(id: alarmId)
+        }
+        var didComplete = false
+
+        delegate.handleSnooze(
+            alarmId: alarmId,
+            occurrenceToken: "series#\(oldOccurrenceMillis)",
+            content: oldContent
+        ) {
+            didComplete = true
+        }
+
+        XCTAssertTrue(didComplete)
         XCTAssertNil(delegate.currentlyPlayingAlarmId)
         XCTAssertNil(delegate.currentlyPlayingOccurrenceToken)
         XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.fallbackAnchorMillis, replacementOccurrenceMillis)
@@ -2014,6 +2071,49 @@ final class WarmAlarmRequestTests: XCTestCase {
                 calendar: deliveryCalendar
             ),
             deliveredOccurrenceMillis
+        )
+    }
+
+    func testFloatingOneShotActionBoundFollowsNotificationAcrossSubsequentTimeZoneChanges() {
+        var schedulingCalendar = Calendar(identifier: .gregorian)
+        schedulingCalendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        var firstDeliveryCalendar = Calendar(identifier: .gregorian)
+        firstDeliveryCalendar.timeZone = TimeZone(identifier: "America/New_York")!
+        var secondDeliveryCalendar = Calendar(identifier: .gregorian)
+        secondDeliveryCalendar.timeZone = TimeZone(identifier: "Europe/London")!
+        let scheduledAtMillis = millis(2030, 4, 1, 7, 0, calendar: schedulingCalendar)
+        let firstDeliveredOccurrenceMillis = millis(2030, 4, 1, 7, 0, calendar: firstDeliveryCalendar)
+        let secondDeliveredOccurrenceMillis = millis(2030, 4, 1, 7, 0, calendar: secondDeliveryCalendar)
+        let wire = makeWireSchedule(scheduledAtMillis: scheduledAtMillis)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: wire,
+            fallbackAnchorMillis: scheduledAtMillis,
+            calendar: schedulingCalendar
+        ).withOneShotAnchor(firstDeliveredOccurrenceMillis)
+        let primaryRequest = WarmAlarmPlugin.makeRequests(
+            for: wire,
+            content: UNMutableNotificationContent(),
+            fallbackAnchorMillis: scheduledAtMillis,
+            calendar: schedulingCalendar
+        )[0]
+        let occurrenceToken = WarmAlarmPlugin.foregroundOccurrenceToken(
+            content: primaryRequest.content,
+            identifier: primaryRequest.identifier,
+            alarmId: 42,
+            deliveredAtMillis: secondDeliveredOccurrenceMillis,
+            calendar: secondDeliveryCalendar,
+            schedule: schedule
+        )
+
+        XCTAssertEqual(occurrenceToken, "warm-alarm-v1:42#\(secondDeliveredOccurrenceMillis)")
+        XCTAssertEqual(
+            WarmAlarmPlugin.actionOccurrenceLowerBound(
+                for: schedule,
+                content: primaryRequest.content,
+                nowMillis: secondDeliveredOccurrenceMillis,
+                calendar: secondDeliveryCalendar
+            ),
+            secondDeliveredOccurrenceMillis
         )
     }
 

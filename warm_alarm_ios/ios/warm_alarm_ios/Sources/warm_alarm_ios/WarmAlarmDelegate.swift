@@ -345,6 +345,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             minimumOccurrenceMillis: actionLowerBound,
             perform: stopAudio
         ) else {
+            stopAudioIfPlaying(alarmId: alarmId, occurrenceToken: occurrenceToken)
             completion()
             return
         }
