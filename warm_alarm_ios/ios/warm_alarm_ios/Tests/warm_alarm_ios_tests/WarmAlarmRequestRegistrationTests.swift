@@ -1042,6 +1042,39 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertEqual(saved.first?.recurrenceMinute, 30)
     }
 
+    func testMigrationPreservesOneShotFallbackWallTimeFromPendingPrimary() {
+        var schedulingCalendar = Calendar(identifier: .gregorian)
+        schedulingCalendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        let scheduledAtMillis = millis(2030, 3, 11, 7, 0, calendar: schedulingCalendar)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: scheduledAtMillis),
+            fallbackAnchorMillis: scheduledAtMillis
+        )
+        let components = schedulingCalendar.dateComponents(
+            [.year, .month, .day, .hour, .minute, .second],
+            from: Date(timeIntervalSince1970: Double(scheduledAtMillis) / 1_000)
+        )
+        let pendingRequest = UNNotificationRequest(
+            identifier: "42",
+            content: UNMutableNotificationContent(),
+            trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        )
+        var recoveryCalendar = Calendar(identifier: .gregorian)
+        recoveryCalendar.timeZone = TimeZone(identifier: "America/New_York")!
+        var saved = [WarmAlarmScheduleData]()
+
+        let migrated = WarmAlarmPlugin.migrateOneShotFallbackAnchors(
+            [schedule],
+            pendingRequests: [pendingRequest],
+            calendar: recoveryCalendar,
+            save: { saved.append($0) }
+        )
+
+        let expectedAnchor = millis(2030, 3, 11, 7, 0, calendar: recoveryCalendar)
+        XCTAssertEqual(migrated.first?.fallbackAnchorMillis, expectedAnchor)
+        XCTAssertEqual(saved.first?.fallbackAnchorMillis, expectedAnchor)
+    }
+
     func testForegroundOccurrenceTrackerScopesSuppressionToResettableOccurrence() {
         let tracker = WarmAlarmForegroundOccurrenceTracker()
 

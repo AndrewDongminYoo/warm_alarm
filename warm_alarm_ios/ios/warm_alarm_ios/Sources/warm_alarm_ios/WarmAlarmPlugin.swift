@@ -432,11 +432,34 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
 
     static func migrateOneShotFallbackAnchors(
         _ schedules: [WarmAlarmScheduleData],
-        pendingRequests _: [UNNotificationRequest],
-        calendar _: Calendar = .current,
-        save _: (WarmAlarmScheduleData) -> Void
+        pendingRequests: [UNNotificationRequest],
+        calendar: Calendar = .current,
+        save: (WarmAlarmScheduleData) -> Void
     ) -> [WarmAlarmScheduleData] {
-        schedules
+        schedules.map { schedule in
+            guard schedule.recurrenceWeekdays?.isEmpty ?? true,
+                  schedule.activeSnoozeUntilMillis == nil else {
+                return schedule
+            }
+            let primaryIdentifier = String(schedule.id)
+            guard let anchorMillis = pendingRequests.lazy.compactMap({ request -> Int64? in
+                let fallbackIndex = fallbackIndex(for: request.identifier, alarmId: schedule.id)
+                guard request.identifier == primaryIdentifier || fallbackIndex != nil,
+                      let trigger = request.trigger as? UNCalendarNotificationTrigger,
+                      !trigger.repeats,
+                      let fireDate = calendar.date(from: trigger.dateComponents) else {
+                    return nil
+                }
+                let fireAtMillis = Int64(fireDate.timeIntervalSince1970 * 1_000)
+                return fireAtMillis - Int64(fallbackIndex ?? 0) * fallbackIntervalMillis
+            }).first,
+                  anchorMillis != schedule.fallbackAnchorMillis else {
+                return schedule
+            }
+            let migrated = schedule.withFallbackAnchor(anchorMillis)
+            save(migrated)
+            return migrated
+        }
     }
 
     static func sortedRecoverableSchedules(
