@@ -341,6 +341,37 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertEqual(metadata.compactMap { $0["ordinal"] as? Int }, Array(0...6))
     }
 
+    func testSnoozeOccurrenceMetadataKeepsFixedEpochAcrossTimeZoneChanges() {
+        let fireAtMillis = Int64(1_900_000_000_000)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: fireAtMillis),
+            fallbackAnchorMillis: nil
+        )
+        let requests = WarmAlarmPlugin.makeSnoozeRequests(
+            for: schedule,
+            fireAtMillis: fireAtMillis,
+            nowMillis: fireAtMillis - 60_000,
+            content: UNMutableNotificationContent()
+        )
+        var deliveryCalendar = Calendar(identifier: .gregorian)
+        deliveryCalendar.timeZone = TimeZone(secondsFromGMT: -7 * 60 * 60)!
+
+        XCTAssertTrue(requests.allSatisfy {
+            occurrenceMetadata(from: $0.content)?["floating"] as? Bool == false
+        })
+        XCTAssertEqual(
+            WarmAlarmPlugin.foregroundOccurrenceToken(
+                content: requests[0].content,
+                identifier: requests[0].identifier,
+                alarmId: 42,
+                deliveredAtMillis: fireAtMillis,
+                calendar: deliveryCalendar,
+                schedule: schedule
+            ),
+            "warm-alarm-v1:42#\(fireAtMillis)"
+        )
+    }
+
     func testBuildsFiniteFallbackChainAlongsideRecurringRequests() {
         let calendar = utcCalendar()
         let schedule = WarmAlarmScheduleWire(
@@ -1552,12 +1583,6 @@ final class WarmAlarmRequestTests: XCTestCase {
             scheduledAtMillis: anchor,
             recurrenceWeekdays: [1]
         )
-        let recurringRequests = WarmAlarmPlugin.makeRequests(
-            for: wire,
-            content: UNMutableNotificationContent(),
-            fallbackAnchorMillis: anchor,
-            calendar: calendar
-        )
         let snoozeAtMillis = anchor + 60_000
         let schedule = WarmAlarmScheduleData.from(
             wire: wire,
@@ -1573,7 +1598,7 @@ final class WarmAlarmRequestTests: XCTestCase {
             nowMillis: anchor,
             content: UNMutableNotificationContent()
         )
-        let pendingRequests = [recurringRequests[0], snoozeRequests[0], snoozeRequests[1]]
+        let pendingRequests = [snoozeRequests[0], snoozeRequests[1]]
 
         let requests = WarmAlarmPlugin.makeRecoveryRequests(
             for: schedule,
@@ -1589,6 +1614,45 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertTrue(requests.allSatisfy {
             occurrenceMetadata(from: $0.content)?["token"] as? String == snoozeToken
         })
+        let recurrenceTime = calendar.dateComponents(
+            [.hour, .minute],
+            from: Date(timeIntervalSince1970: Double(anchor) / 1_000)
+        )
+        let recoveredRecurrenceMetadata = requests.first { $0.identifier == "42#1" }
+            .flatMap { occurrenceMetadata(from: $0.content) }
+        XCTAssertEqual(recoveredRecurrenceMetadata?["hour"] as? Int, recurrenceTime.hour)
+        XCTAssertEqual(recoveredRecurrenceMetadata?["minute"] as? Int, recurrenceTime.minute)
+    }
+
+    func testRecoveredRecurrenceMetadataKeepsRequestedTimeAcrossDstGap() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        let scheduledAtMillis = millis(2030, 3, 3, 2, 30, calendar: calendar)
+        let snoozeAtMillis = millis(2030, 3, 10, 1, 5, calendar: calendar)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(
+                scheduledAtMillis: scheduledAtMillis,
+                recurrenceWeekdays: [7]
+            ),
+            fallbackAnchorMillis: scheduledAtMillis,
+            calendar: calendar
+        ).withActiveSnooze(
+            untilMillis: snoozeAtMillis,
+            fallbackAnchorMillis: snoozeAtMillis
+        )
+
+        let requests = WarmAlarmPlugin.makeRecoveryRequests(
+            for: schedule,
+            nowMillis: millis(2030, 3, 10, 1, 0, calendar: calendar),
+            pendingIdentifiers: ["42"],
+            content: UNMutableNotificationContent(),
+            calendar: calendar
+        )
+
+        let metadata = requests.first { $0.identifier == "42#7" }
+            .flatMap { occurrenceMetadata(from: $0.content) }
+        XCTAssertEqual(metadata?["hour"] as? Int, 2)
+        XCTAssertEqual(metadata?["minute"] as? Int, 30)
     }
 
     func testRecoveryReusesInitialTokenWhenNoRequestsRemainPending() {
@@ -1681,6 +1745,21 @@ final class WarmAlarmRequestTests: XCTestCase {
 
         XCTAssertFalse(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "series#1000", perform: {}))
         XCTAssertTrue(tracker.handleIfAllowed(alarmId: 42, occurrenceToken: "series#2000", perform: {}))
+    }
+
+    func testStopRejectsOlderOccurrenceButAllowsCurrentOccurrenceAction() {
+        let tracker = WarmAlarmForegroundOccurrenceTracker()
+        var stoppedOccurrences = [String]()
+
+        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "series#2000"))
+        tracker.stop(alarmId: 42, occurrenceToken: "series#1000") {
+            stoppedOccurrences.append("older")
+        }
+        tracker.stop(alarmId: 42, occurrenceToken: "series#2000") {
+            stoppedOccurrences.append("current")
+        }
+
+        XCTAssertEqual(stoppedOccurrences, ["current"])
     }
 
     func testStoppedOccurrenceDoesNotSuppressFallbackFromNextOccurrence() {
