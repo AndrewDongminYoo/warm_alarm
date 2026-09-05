@@ -1045,24 +1045,24 @@ final class WarmAlarmRequestTests: XCTestCase {
     func testForegroundOccurrenceTrackerScopesSuppressionToResettableOccurrence() {
         let tracker = WarmAlarmForegroundOccurrenceTracker()
 
-        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, isFallback: false))
-        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, isFallback: true))
+        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, occurrenceMillis: 1_000, isFallback: false))
+        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, occurrenceMillis: 1_000, isFallback: true))
 
         tracker.clear(alarmId: 42)
 
-        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, isFallback: true))
-        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, isFallback: true))
+        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, occurrenceMillis: 1_000, isFallback: true))
+        XCTAssertFalse(tracker.shouldHandleAndMark(alarmId: 42, occurrenceMillis: 1_000, isFallback: true))
     }
 
     func testStopSuppressesLateFallbackUntilNextPrimaryOccurrence() {
         let tracker = WarmAlarmForegroundOccurrenceTracker()
 
-        XCTAssertTrue(tracker.handleIfAllowed(alarmId: 42, isFallback: false, perform: {}))
-        tracker.stop(alarmId: 42, perform: {})
+        XCTAssertTrue(tracker.handleIfAllowed(alarmId: 42, occurrenceMillis: 1_000, isFallback: false, perform: {}))
+        tracker.stop(alarmId: 42, occurrenceMillis: 1_000, perform: {})
 
-        XCTAssertFalse(tracker.handleIfAllowed(alarmId: 42, isFallback: true, perform: {}))
-        XCTAssertTrue(tracker.handleIfAllowed(alarmId: 42, isFallback: false, perform: {}))
-        XCTAssertFalse(tracker.handleIfAllowed(alarmId: 42, isFallback: true, perform: {}))
+        XCTAssertFalse(tracker.handleIfAllowed(alarmId: 42, occurrenceMillis: 1_000, isFallback: true, perform: {}))
+        XCTAssertTrue(tracker.handleIfAllowed(alarmId: 42, occurrenceMillis: 1_000, isFallback: false, perform: {}))
+        XCTAssertFalse(tracker.handleIfAllowed(alarmId: 42, occurrenceMillis: 1_000, isFallback: true, perform: {}))
     }
 
     func testForegroundOccurrenceTrackerAtomicallyHandlesOneConcurrentFallback() {
@@ -1071,7 +1071,7 @@ final class WarmAlarmRequestTests: XCTestCase {
         var handledCount = 0
 
         DispatchQueue.concurrentPerform(iterations: 100) { _ in
-            guard tracker.shouldHandleAndMark(alarmId: 42, isFallback: true) else { return }
+            guard tracker.shouldHandleAndMark(alarmId: 42, occurrenceMillis: 1_000, isFallback: true) else { return }
             resultLock.lock()
             handledCount += 1
             resultLock.unlock()
@@ -1089,7 +1089,7 @@ final class WarmAlarmRequestTests: XCTestCase {
         let stopCompleted = DispatchSemaphore(value: 0)
 
         DispatchQueue.global().async {
-            _ = tracker.handleIfAllowed(alarmId: 42, isFallback: true) {
+            _ = tracker.handleIfAllowed(alarmId: 42, occurrenceMillis: 1_000, isFallback: true) {
                 fallbackEntered.signal()
                 releaseFallback.wait()
             }
@@ -1099,7 +1099,7 @@ final class WarmAlarmRequestTests: XCTestCase {
 
         DispatchQueue.global().async {
             stopStarted.signal()
-            tracker.stop(alarmId: 42, perform: {})
+            tracker.stop(alarmId: 42, occurrenceMillis: 1_000, perform: {})
             stopCompleted.signal()
         }
         XCTAssertEqual(stopStarted.wait(timeout: .now() + 1), .success)

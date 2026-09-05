@@ -8,11 +8,21 @@ final class WarmAlarmForegroundOccurrenceTracker: @unchecked Sendable {
     private let lock = NSLock()
     private var handledAlarmIds = Set<Int64>()
 
-    func shouldHandleAndMark(alarmId: Int64, isFallback: Bool) -> Bool {
-        handleIfAllowed(alarmId: alarmId, isFallback: isFallback, perform: {})
+    func shouldHandleAndMark(alarmId: Int64, occurrenceMillis: Int64, isFallback: Bool) -> Bool {
+        handleIfAllowed(
+            alarmId: alarmId,
+            occurrenceMillis: occurrenceMillis,
+            isFallback: isFallback,
+            perform: {}
+        )
     }
 
-    func handleIfAllowed(alarmId: Int64, isFallback: Bool, perform action: () -> Void) -> Bool {
+    func handleIfAllowed(
+        alarmId: Int64,
+        occurrenceMillis _: Int64,
+        isFallback: Bool,
+        perform action: () -> Void
+    ) -> Bool {
         lock.lock()
         defer { lock.unlock() }
         if isFallback, handledAlarmIds.contains(alarmId) {
@@ -23,7 +33,7 @@ final class WarmAlarmForegroundOccurrenceTracker: @unchecked Sendable {
         return true
     }
 
-    func mark(alarmId: Int64) {
+    func mark(alarmId: Int64, occurrenceMillis _: Int64) {
         lock.lock()
         handledAlarmIds.insert(alarmId)
         lock.unlock()
@@ -35,11 +45,11 @@ final class WarmAlarmForegroundOccurrenceTracker: @unchecked Sendable {
         lock.unlock()
     }
 
-    func stop(alarmId: Int64) {
-        stop(alarmId: alarmId, perform: {})
+    func stop(alarmId: Int64, occurrenceMillis: Int64) {
+        stop(alarmId: alarmId, occurrenceMillis: occurrenceMillis, perform: {})
     }
 
-    func stop(alarmId: Int64, perform action: () -> Void) {
+    func stop(alarmId: Int64, occurrenceMillis _: Int64, perform action: () -> Void) {
         lock.lock()
         defer { lock.unlock() }
         handledAlarmIds.insert(alarmId)
@@ -87,12 +97,17 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             return
         }
         let isFallback = WarmAlarmPlugin.isFallbackIdentifier(notification.request.identifier, for: alarmId)
-        guard foregroundOccurrenceTracker.handleIfAllowed(alarmId: alarmId, isFallback: isFallback, perform: {
+        guard foregroundOccurrenceTracker.handleIfAllowed(
+            alarmId: alarmId,
+            occurrenceMillis: alarmId,
+            isFallback: isFallback,
+            perform: {
             let schedule = WarmAlarmStore.shared.load(id: alarmId)
             startAudio(alarmId: alarmId, for: schedule)
             emitEvent(WarmAlarmEventWire(
                 alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis(), payload: schedule?.payload))
-        }) else {
+            }
+        ) else {
             completionHandler([])
             return
         }
@@ -132,7 +147,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
                 }
             }
         case UNNotificationDefaultActionIdentifier:
-            foregroundOccurrenceTracker.mark(alarmId: alarmId)
+            foregroundOccurrenceTracker.mark(alarmId: alarmId, occurrenceMillis: alarmId)
             let schedule = WarmAlarmStore.shared.load(id: alarmId)
             startAudio(alarmId: alarmId, for: schedule)
             emitEvent(WarmAlarmEventWire(
@@ -147,7 +162,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
     func handleStop(alarmId: Int64, deliveredIdentifier: String? = nil) {
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
-        foregroundOccurrenceTracker.stop(alarmId: alarmId, perform: stopAudio)
+        foregroundOccurrenceTracker.stop(alarmId: alarmId, occurrenceMillis: alarmId, perform: stopAudio)
         removePendingFallbackRequests(for: alarmId)
         // Dismiss ends only this occurrence for a recurring alarm; the repeating
         // triggers stay armed, so keep the stored schedule. cancelAlarm tears down
@@ -176,7 +191,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         deliveredIdentifier: String? = nil,
         completion: @escaping () -> Void
     ) {
-        foregroundOccurrenceTracker.stop(alarmId: alarmId, perform: stopAudio)
+        foregroundOccurrenceTracker.stop(alarmId: alarmId, occurrenceMillis: alarmId, perform: stopAudio)
         removePendingFallbackRequests(for: alarmId)
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
         if schedule?.keepNotificationAfterAlarmEnds != true {
