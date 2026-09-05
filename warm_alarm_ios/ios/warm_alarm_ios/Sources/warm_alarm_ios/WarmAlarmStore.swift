@@ -8,6 +8,7 @@ struct FadeStep: Codable {
 struct WarmAlarmScheduleData: Codable {
     let id: Int64
     let scheduledAtMillis: Int64
+    let oneShotOccurrenceEpochMillis: Int64
     let notificationTitle: String
     let notificationBody: String
     let stopActionTitle: String?
@@ -32,7 +33,7 @@ struct WarmAlarmScheduleData: Codable {
     // Explicit CodingKeys lets the synthesized encode(to:) work while we
     // override init(from:) in the extension below to add migration defaults.
     private enum CodingKeys: String, CodingKey {
-        case id, scheduledAtMillis, notificationTitle, notificationBody
+        case id, scheduledAtMillis, oneShotOccurrenceEpochMillis, notificationTitle, notificationBody
         case stopActionTitle, snoozeActionTitle, filePath, assetPath
         case loop, volume, vibrate, fadeInDurationMillis
         case recurrenceWeekdays, recurrenceHour, recurrenceMinute, snoozeDurationMillis, payload
@@ -74,6 +75,10 @@ extension WarmAlarmScheduleData {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(Int64.self, forKey: .id)
         scheduledAtMillis = try c.decode(Int64.self, forKey: .scheduledAtMillis)
+        oneShotOccurrenceEpochMillis = try c.decodeIfPresent(
+            Int64.self,
+            forKey: .oneShotOccurrenceEpochMillis
+        ) ?? scheduledAtMillis
         notificationTitle = try c.decode(String.self, forKey: .notificationTitle)
         notificationBody = try c.decode(String.self, forKey: .notificationBody)
         stopActionTitle = try c.decodeIfPresent(String.self, forKey: .stopActionTitle)
@@ -113,6 +118,7 @@ extension WarmAlarmScheduleData {
         return WarmAlarmScheduleData(
             id: wire.id,
             scheduledAtMillis: wire.scheduledAtMillis,
+            oneShotOccurrenceEpochMillis: wire.scheduledAtMillis,
             notificationTitle: wire.notification.title,
             notificationBody: wire.notification.body,
             stopActionTitle: wire.notification.stopActionTitle,
@@ -157,6 +163,16 @@ extension WarmAlarmScheduleData {
         )
     }
 
+    func withOneShotAnchor(_ anchorMillis: Int64) -> WarmAlarmScheduleData {
+        copying(
+            scheduledAtMillis: anchorMillis,
+            recurrenceHour: recurrenceHour,
+            recurrenceMinute: recurrenceMinute,
+            activeSnoozeUntilMillis: activeSnoozeUntilMillis,
+            fallbackAnchorMillis: anchorMillis
+        )
+    }
+
     func clearingFallbackAnchor() -> WarmAlarmScheduleData {
         copying(
             recurrenceHour: recurrenceHour,
@@ -167,13 +183,15 @@ extension WarmAlarmScheduleData {
     }
 
     private func copying(
+        scheduledAtMillis: Int64? = nil,
         recurrenceHour: Int?,
         recurrenceMinute: Int?,
         activeSnoozeUntilMillis: Int64?,
         fallbackAnchorMillis: Int64?
     ) -> WarmAlarmScheduleData {
         WarmAlarmScheduleData(
-            id: id, scheduledAtMillis: scheduledAtMillis,
+            id: id, scheduledAtMillis: scheduledAtMillis ?? self.scheduledAtMillis,
+            oneShotOccurrenceEpochMillis: oneShotOccurrenceEpochMillis,
             notificationTitle: notificationTitle, notificationBody: notificationBody,
             stopActionTitle: stopActionTitle, snoozeActionTitle: snoozeActionTitle,
             filePath: filePath, assetPath: assetPath,

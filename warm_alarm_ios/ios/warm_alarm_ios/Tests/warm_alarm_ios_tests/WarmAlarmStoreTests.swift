@@ -38,6 +38,7 @@ final class WarmAlarmStoreTests: XCTestCase {
     func testRoundtripPreservesOptionals() {
         let data = WarmAlarmScheduleData(
             id: 99, scheduledAtMillis: 9_000,
+            oneShotOccurrenceEpochMillis: 8_900,
             notificationTitle: "T", notificationBody: "B",
             stopActionTitle: "Stop", snoozeActionTitle: "Snooze",
             filePath: "/tmp/alarm.mp3", assetPath: nil,
@@ -71,6 +72,7 @@ final class WarmAlarmStoreTests: XCTestCase {
         XCTAssertEqual(loaded.payload, "{\"key\":\"value\"}")
         XCTAssertEqual(loaded.activeSnoozeUntilMillis, 9_500)
         XCTAssertEqual(loaded.fallbackAnchorMillis, 9_100)
+        XCTAssertEqual(loaded.oneShotOccurrenceEpochMillis, 8_900)
     }
 
     func testRoundtripNilOptionals() {
@@ -251,6 +253,7 @@ final class WarmAlarmStoreTests: XCTestCase {
     ) -> WarmAlarmScheduleData {
         WarmAlarmScheduleData(
             id: id, scheduledAtMillis: scheduledAt,
+            oneShotOccurrenceEpochMillis: scheduledAt,
             notificationTitle: title, notificationBody: "",
             stopActionTitle: nil, snoozeActionTitle: nil,
             filePath: nil, assetPath: nil,
