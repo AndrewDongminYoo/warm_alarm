@@ -781,6 +781,46 @@ final class WarmAlarmRequestTests: XCTestCase {
             "42#fallback#5",
             "42#fallback#6",
         ])
+        XCTAssertEqual(requests.compactMap { $0.trigger as? UNCalendarNotificationTrigger }.count, 5)
+        XCTAssertTrue(requests.compactMap { $0.trigger as? UNTimeIntervalNotificationTrigger }.isEmpty)
+    }
+
+    func testRecoveryDoesNotReuseAnExpiredSnoozeAnchorThatMatchesCurrentWallTime() {
+        var schedulingCalendar = Calendar(identifier: .gregorian)
+        schedulingCalendar.timeZone = TimeZone(identifier: "America/New_York")!
+        let scheduledAtMillis = millis(2030, 3, 11, 7, 0, calendar: schedulingCalendar)
+        let snoozeAnchorMillis = scheduledAtMillis + 3 * 60 * 60 * 1_000
+        let wire = makeWireSchedule(
+            scheduledAtMillis: scheduledAtMillis,
+            recurrenceWeekdays: [1]
+        )
+        let schedule = WarmAlarmScheduleData.from(
+            wire: wire,
+            fallbackAnchorMillis: scheduledAtMillis,
+            calendar: schedulingCalendar
+        ).withActiveSnooze(
+            untilMillis: snoozeAnchorMillis,
+            fallbackAnchorMillis: snoozeAnchorMillis
+        )
+        var recoveryCalendar = Calendar(identifier: .gregorian)
+        recoveryCalendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+
+        let requests = WarmAlarmPlugin.makeRecoveryRequests(
+            for: schedule,
+            nowMillis: snoozeAnchorMillis + 181_000,
+            pendingIdentifiers: ["42#1"],
+            content: UNMutableNotificationContent(),
+            calendar: recoveryCalendar
+        )
+
+        XCTAssertEqual(requests.map(\.identifier), WarmAlarmPlugin.fallbackIdentifiers(for: 42))
+        let firstTrigger = requests.first?.trigger as? UNCalendarNotificationTrigger
+        XCTAssertEqual(firstTrigger?.dateComponents.year, 2030)
+        XCTAssertEqual(firstTrigger?.dateComponents.month, 3)
+        XCTAssertEqual(firstTrigger?.dateComponents.day, 18)
+        XCTAssertEqual(firstTrigger?.dateComponents.hour, 7)
+        XCTAssertEqual(firstTrigger?.dateComponents.minute, 0)
+        XCTAssertEqual(firstTrigger?.dateComponents.second, 30)
     }
 
     func testRecoveryKeepsSnoozedPrimaryRelativeToFallbacks() {

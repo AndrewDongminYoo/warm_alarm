@@ -452,6 +452,10 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         content: UNNotificationContent,
         calendar: Calendar = .current
     ) -> [UNNotificationRequest] {
+        let usesRelativeFallbackTrigger = hasActiveSnoozeFallbacks(
+            for: schedule,
+            nowMillis: nowMillis
+        )
         let fallbackAnchorMillis = recoveryFallbackAnchorMillis(
             for: schedule,
             nowMillis: nowMillis,
@@ -487,7 +491,8 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                         content: content,
                         nowMillis: nowMillis,
                         calendar: calendar,
-                        fallbackAnchorMillis: fallbackAnchorMillis
+                        fallbackAnchorMillis: fallbackAnchorMillis,
+                        usesRelativeFallbackTrigger: usesRelativeFallbackTrigger
                     )
                 }
         )
@@ -511,13 +516,14 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         content: UNNotificationContent,
         nowMillis: Int64,
         calendar: Calendar,
-        fallbackAnchorMillis: Int64?
+        fallbackAnchorMillis: Int64?,
+        usesRelativeFallbackTrigger: Bool
     ) -> UNNotificationRequest {
         let recoveryFallbackIndex = fallbackIndex(for: identifier, alarmId: schedule.id)
         let fireAtMillis: Int64
         if let recoveryFallbackIndex, let anchor = fallbackAnchorMillis {
             fireAtMillis = fallbackFireAtMillis(anchorMillis: anchor, index: recoveryFallbackIndex)
-            if schedule.activeSnoozeUntilMillis != nil {
+            if usesRelativeFallbackTrigger {
                 let delay = max(1.0, Double(fireAtMillis - nowMillis) / 1_000.0)
                 return UNNotificationRequest(
                     identifier: identifier,
@@ -938,26 +944,37 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         anchorMillis + Int64(index) * fallbackIntervalMillis
     }
 
+    private static func hasActiveSnoozeFallbacks(
+        for schedule: WarmAlarmScheduleData,
+        nowMillis: Int64
+    ) -> Bool {
+        guard schedule.activeSnoozeUntilMillis != nil,
+              let fallbackAnchorMillis = schedule.fallbackAnchorMillis else {
+            return false
+        }
+        return fallbackFireAtMillis(anchorMillis: fallbackAnchorMillis, index: fallbackCount) > nowMillis
+    }
+
     private static func recoveryFallbackAnchorMillis(
         for schedule: WarmAlarmScheduleData,
         nowMillis: Int64,
         calendar: Calendar
     ) -> Int64? {
         guard let persistedAnchorMillis = schedule.fallbackAnchorMillis else { return nil }
-        let hasActiveSnoozeFallbacks = schedule.activeSnoozeUntilMillis != nil
-            && fallbackFireAtMillis(anchorMillis: persistedAnchorMillis, index: fallbackCount) > nowMillis
-        guard !hasActiveSnoozeFallbacks,
+        guard !hasActiveSnoozeFallbacks(for: schedule, nowMillis: nowMillis),
               let weekdays = schedule.recurrenceWeekdays, !weekdays.isEmpty,
               let hour = schedule.recurrenceHour,
               let minute = schedule.recurrenceMinute else {
             return persistedAnchorMillis
         }
-        let persistedAnchorDate = Date(timeIntervalSince1970: Double(persistedAnchorMillis) / 1_000)
-        let persistedTime = calendar.dateComponents([.weekday, .hour, .minute], from: persistedAnchorDate)
-        let appleWeekdays = Set(weekdays.map(WarmAlarmRecurrence.appleWeekday))
-        let persistedWeekdayMatches = persistedTime.weekday.map(appleWeekdays.contains) ?? false
-        guard !persistedWeekdayMatches || persistedTime.hour != hour || persistedTime.minute != minute else {
-            return persistedAnchorMillis
+        if schedule.activeSnoozeUntilMillis == nil {
+            let persistedAnchorDate = Date(timeIntervalSince1970: Double(persistedAnchorMillis) / 1_000)
+            let persistedTime = calendar.dateComponents([.weekday, .hour, .minute], from: persistedAnchorDate)
+            let appleWeekdays = Set(weekdays.map(WarmAlarmRecurrence.appleWeekday))
+            let persistedWeekdayMatches = persistedTime.weekday.map(appleWeekdays.contains) ?? false
+            if persistedWeekdayMatches, persistedTime.hour == hour, persistedTime.minute == minute {
+                return persistedAnchorMillis
+            }
         }
         let fallbackWindowMillis = Int64(fallbackCount) * fallbackIntervalMillis
         return WarmAlarmRecurrence.nextOccurrenceMillis(
