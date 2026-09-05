@@ -9,6 +9,7 @@ struct WarmAlarmScheduleData: Codable {
     let id: Int64
     let scheduledAtMillis: Int64
     let oneShotOccurrenceEpochMillis: Int64
+    let occurrenceSeriesToken: String
     let notificationTitle: String
     let notificationBody: String
     let stopActionTitle: String?
@@ -33,7 +34,8 @@ struct WarmAlarmScheduleData: Codable {
     // Explicit CodingKeys lets the synthesized encode(to:) work while we
     // override init(from:) in the extension below to add migration defaults.
     private enum CodingKeys: String, CodingKey {
-        case id, scheduledAtMillis, oneShotOccurrenceEpochMillis, notificationTitle, notificationBody
+        case id, scheduledAtMillis, oneShotOccurrenceEpochMillis, occurrenceSeriesToken
+        case notificationTitle, notificationBody
         case stopActionTitle, snoozeActionTitle, filePath, assetPath
         case loop, volume, vibrate, fadeInDurationMillis
         case recurrenceWeekdays, recurrenceHour, recurrenceMinute, snoozeDurationMillis, payload
@@ -79,6 +81,8 @@ extension WarmAlarmScheduleData {
             Int64.self,
             forKey: .oneShotOccurrenceEpochMillis
         ) ?? scheduledAtMillis
+        occurrenceSeriesToken = try c.decodeIfPresent(String.self, forKey: .occurrenceSeriesToken)
+            ?? "warm-alarm-v1:\(id)"
         notificationTitle = try c.decode(String.self, forKey: .notificationTitle)
         notificationBody = try c.decode(String.self, forKey: .notificationBody)
         stopActionTitle = try c.decodeIfPresent(String.self, forKey: .stopActionTitle)
@@ -105,7 +109,8 @@ extension WarmAlarmScheduleData {
     static func from(
         wire: WarmAlarmScheduleWire,
         fallbackAnchorMillis: Int64? = nil,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        occurrenceSeriesToken: String? = nil
     ) -> WarmAlarmScheduleData {
         let recurrenceTime = if wire.recurrence?.weekdays.isEmpty == false {
             calendar.dateComponents(
@@ -119,6 +124,7 @@ extension WarmAlarmScheduleData {
             id: wire.id,
             scheduledAtMillis: wire.scheduledAtMillis,
             oneShotOccurrenceEpochMillis: wire.scheduledAtMillis,
+            occurrenceSeriesToken: occurrenceSeriesToken ?? "warm-alarm-v1:\(wire.id)",
             notificationTitle: wire.notification.title,
             notificationBody: wire.notification.body,
             stopActionTitle: wire.notification.stopActionTitle,
@@ -192,6 +198,7 @@ extension WarmAlarmScheduleData {
         WarmAlarmScheduleData(
             id: id, scheduledAtMillis: scheduledAtMillis ?? self.scheduledAtMillis,
             oneShotOccurrenceEpochMillis: oneShotOccurrenceEpochMillis,
+            occurrenceSeriesToken: occurrenceSeriesToken,
             notificationTitle: notificationTitle, notificationBody: notificationBody,
             stopActionTitle: stopActionTitle, snoozeActionTitle: snoozeActionTitle,
             filePath: filePath, assetPath: assetPath,

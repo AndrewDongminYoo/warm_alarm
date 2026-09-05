@@ -726,7 +726,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         let occurrenceToken = pendingOccurrenceSeriesToken(
             for: schedule.id,
             in: matchingPendingRequests
-        ) ?? occurrenceSeriesToken(for: schedule.id)
+        ) ?? schedule.occurrenceSeriesToken
         let chainMetadata = WarmAlarmOccurrenceMetadata(
             token: occurrenceToken,
             primaryAtMillis: primaryAtMillis,
@@ -1046,11 +1046,13 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         for schedule: WarmAlarmScheduleWire,
         content: UNNotificationContent,
         fallbackAnchorMillis: Int64,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        occurrenceSeriesToken: String? = nil
     ) -> [UNNotificationRequest] {
         let fireDate = Date(timeIntervalSince1970: Double(schedule.scheduledAtMillis) / 1000.0)
+        let seriesToken = occurrenceSeriesToken ?? Self.occurrenceSeriesToken(for: schedule.id)
         let occurrenceMetadata = WarmAlarmOccurrenceMetadata(
-            token: occurrenceSeriesToken(for: schedule.id),
+            token: seriesToken,
             primaryAtMillis: fallbackAnchorMillis,
             calendar: calendar
         )
@@ -1064,7 +1066,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 .map { Int64($0.timeIntervalSince1970 * 1_000) }
                 ?? schedule.scheduledAtMillis
             let recurringOccurrenceMetadata = WarmAlarmOccurrenceMetadata(
-                token: occurrenceSeriesToken(for: schedule.id),
+                token: seriesToken,
                 primaryAtMillis: requestedAtMillis,
                 calendar: calendar
             )
@@ -1117,7 +1119,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     ) -> [UNNotificationRequest] {
         let delay = max(1.0, Double(fireAtMillis - nowMillis) / 1000.0)
         let occurrenceMetadata = WarmAlarmOccurrenceMetadata(
-            token: occurrenceSeriesToken(for: schedule.id),
+            token: schedule.occurrenceSeriesToken,
             primaryAtMillis: fireAtMillis,
             calendar: .current,
             floating: false
@@ -1402,7 +1404,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             return metadata.scopedToken(for: metadataPrimaryDate)
         }
         if let schedule {
-            let seriesToken = occurrenceSeriesToken(for: alarmId)
+            let seriesToken = schedule.occurrenceSeriesToken
             if let isoWeekday = recurringWeekday(for: identifier, alarmId: alarmId),
                let hour = schedule.recurrenceHour,
                let minute = schedule.recurrenceMinute {
@@ -1474,7 +1476,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             return false
         }
         return metadata.floating
-            && metadata.token == occurrenceSeriesToken(for: schedule.id)
+            && metadata.token == schedule.occurrenceSeriesToken
             && metadata.hour == schedule.recurrenceHour
             && metadata.minute == schedule.recurrenceMinute
     }
@@ -1487,7 +1489,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         guard schedule.recurrenceWeekdays?.isEmpty != false,
               let metadata = occurrenceMetadata(from: content),
               metadata.floating,
-              metadata.token == occurrenceSeriesToken(for: schedule.id),
+              metadata.token == schedule.occurrenceSeriesToken,
               metadata.primaryEpochMillis == schedule.oneShotOccurrenceEpochMillis,
               let occurrenceDate = metadata.primaryDate(in: calendar) else {
             return nil
