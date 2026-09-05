@@ -661,13 +661,14 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
                     )
                 }
             },
-            rollback: {
+            rollback: { rollbackCompletion in
                 let isRecurring = !(existing.recurrenceWeekdays?.isEmpty ?? true)
                 if isRecurring {
                     WarmAlarmStore.shared.save(existing.clearingFallbackAnchor())
                 } else {
                     WarmAlarmStore.shared.remove(id: existing.id)
                 }
+                rollbackCompletion()
             },
             completion: completion
         )

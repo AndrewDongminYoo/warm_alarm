@@ -121,7 +121,7 @@ final class WarmAlarmSnoozeRegistrationTests: XCTestCase {
                     completion(nil)
                 }
             },
-            rollback: {
+            rollback: { _ in
                 XCTFail("A successful registration must not roll back the intent")
             },
             completion: { error in
@@ -144,7 +144,7 @@ final class WarmAlarmSnoozeRegistrationTests: XCTestCase {
             register: { _ in
                 steps.append("register")
             },
-            rollback: {
+            rollback: { _ in
                 XCTFail("An unfinished registration must not roll back the intent")
             },
             completion: { _ in
@@ -168,8 +168,9 @@ final class WarmAlarmSnoozeRegistrationTests: XCTestCase {
                 steps.append("register")
                 completion(expectedError)
             },
-            rollback: {
+            rollback: { rollbackCompletion in
                 steps.append("rollback")
+                rollbackCompletion()
             },
             completion: { error in
                 XCTAssertEqual((error as NSError?)?.domain, expectedError.domain)
