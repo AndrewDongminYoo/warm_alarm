@@ -1429,6 +1429,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
 
     static func actionOccurrenceLowerBound(
         for schedule: WarmAlarmScheduleData,
+        content: UNNotificationContent? = nil,
         nowMillis: Int64,
         calendar: Calendar = .current
     ) -> Int64? {

@@ -148,6 +148,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     private let notificationMutationQueue: WarmAlarmMutationQueue
     private var audioPlayer: AVAudioPlayer?
     private(set) var currentlyPlayingAlarmId: Int64?
+    private(set) var currentlyPlayingOccurrenceToken: String?
     private let foregroundOccurrenceTracker = WarmAlarmForegroundOccurrenceTracker(
         consumedOccurrenceStore: WarmAlarmConsumedOccurrenceStore()
     )
@@ -186,7 +187,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             alarmId: alarmId,
             occurrenceToken: occurrenceToken,
             perform: {
-            startAudio(alarmId: alarmId, for: schedule)
+            startAudio(alarmId: alarmId, occurrenceToken: occurrenceToken, for: schedule)
             emitEvent(WarmAlarmEventWire(
                 alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis(), payload: schedule?.payload))
             }
@@ -223,7 +224,8 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
                 self?.handleStop(
                     alarmId: alarmId,
                     occurrenceToken: occurrenceToken,
-                    deliveredIdentifier: deliveredIdentifier
+                    deliveredIdentifier: deliveredIdentifier,
+                    content: response.notification.request.content
                 )
             }, completionHandler: completionHandler)
         case Self.snoozeActionIdentifier:
@@ -236,7 +238,8 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
                 self.handleSnooze(
                     alarmId: alarmId,
                     occurrenceToken: occurrenceToken,
-                    deliveredIdentifier: deliveredIdentifier
+                    deliveredIdentifier: deliveredIdentifier,
+                    content: response.notification.request.content
                 ) {
                     completionHandler()
                     finish()
@@ -247,7 +250,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
                 alarmId: alarmId,
                 occurrenceToken: occurrenceToken,
                 perform: {
-                    startAudio(alarmId: alarmId, for: schedule)
+                    startAudio(alarmId: alarmId, occurrenceToken: occurrenceToken, for: schedule)
                     emitEvent(WarmAlarmEventWire(
                         alarmId: alarmId,
                         type: .fired,
@@ -267,11 +270,16 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     func handleStop(
         alarmId: Int64,
         occurrenceToken: String,
-        deliveredIdentifier: String? = nil
+        deliveredIdentifier: String? = nil,
+        content: UNNotificationContent? = nil
     ) {
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
         let actionLowerBound = schedule.flatMap {
-            WarmAlarmPlugin.actionOccurrenceLowerBound(for: $0, nowMillis: nowMillis())
+            WarmAlarmPlugin.actionOccurrenceLowerBound(
+                for: $0,
+                content: content,
+                nowMillis: nowMillis()
+            )
         }
         guard foregroundOccurrenceTracker.stop(
             alarmId: alarmId,
@@ -306,11 +314,16 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         alarmId: Int64,
         occurrenceToken: String,
         deliveredIdentifier: String? = nil,
+        content: UNNotificationContent? = nil,
         completion: @escaping () -> Void
     ) {
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
         let actionLowerBound = schedule.flatMap {
-            WarmAlarmPlugin.actionOccurrenceLowerBound(for: $0, nowMillis: nowMillis())
+            WarmAlarmPlugin.actionOccurrenceLowerBound(
+                for: $0,
+                content: content,
+                nowMillis: nowMillis()
+            )
         }
         guard foregroundOccurrenceTracker.stop(
             alarmId: alarmId,
@@ -457,7 +470,11 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         return Bundle.main.url(forResource: "flutter_assets/\(asset)", withExtension: nil)
     }
 
-    private func startAudio(alarmId: Int64, for schedule: WarmAlarmScheduleData?) {
+    private func startAudio(
+        alarmId: Int64,
+        occurrenceToken: String,
+        for schedule: WarmAlarmScheduleData?
+    ) {
         configureAudioSession()
         let player: AVAudioPlayer?
         if let path = schedule?.filePath, !path.isEmpty {
@@ -481,6 +498,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             p.play()
             audioPlayer = p
             currentlyPlayingAlarmId = alarmId
+            currentlyPlayingOccurrenceToken = occurrenceToken
             if let steps = steps { applyFadeSteps(steps, to: p) }
             if schedule?.volumeEnforced == true { startVolumeEnforcer(for: p) }
         }
@@ -510,6 +528,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         audioPlayer?.stop()
         audioPlayer = nil
         currentlyPlayingAlarmId = nil
+        currentlyPlayingOccurrenceToken = nil
         deactivateAudioSession()
     }
 
