@@ -530,7 +530,6 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                     for: schedule,
                     nowMillis: nowMillis,
                     pendingIdentifiers: pendingIdentifiers,
-                    pendingRequests: pendingRequests,
                     content: content
                 )
             )
@@ -568,7 +567,6 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                         for: candidate.schedule,
                         nowMillis: registrationNowMillis,
                         pendingIdentifiers: pendingIdentifiers,
-                        pendingRequests: pendingRequests,
                         content: candidate.content
                     )
                 }
@@ -652,8 +650,14 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             }
             let primaryIdentifier = String(schedule.id)
             let matchingRequests = notificationRequests(for: schedule.id, in: pendingRequests)
-            let metadataDate = occurrenceMetadata(for: schedule.id, in: matchingRequests)?.primaryDate(in: calendar)
-            let primaryTriggerDate = matchingRequests.lazy.compactMap { request -> Date? in
+            let currentGenerationRequests = matchingRequests.filter {
+                notificationContent(schedule, matches: $0.content)
+            }
+            let metadataDate = occurrenceMetadata(
+                for: schedule.id,
+                in: currentGenerationRequests
+            )?.primaryDate(in: calendar)
+            let primaryTriggerDate = currentGenerationRequests.lazy.compactMap { request -> Date? in
                 guard request.identifier == primaryIdentifier,
                       let trigger = request.trigger as? UNCalendarNotificationTrigger,
                       !trigger.repeats else {
@@ -706,7 +710,6 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         for schedule: WarmAlarmScheduleData,
         nowMillis: Int64,
         pendingIdentifiers: Set<String>,
-        pendingRequests: [UNNotificationRequest] = [],
         content: UNNotificationContent,
         calendar: Calendar = .current
     ) -> [UNNotificationRequest] {
@@ -719,14 +722,10 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             nowMillis: nowMillis,
             calendar: calendar
         )
-        let matchingPendingRequests = notificationRequests(for: schedule.id, in: pendingRequests)
         let primaryAtMillis = fallbackAnchorMillis
             ?? schedule.activeSnoozeUntilMillis
             ?? schedule.scheduledAtMillis
-        let occurrenceToken = pendingOccurrenceSeriesToken(
-            for: schedule.id,
-            in: matchingPendingRequests
-        ) ?? schedule.occurrenceSeriesToken
+        let occurrenceToken = schedule.occurrenceSeriesToken
         let chainMetadata = WarmAlarmOccurrenceMetadata(
             token: occurrenceToken,
             primaryAtMillis: primaryAtMillis,
@@ -1330,29 +1329,6 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             sharedMetadata = metadata
         }
         return sharedMetadata
-    }
-
-    private static func pendingOccurrenceSeriesToken(
-        for alarmId: Int64,
-        in requests: [UNNotificationRequest]
-    ) -> String? {
-        let requestsWithMetadata = notificationRequests(for: alarmId, in: requests).filter {
-            $0.content.userInfo[WarmAlarmOccurrenceMetadata.userInfoKey] != nil
-        }
-        guard !requestsWithMetadata.isEmpty else { return nil }
-
-        var sharedToken: String?
-        for request in requestsWithMetadata {
-            guard let metadata = occurrenceMetadata(from: request.content),
-                  metadata.ordinal == (fallbackIndex(for: request.identifier, alarmId: alarmId) ?? 0) else {
-                return nil
-            }
-            if let sharedToken, sharedToken != metadata.token {
-                return nil
-            }
-            sharedToken = metadata.token
-        }
-        return sharedToken
     }
 
     private static func occurrenceSeriesToken(for alarmId: Int64) -> String {

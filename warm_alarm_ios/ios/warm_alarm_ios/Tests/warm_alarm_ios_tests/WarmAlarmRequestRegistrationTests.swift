@@ -1330,7 +1330,8 @@ final class WarmAlarmRequestTests: XCTestCase {
         let scheduledAtMillis = Int64(primaryDate.timeIntervalSince1970 * 1_000)
         let schedule = WarmAlarmScheduleData.from(
             wire: makeWireSchedule(scheduledAtMillis: scheduledAtMillis),
-            fallbackAnchorMillis: scheduledAtMillis
+            fallbackAnchorMillis: scheduledAtMillis,
+            occurrenceSeriesToken: "dst-occurrence"
         )
         let fallbackDate = primaryDate.addingTimeInterval(30)
         let fallbackComponents = schedulingCalendar.dateComponents(
@@ -1383,7 +1384,8 @@ final class WarmAlarmRequestTests: XCTestCase {
         let scheduledAtMillis = Int64(primaryDate.timeIntervalSince1970 * 1_000)
         let schedule = WarmAlarmScheduleData.from(
             wire: makeWireSchedule(scheduledAtMillis: scheduledAtMillis),
-            fallbackAnchorMillis: scheduledAtMillis
+            fallbackAnchorMillis: scheduledAtMillis,
+            occurrenceSeriesToken: "calendar-occurrence"
         )
         let fallbackDate = primaryDate.addingTimeInterval(30)
         let pendingFallback = UNNotificationRequest(
@@ -1450,7 +1452,8 @@ final class WarmAlarmRequestTests: XCTestCase {
         let lastOccurrenceMillis = Int64(lastOccurrence.timeIntervalSince1970 * 1_000)
         let schedule = WarmAlarmScheduleData.from(
             wire: makeWireSchedule(scheduledAtMillis: firstOccurrenceMillis),
-            fallbackAnchorMillis: firstOccurrenceMillis
+            fallbackAnchorMillis: firstOccurrenceMillis,
+            occurrenceSeriesToken: "repeated-hour-occurrence"
         )
         let fallback = UNNotificationRequest(
             identifier: "42#fallback#1",
@@ -1484,7 +1487,8 @@ final class WarmAlarmRequestTests: XCTestCase {
         let anchor = Int64(1_900_000_000_000)
         let schedule = WarmAlarmScheduleData.from(
             wire: makeWireSchedule(scheduledAtMillis: anchor),
-            fallbackAnchorMillis: anchor
+            fallbackAnchorMillis: anchor,
+            occurrenceSeriesToken: "surviving-occurrence"
         )
         let calendar = utcCalendar()
         let primaryDate = Date(timeIntervalSince1970: Double(anchor) / 1_000)
@@ -1509,7 +1513,6 @@ final class WarmAlarmRequestTests: XCTestCase {
             for: schedule,
             nowMillis: anchor - 60_000,
             pendingIdentifiers: [fallback.identifier],
-            pendingRequests: [fallback],
             content: UNMutableNotificationContent(),
             calendar: calendar
         )
@@ -1518,6 +1521,82 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertTrue(requests.allSatisfy {
             occurrenceMetadata(from: $0.content)?["token"] as? String == "surviving-occurrence"
         })
+    }
+
+    func testRecoveryRejectsPendingRequestsFromReplacedGeneration() {
+        let anchor = Int64(1_900_000_000_000)
+        let calendar = utcCalendar()
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: anchor),
+            fallbackAnchorMillis: anchor,
+            occurrenceSeriesToken: "new-generation"
+        )
+        let oldFallback = UNNotificationRequest(
+            identifier: "42#fallback#1",
+            content: makeOccurrenceContent(
+                token: "old-generation",
+                ordinal: 1,
+                primaryDate: Date(timeIntervalSince1970: Double(anchor) / 1_000),
+                calendar: calendar
+            ),
+            trigger: UNCalendarNotificationTrigger(
+                dateMatching: calendar.dateComponents(
+                    [.year, .month, .day, .hour, .minute, .second],
+                    from: Date(timeIntervalSince1970: Double(anchor + 30_000) / 1_000)
+                ),
+                repeats: false
+            )
+        )
+
+        let requests = WarmAlarmPlugin.makeRecoveryRequests(
+            for: schedule,
+            nowMillis: anchor - 60_000,
+            pendingIdentifiers: [oldFallback.identifier],
+            content: UNMutableNotificationContent(),
+            calendar: calendar
+        )
+
+        XCTAssertFalse(requests.isEmpty)
+        XCTAssertTrue(requests.allSatisfy {
+            occurrenceMetadata(from: $0.content)?["token"] as? String == "new-generation"
+        })
+    }
+
+    func testOneShotMigrationIgnoresPendingRequestsFromReplacedGeneration() {
+        let calendar = utcCalendar()
+        let storedAtMillis = millis(2030, 1, 1, 7, 0, calendar: calendar)
+        let oldAtMillis = millis(2030, 1, 2, 7, 0, calendar: calendar)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: storedAtMillis),
+            fallbackAnchorMillis: storedAtMillis,
+            occurrenceSeriesToken: "new-generation"
+        )
+        let oldPrimary = UNNotificationRequest(
+            identifier: "42",
+            content: makeOccurrenceContent(
+                token: "old-generation",
+                ordinal: 0,
+                primaryDate: Date(timeIntervalSince1970: Double(oldAtMillis) / 1_000),
+                calendar: calendar
+            ),
+            trigger: UNCalendarNotificationTrigger(
+                dateMatching: calendar.dateComponents(
+                    [.year, .month, .day, .hour, .minute, .second],
+                    from: Date(timeIntervalSince1970: Double(oldAtMillis) / 1_000)
+                ),
+                repeats: false
+            )
+        )
+
+        let migrated = WarmAlarmPlugin.migrateOneShotFallbackAnchors(
+            [schedule],
+            pendingRequests: [oldPrimary],
+            calendar: calendar,
+            save: { _ in }
+        )[0]
+
+        XCTAssertEqual(migrated.scheduledAtMillis, storedAtMillis)
+        XCTAssertEqual(migrated.fallbackAnchorMillis, storedAtMillis)
     }
 
     func testRecoveryRetainsSeriesTokenWhenRepeatingPrimaryUsesPreviousAnchorMetadata() {
@@ -1530,7 +1609,8 @@ final class WarmAlarmRequestTests: XCTestCase {
                 recurrenceWeekdays: [1]
             ),
             fallbackAnchorMillis: previousAnchorMillis,
-            calendar: schedulingCalendar
+            calendar: schedulingCalendar,
+            occurrenceSeriesToken: "recurring-series"
         )
         let repeatingPrimary = UNNotificationRequest(
             identifier: "42#1",
@@ -1552,7 +1632,6 @@ final class WarmAlarmRequestTests: XCTestCase {
             for: schedule,
             nowMillis: nowMillis,
             pendingIdentifiers: [repeatingPrimary.identifier],
-            pendingRequests: [repeatingPrimary],
             content: UNMutableNotificationContent(),
             calendar: recoveryCalendar
         )
@@ -1562,7 +1641,6 @@ final class WarmAlarmRequestTests: XCTestCase {
             for: schedule,
             nowMillis: nowMillis,
             pendingIdentifiers: [repeatingPrimary.identifier, survivingFallback.identifier],
-            pendingRequests: [repeatingPrimary, survivingFallback],
             content: UNMutableNotificationContent(),
             calendar: recoveryCalendar
         )
@@ -1597,7 +1675,6 @@ final class WarmAlarmRequestTests: XCTestCase {
             for: schedule,
             nowMillis: anchor - 60_000,
             pendingIdentifiers: [legacyPrimary.identifier],
-            pendingRequests: [legacyPrimary],
             content: UNMutableNotificationContent(),
             calendar: calendar
         )
@@ -1651,7 +1728,6 @@ final class WarmAlarmRequestTests: XCTestCase {
             for: schedule,
             nowMillis: anchor,
             pendingIdentifiers: Set(pendingRequests.map(\.identifier)),
-            pendingRequests: pendingRequests,
             content: UNMutableNotificationContent(),
             calendar: calendar
         )
