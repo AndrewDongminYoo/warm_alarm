@@ -203,12 +203,20 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         deliveredAtMillis: Int64,
         completion: @escaping (Bool) -> Void
     ) {
-        completion(performForegroundDelivery(
-            alarmId: alarmId,
-            identifier: identifier,
-            content: content,
-            deliveredAtMillis: deliveredAtMillis
-        ))
+        notificationMutationQueue.enqueueOnMain { [weak self] finish in
+            guard let self else {
+                completion(false)
+                finish()
+                return
+            }
+            completion(self.performForegroundDelivery(
+                alarmId: alarmId,
+                identifier: identifier,
+                content: content,
+                deliveredAtMillis: deliveredAtMillis
+            ))
+            finish()
+        }
     }
 
     private func performForegroundDelivery(
