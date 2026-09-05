@@ -1427,6 +1427,18 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         return String(deliveredAtMillis - Int64(index) * fallbackIntervalMillis)
     }
 
+    static func actionOccurrenceLowerBound(
+        for schedule: WarmAlarmScheduleData,
+        nowMillis: Int64,
+        calendar: Calendar = .current
+    ) -> Int64? {
+        recoveryFallbackAnchorMillis(
+            for: schedule,
+            nowMillis: nowMillis,
+            calendar: calendar
+        )
+    }
+
     private static func recurringWeekday(for identifier: String, alarmId: Int64) -> Int64? {
         let prefix = "\(alarmId)#"
         guard identifier.hasPrefix(prefix),

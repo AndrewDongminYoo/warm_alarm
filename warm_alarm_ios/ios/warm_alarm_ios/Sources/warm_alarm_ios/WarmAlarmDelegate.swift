@@ -4,9 +4,47 @@ import UserNotifications
 
 import Flutter
 
+final class WarmAlarmConsumedOccurrenceStore: @unchecked Sendable {
+    private let defaults: UserDefaults
+    private let key: String
+
+    init(
+        defaults: UserDefaults = .standard,
+        key: String = "warm_alarm_consumed_occurrences"
+    ) {
+        self.defaults = defaults
+        self.key = key
+    }
+
+    func load(alarmId: Int64) -> Int64? {
+        (defaults.dictionary(forKey: key)?[String(alarmId)] as? NSNumber)?.int64Value
+    }
+
+    func save(alarmId: Int64, occurrenceMillis: Int64) {
+        var values = defaults.dictionary(forKey: key) ?? [:]
+        values[String(alarmId)] = occurrenceMillis
+        defaults.set(values, forKey: key)
+    }
+
+    func clear(alarmId: Int64) {
+        var values = defaults.dictionary(forKey: key) ?? [:]
+        values.removeValue(forKey: String(alarmId))
+        defaults.set(values, forKey: key)
+    }
+
+    func clearAll() {
+        defaults.removeObject(forKey: key)
+    }
+}
+
 final class WarmAlarmForegroundOccurrenceTracker: @unchecked Sendable {
     private let lock = NSLock()
     private var latestHandledOccurrenceMillisByAlarmId = [Int64: Int64]()
+    private let consumedOccurrenceStore: WarmAlarmConsumedOccurrenceStore?
+
+    init(consumedOccurrenceStore: WarmAlarmConsumedOccurrenceStore? = nil) {
+        self.consumedOccurrenceStore = consumedOccurrenceStore
+    }
 
     func shouldHandleAndMark(alarmId: Int64, occurrenceToken: String) -> Bool {
         handleIfAllowed(
@@ -35,12 +73,26 @@ final class WarmAlarmForegroundOccurrenceTracker: @unchecked Sendable {
     }
 
     @discardableResult
-    func stop(alarmId: Int64, occurrenceToken: String) -> Bool {
-        stop(alarmId: alarmId, occurrenceToken: occurrenceToken, perform: {})
+    func stop(
+        alarmId: Int64,
+        occurrenceToken: String,
+        minimumOccurrenceMillis: Int64? = nil
+    ) -> Bool {
+        stop(
+            alarmId: alarmId,
+            occurrenceToken: occurrenceToken,
+            minimumOccurrenceMillis: minimumOccurrenceMillis,
+            perform: {}
+        )
     }
 
     @discardableResult
-    func stop(alarmId: Int64, occurrenceToken: String, perform action: () -> Void) -> Bool {
+    func stop(
+        alarmId: Int64,
+        occurrenceToken: String,
+        minimumOccurrenceMillis: Int64? = nil,
+        perform action: () -> Void
+    ) -> Bool {
         lock.lock()
         defer { lock.unlock() }
         guard let occurrenceMillis = occurrenceMillis(from: occurrenceToken),
@@ -81,7 +133,9 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     private let notificationMutationQueue: WarmAlarmMutationQueue
     private var audioPlayer: AVAudioPlayer?
     private(set) var currentlyPlayingAlarmId: Int64?
-    private let foregroundOccurrenceTracker = WarmAlarmForegroundOccurrenceTracker()
+    private let foregroundOccurrenceTracker = WarmAlarmForegroundOccurrenceTracker(
+        consumedOccurrenceStore: WarmAlarmConsumedOccurrenceStore()
+    )
     private var fadeWorkItems: [DispatchWorkItem] = []
     private var volumeEnforcerTimer: Timer?
 
