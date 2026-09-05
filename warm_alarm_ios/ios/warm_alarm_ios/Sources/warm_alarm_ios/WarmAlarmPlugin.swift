@@ -1651,14 +1651,14 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         nowMillis: Int64,
         calendar: Calendar
     ) -> Int64? {
-        guard let persistedAnchorMillis = schedule.fallbackAnchorMillis else { return nil }
+        let persistedAnchorMillis = schedule.fallbackAnchorMillis
         guard !hasActiveSnoozeFallbacks(for: schedule, nowMillis: nowMillis),
               let weekdays = schedule.recurrenceWeekdays, !weekdays.isEmpty,
               let hour = schedule.recurrenceHour,
               let minute = schedule.recurrenceMinute else {
             return persistedAnchorMillis
         }
-        if schedule.activeSnoozeUntilMillis == nil {
+        if schedule.activeSnoozeUntilMillis == nil, let persistedAnchorMillis {
             let persistedAnchorDate = Date(timeIntervalSince1970: Double(persistedAnchorMillis) / 1_000)
             let persistedTime = calendar.dateComponents([.weekday, .hour, .minute], from: persistedAnchorDate)
             let appleWeekdays = Set(weekdays.map(WarmAlarmRecurrence.appleWeekday))

@@ -915,6 +915,37 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertTrue(requests.isEmpty)
     }
 
+    func testRecoveryRebuildsFallbacksAfterRecurringStopClearsAnchor() {
+        let calendar = utcCalendar()
+        let firstOccurrenceMillis = millis(2030, 1, 7, 7, 0, calendar: calendar)
+        let nextOccurrenceMillis = millis(2030, 1, 14, 7, 0, calendar: calendar)
+        let wire = makeWireSchedule(
+            scheduledAtMillis: firstOccurrenceMillis,
+            recurrenceWeekdays: [1]
+        )
+        let schedule = WarmAlarmScheduleData.from(
+            wire: wire,
+            fallbackAnchorMillis: firstOccurrenceMillis,
+            calendar: calendar
+        ).clearingFallbackAnchor()
+
+        let requests = WarmAlarmPlugin.makeRecoveryRequests(
+            for: schedule,
+            nowMillis: millis(2030, 1, 8, 12, 0, calendar: calendar),
+            pendingIdentifiers: ["42#1"],
+            content: UNMutableNotificationContent(),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(requests.map(\.identifier), WarmAlarmPlugin.fallbackIdentifiers(for: 42))
+        let firstFallbackTrigger = requests.first?.trigger as? UNCalendarNotificationTrigger
+        XCTAssertEqual(
+            firstFallbackTrigger.flatMap { calendar.date(from: $0.dateComponents) }
+                .map { Int64($0.timeIntervalSince1970 * 1_000) },
+            nextOccurrenceMillis + 30_000
+        )
+    }
+
     func testRecoveryAdvancesPastAnExpiredSnoozeAfterTimeZoneChange() {
         var schedulingCalendar = Calendar(identifier: .gregorian)
         schedulingCalendar.timeZone = TimeZone(identifier: "America/New_York")!
