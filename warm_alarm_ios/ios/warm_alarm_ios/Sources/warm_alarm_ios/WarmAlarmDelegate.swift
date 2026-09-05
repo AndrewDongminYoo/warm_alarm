@@ -117,7 +117,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
                 self?.handleStop(alarmId: alarmId, deliveredIdentifier: deliveredIdentifier)
             }, completionHandler: completionHandler)
         case Self.snoozeActionIdentifier:
-            notificationMutationQueue.enqueue { [weak self] finish in
+            notificationMutationQueue.enqueueOnMain { [weak self] finish in
                 guard let self else {
                     completionHandler()
                     finish()
@@ -279,7 +279,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         _ action: @escaping () -> Void,
         completionHandler: @escaping () -> Void
     ) {
-        notificationMutationQueue.enqueue { finish in
+        notificationMutationQueue.enqueueOnMain { finish in
             action()
             completionHandler()
             finish()

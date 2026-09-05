@@ -3,6 +3,19 @@ import XCTest
 @testable import warm_alarm_ios
 
 final class WarmAlarmMutationQueueTests: XCTestCase {
+    func testRunsPlatformMutationOnMainThread() {
+        let completed = expectation(description: "platform mutation completes")
+        let mutationQueue = WarmAlarmMutationQueue(label: "warm_alarm_tests.platform_mutation")
+
+        mutationQueue.enqueueOnMain { finish in
+            XCTAssertTrue(Thread.isMainThread)
+            completed.fulfill()
+            finish()
+        }
+
+        wait(for: [completed], timeout: 1)
+    }
+
     func testDefersNotificationActionUntilRegistrationFinishes() {
         let registrationStarted = expectation(description: "registration starts")
         let cancellationStartedEarly = expectation(description: "cancellation does not start early")
