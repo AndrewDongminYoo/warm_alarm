@@ -1762,6 +1762,85 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertEqual(stoppedOccurrences, ["current"])
     }
 
+    func testStopConsumesCurrentOccurrenceOnlyOnce() {
+        let tracker = WarmAlarmForegroundOccurrenceTracker()
+        var actionCount = 0
+
+        XCTAssertTrue(tracker.shouldHandleAndMark(alarmId: 42, occurrenceToken: "series#1000"))
+        tracker.stop(alarmId: 42, occurrenceToken: "series#1000") {
+            actionCount += 1
+        }
+        tracker.stop(alarmId: 42, occurrenceToken: "series#1000") {
+            actionCount += 1
+        }
+
+        XCTAssertEqual(actionCount, 1)
+    }
+
+    func testConsumedOccurrenceSurvivesTrackerReinitialization() {
+        let suiteName = "WarmAlarmConsumedOccurrenceTests.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            XCTFail("Could not create isolated UserDefaults")
+            return
+        }
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = WarmAlarmConsumedOccurrenceStore(defaults: defaults)
+        var actionCount = 0
+
+        WarmAlarmForegroundOccurrenceTracker(consumedOccurrenceStore: store).stop(
+            alarmId: 42,
+            occurrenceToken: "series#1000"
+        ) {
+            actionCount += 1
+        }
+        let reinitializedTracker = WarmAlarmForegroundOccurrenceTracker(consumedOccurrenceStore: store)
+        reinitializedTracker.stop(
+            alarmId: 42,
+            occurrenceToken: "series#1000"
+        ) {
+            actionCount += 1
+        }
+
+        XCTAssertEqual(actionCount, 1)
+
+        reinitializedTracker.clear(alarmId: 42)
+        WarmAlarmForegroundOccurrenceTracker(consumedOccurrenceStore: store).stop(
+            alarmId: 42,
+            occurrenceToken: "series#1000"
+        ) {
+            actionCount += 1
+        }
+
+        XCTAssertEqual(actionCount, 2)
+    }
+
+    func testStopRejectsOccurrenceBeforePersistedScheduleAnchorAfterTrackerReinitialization() {
+        let calendar = utcCalendar()
+        let currentAnchorMillis = Int64(2_000)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: currentAnchorMillis),
+            fallbackAnchorMillis: currentAnchorMillis,
+            calendar: calendar
+        )
+        let minimumOccurrenceMillis = WarmAlarmPlugin.actionOccurrenceLowerBound(
+            for: schedule,
+            nowMillis: currentAnchorMillis,
+            calendar: calendar
+        )
+        let tracker = WarmAlarmForegroundOccurrenceTracker()
+        var didRunAction = false
+
+        tracker.stop(
+            alarmId: 42,
+            occurrenceToken: "series#1000",
+            minimumOccurrenceMillis: minimumOccurrenceMillis
+        ) {
+            didRunAction = true
+        }
+
+        XCTAssertFalse(didRunAction)
+    }
+
     func testStoppedOccurrenceDoesNotSuppressFallbackFromNextOccurrence() {
         let tracker = WarmAlarmForegroundOccurrenceTracker()
 

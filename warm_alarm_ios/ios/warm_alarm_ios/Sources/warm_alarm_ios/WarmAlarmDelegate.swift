@@ -40,6 +40,7 @@ final class WarmAlarmConsumedOccurrenceStore: @unchecked Sendable {
 final class WarmAlarmForegroundOccurrenceTracker: @unchecked Sendable {
     private let lock = NSLock()
     private var latestHandledOccurrenceMillisByAlarmId = [Int64: Int64]()
+    private var latestConsumedOccurrenceMillisByAlarmId = [Int64: Int64]()
     private let consumedOccurrenceStore: WarmAlarmConsumedOccurrenceStore?
 
     init(consumedOccurrenceStore: WarmAlarmConsumedOccurrenceStore? = nil) {
@@ -69,6 +70,8 @@ final class WarmAlarmForegroundOccurrenceTracker: @unchecked Sendable {
     func clear(alarmId: Int64) {
         lock.lock()
         latestHandledOccurrenceMillisByAlarmId.removeValue(forKey: alarmId)
+        latestConsumedOccurrenceMillisByAlarmId.removeValue(forKey: alarmId)
+        consumedOccurrenceStore?.clear(alarmId: alarmId)
         lock.unlock()
     }
 
@@ -96,10 +99,20 @@ final class WarmAlarmForegroundOccurrenceTracker: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         guard let occurrenceMillis = occurrenceMillis(from: occurrenceToken),
-              latestHandledOccurrenceMillisByAlarmId[alarmId].map({ occurrenceMillis >= $0 }) ?? true else {
+              latestHandledOccurrenceMillisByAlarmId[alarmId].map({ occurrenceMillis >= $0 }) ?? true,
+              minimumOccurrenceMillis.map({ occurrenceMillis >= $0 }) ?? true else {
+            return false
+        }
+        let consumedOccurrenceMillis = max(
+            latestConsumedOccurrenceMillisByAlarmId[alarmId] ?? .min,
+            consumedOccurrenceStore?.load(alarmId: alarmId) ?? .min
+        )
+        guard occurrenceMillis > consumedOccurrenceMillis else {
             return false
         }
         latestHandledOccurrenceMillisByAlarmId[alarmId] = occurrenceMillis
+        latestConsumedOccurrenceMillisByAlarmId[alarmId] = occurrenceMillis
+        consumedOccurrenceStore?.save(alarmId: alarmId, occurrenceMillis: occurrenceMillis)
         action()
         return true
     }
@@ -120,6 +133,8 @@ final class WarmAlarmForegroundOccurrenceTracker: @unchecked Sendable {
     func clearAll() {
         lock.lock()
         latestHandledOccurrenceMillisByAlarmId.removeAll()
+        latestConsumedOccurrenceMillisByAlarmId.removeAll()
+        consumedOccurrenceStore?.clearAll()
         lock.unlock()
     }
 }
@@ -255,9 +270,13 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         deliveredIdentifier: String? = nil
     ) {
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
+        let actionLowerBound = schedule.flatMap {
+            WarmAlarmPlugin.actionOccurrenceLowerBound(for: $0, nowMillis: nowMillis())
+        }
         guard foregroundOccurrenceTracker.stop(
             alarmId: alarmId,
             occurrenceToken: occurrenceToken,
+            minimumOccurrenceMillis: actionLowerBound,
             perform: stopAudio
         ) else { return }
         removePendingFallbackRequests(for: alarmId)
@@ -289,16 +308,20 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         deliveredIdentifier: String? = nil,
         completion: @escaping () -> Void
     ) {
+        let schedule = WarmAlarmStore.shared.load(id: alarmId)
+        let actionLowerBound = schedule.flatMap {
+            WarmAlarmPlugin.actionOccurrenceLowerBound(for: $0, nowMillis: nowMillis())
+        }
         guard foregroundOccurrenceTracker.stop(
             alarmId: alarmId,
             occurrenceToken: occurrenceToken,
+            minimumOccurrenceMillis: actionLowerBound,
             perform: stopAudio
         ) else {
             completion()
             return
         }
         removePendingFallbackRequests(for: alarmId)
-        let schedule = WarmAlarmStore.shared.load(id: alarmId)
         if schedule?.keepNotificationAfterAlarmEnds != true {
             UNUserNotificationCenter.current().removeDeliveredNotifications(
                 withIdentifiers: Self.deliveredIdentifiersToRemove(
