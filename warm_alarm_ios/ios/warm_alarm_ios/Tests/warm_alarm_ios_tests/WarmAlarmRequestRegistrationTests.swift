@@ -1990,6 +1990,53 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertEqual(minimumOccurrenceMillis, interveningOccurrenceMillis)
     }
 
+    func testStoppingRecurringOccurrencePreservesLaterSnoozeFallbackChain() {
+        let alarmId = Int64(4_242_424_244)
+        let calendar = utcCalendar()
+        let firstOccurrenceMillis = millis(2030, 1, 7, 7, 0, calendar: calendar)
+        let interveningOccurrenceMillis = millis(2030, 1, 14, 7, 0, calendar: calendar)
+        let snoozeOccurrenceMillis = millis(2030, 1, 21, 7, 30, calendar: calendar)
+        let wire = makeWireSchedule(
+            id: alarmId,
+            scheduledAtMillis: firstOccurrenceMillis,
+            recurrenceWeekdays: [1]
+        )
+        let schedule = WarmAlarmScheduleData.from(
+            wire: wire,
+            fallbackAnchorMillis: firstOccurrenceMillis,
+            calendar: calendar
+        ).withActiveSnooze(
+            untilMillis: snoozeOccurrenceMillis,
+            fallbackAnchorMillis: snoozeOccurrenceMillis
+        )
+        let recurringContent = WarmAlarmPlugin.makeRequests(
+            for: wire,
+            content: UNMutableNotificationContent(),
+            fallbackAnchorMillis: firstOccurrenceMillis,
+            calendar: calendar
+        )[0].content
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(schedule)
+        let delegate = WarmAlarmDelegate(
+            eventsApi: RecordingWarmAlarmEventsApi(),
+            notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.recurring_stop_snooze")
+        )
+        defer {
+            delegate.stopIfPlaying(alarmId: alarmId)
+            WarmAlarmStore.shared.remove(id: alarmId)
+        }
+
+        delegate.handleStop(
+            alarmId: alarmId,
+            occurrenceToken: "warm-alarm-v1:\(alarmId)#\(interveningOccurrenceMillis)",
+            deliveredIdentifier: "\(alarmId)#1",
+            content: recurringContent
+        )
+
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.activeSnoozeUntilMillis, snoozeOccurrenceMillis)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.fallbackAnchorMillis, snoozeOccurrenceMillis)
+    }
+
     func testRejectedReplacedOccurrenceStillStopsMatchingPlayingAudio() {
         let alarmId = Int64(4_242_424_242)
         let oldOccurrenceMillis = Int64(1_000)

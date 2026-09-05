@@ -301,13 +301,19 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             stopAudioIfPlaying(alarmId: alarmId, occurrenceToken: occurrenceToken)
             return
         }
-        removePendingFallbackRequests(for: alarmId)
+        let preservesActiveSnooze = schedule?.activeSnoozeUntilMillis.map { $0 > nowMillis() } == true
+            && content.map { content in
+                schedule.map { WarmAlarmPlugin.isFloatingRecurringOccurrence(for: $0, content: content) } == true
+            } == true
+        if !preservesActiveSnooze {
+            removePendingFallbackRequests(for: alarmId)
+        }
         // Dismiss ends only this occurrence for a recurring alarm; the repeating
         // triggers stay armed, so keep the stored schedule. cancelAlarm tears down
         // the series.
         let isRecurring = !(schedule?.recurrenceWeekdays?.isEmpty ?? true)
         if isRecurring, let schedule {
-            WarmAlarmStore.shared.save(schedule.clearingFallbackAnchor())
+            WarmAlarmStore.shared.save(preservesActiveSnooze ? schedule : schedule.clearingFallbackAnchor())
         } else {
             WarmAlarmStore.shared.remove(id: alarmId)
         }
