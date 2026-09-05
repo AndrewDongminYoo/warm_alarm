@@ -1548,15 +1548,21 @@ final class WarmAlarmRequestTests: XCTestCase {
             )
         )
 
+        let staleIdentifiers = WarmAlarmPlugin.staleRecoveryRequestIdentifiers(
+            for: [schedule],
+            in: [oldFallback]
+        )
+
         let requests = WarmAlarmPlugin.makeRecoveryRequests(
             for: schedule,
             nowMillis: anchor - 60_000,
-            pendingIdentifiers: [oldFallback.identifier],
+            pendingIdentifiers: Set([oldFallback.identifier]).subtracting(staleIdentifiers),
             content: UNMutableNotificationContent(),
             calendar: calendar
         )
 
-        XCTAssertFalse(requests.isEmpty)
+        XCTAssertEqual(staleIdentifiers, [oldFallback.identifier])
+        XCTAssertTrue(requests.map(\.identifier).contains(oldFallback.identifier))
         XCTAssertTrue(requests.allSatisfy {
             occurrenceMetadata(from: $0.content)?["token"] as? String == "new-generation"
         })

@@ -520,7 +520,14 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         center: UNUserNotificationCenter,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
-        let pendingIdentifiers = Set(pendingRequests.map(\.identifier))
+        let staleIdentifiers = Self.staleRecoveryRequestIdentifiers(
+            for: alarms,
+            in: pendingRequests
+        )
+        let pendingIdentifiers = Set(pendingRequests.map(\.identifier)).subtracting(staleIdentifiers)
+        if !staleIdentifiers.isEmpty {
+            center.removePendingNotificationRequests(withIdentifiers: Array(staleIdentifiers))
+        }
         let requestGroups = alarms.map { schedule in
             let content = delegate.makeContent(from: schedule)
             return (
@@ -1298,6 +1305,17 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         return requests.filter {
             $0.identifier == identifier || $0.identifier.hasPrefix(childPrefix)
         }
+    }
+
+    static func staleRecoveryRequestIdentifiers(
+        for schedules: [WarmAlarmScheduleData],
+        in requests: [UNNotificationRequest]
+    ) -> Set<String> {
+        Set(schedules.flatMap { schedule in
+            notificationRequests(for: schedule.id, in: requests)
+                .filter { !notificationContent(schedule, matches: $0.content) }
+                .map(\.identifier)
+        })
     }
 
     private static func occurrenceMetadata(from content: UNNotificationContent) -> WarmAlarmOccurrenceMetadata? {
