@@ -1,3 +1,7 @@
+# 0.1.3
+
+- Preserve alarm events that arrive before the app registers its first Dart listener. This lets a cold-start notification tap reach the app instead of being dropped during startup.
+
 # 0.1.2
 
 - Own the fallback notification chain. Each alarm now registers a finite chain of follow-up requests behind its primary notification, and the plugin keeps that chain's whole lifecycle (registration, replacement, suppression, and teardown) in one place instead of leaving stray requests behind after a dismissal, a snooze, or a recurrence stop.
