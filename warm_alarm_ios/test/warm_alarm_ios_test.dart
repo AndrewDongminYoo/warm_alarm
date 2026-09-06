@@ -87,6 +87,46 @@ void main() {
   });
 
   group('WarmAlarmIOS events', () {
+    test('registerWith defers the event channel until events is accessed', () async {
+      WarmAlarmEventsApi.setUp(null);
+      addTearDown(() => WarmAlarmEventsApi.setUp(null));
+      WarmAlarmIOS.registerWith();
+      final platform = WarmAlarmPlatform.instance as WarmAlarmIOS;
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
+        'dev.flutter.pigeon.warm_alarm.WarmAlarmEventsApi.emitEvent',
+        WarmAlarmEventsApi.pigeonChannelCodec.encodeMessage(<Object?>[
+          WarmAlarmEventWire(
+            alarmId: 41,
+            type: WarmAlarmEventTypeWire.fired,
+            occurredAtMillis: now,
+          ),
+        ]),
+        null,
+      );
+
+      final events = <WarmAlarmEvent>[];
+      final subscription = platform.events.listen(events.add);
+      addTearDown(subscription.cancel);
+      await Future<void>.delayed(Duration.zero);
+      expect(events, isEmpty);
+
+      await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
+        'dev.flutter.pigeon.warm_alarm.WarmAlarmEventsApi.emitEvent',
+        WarmAlarmEventsApi.pigeonChannelCodec.encodeMessage(<Object?>[
+          WarmAlarmEventWire(
+            alarmId: 42,
+            type: WarmAlarmEventTypeWire.fired,
+            occurredAtMillis: now,
+          ),
+        ]),
+        null,
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(events.single.alarmId, 42);
+    });
+
     test('preserves an event before the first listener only', () async {
       final platform = WarmAlarmIOS(api: _MockWarmAlarmApi());
       final now = DateTime.now().millisecondsSinceEpoch;
