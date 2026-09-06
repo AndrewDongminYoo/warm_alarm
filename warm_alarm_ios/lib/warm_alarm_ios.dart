@@ -15,6 +15,8 @@ class WarmAlarmIOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
     _events = StreamController<WarmAlarmEvent>.broadcast(onListen: _handleFirstEventListener);
   }
 
+  static const int _pendingEventLimit = 64;
+
   /// The API used to interact with the native platform.
   final WarmAlarmApi api;
 
@@ -97,6 +99,9 @@ class WarmAlarmIOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   Future<void> emitEvent(WarmAlarmEventWire event) async {
     final mappedEvent = _eventFromWire(event);
     if (!_hasEventListener) {
+      if (_pendingEvents.length == _pendingEventLimit) {
+        _pendingEvents.removeAt(0);
+      }
       _pendingEvents.add(mappedEvent);
       return;
     }

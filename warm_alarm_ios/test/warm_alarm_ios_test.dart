@@ -120,6 +120,28 @@ void main() {
       await secondSubscription.cancel();
     });
 
+    test('retains only the 64 newest events before the first listener', () async {
+      final platform = WarmAlarmIOS(api: _MockWarmAlarmApi());
+      for (var alarmId = 0; alarmId < 65; alarmId++) {
+        await platform.emitEvent(
+          WarmAlarmEventWire(
+            alarmId: alarmId,
+            type: WarmAlarmEventTypeWire.scheduled,
+            occurredAtMillis: alarmId,
+          ),
+        );
+      }
+
+      final emitted = <WarmAlarmEvent>[];
+      final subscription = platform.events.listen(emitted.add);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(emitted, hasLength(64));
+      expect(emitted.first.alarmId, 1);
+      expect(emitted.last.alarmId, 64);
+      await subscription.cancel();
+    });
+
     test('emitEvent adds WarmAlarmFired to events stream', () async {
       final api = _MockWarmAlarmApi();
       final platform = WarmAlarmIOS(api: api);
