@@ -29,8 +29,7 @@ class WarmAlarmIOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   /// Registers this class as the default instance of
   /// [WarmAlarmPlatform].
   static void registerWith() {
-    final instance = WarmAlarmIOS().._ensureEventsApiSetUp();
-    WarmAlarmPlatform.instance = instance;
+    WarmAlarmPlatform.instance = WarmAlarmIOS();
   }
 
   void _ensureEventsApiSetUp() {
