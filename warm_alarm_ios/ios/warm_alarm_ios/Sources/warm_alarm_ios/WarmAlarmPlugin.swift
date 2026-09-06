@@ -464,6 +464,12 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
 
     public static func register(with registrar: FlutterPluginRegistrar) {
         let binaryMessenger = registrar.messenger()
+        let eventsChannel = FlutterBasicMessageChannel(
+            name: "dev.flutter.pigeon.warm_alarm.WarmAlarmEventsApi.emitEvent",
+            binaryMessenger: binaryMessenger,
+            codec: MessagesPigeonCodec.shared
+        )
+        eventsChannel.resizeBuffer(64)
         let eventsApi = WarmAlarmEventsApi(binaryMessenger: binaryMessenger)
         // ponytail: serializes all Apple notification mutations; split by alarm ID only if contention is measured.
         let notificationMutationQueue = WarmAlarmMutationQueue(label: "warm_alarm.notification_mutation")

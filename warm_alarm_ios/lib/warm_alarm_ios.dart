@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:warm_alarm_ios/src/messages.g.dart';
@@ -16,6 +17,7 @@ class WarmAlarmIOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   }
 
   static const int _pendingEventLimit = 64;
+  static const String _eventsChannelName = 'dev.flutter.pigeon.warm_alarm.WarmAlarmEventsApi.emitEvent';
 
   /// The API used to interact with the native platform.
   final WarmAlarmApi api;
@@ -29,8 +31,10 @@ class WarmAlarmIOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   /// Registers this class as the default instance of
   /// [WarmAlarmPlatform].
   static void registerWith() {
-    final instance = WarmAlarmIOS().._ensureEventsApiSetUp();
-    WarmAlarmPlatform.instance = instance;
+    if (ui.RootIsolateToken.instance != null) {
+      ui.channelBuffers.resize(_eventsChannelName, _pendingEventLimit);
+    }
+    WarmAlarmPlatform.instance = WarmAlarmIOS();
   }
 
   void _ensureEventsApiSetUp() {

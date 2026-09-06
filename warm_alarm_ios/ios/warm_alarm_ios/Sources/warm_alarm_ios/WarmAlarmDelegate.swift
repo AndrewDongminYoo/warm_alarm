@@ -737,6 +737,12 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     private func nowMillis() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
 
     private func emitEvent(_ event: WarmAlarmEventWire) {
-        eventsApi.emitEvent(event: event) { _ in }
+        if Thread.isMainThread {
+            eventsApi.emitEvent(event: event) { _ in }
+            return
+        }
+        DispatchQueue.main.async { [weak self] in
+            self?.eventsApi.emitEvent(event: event) { _ in }
+        }
     }
 }

@@ -4,6 +4,26 @@ import UserNotifications
 @testable import warm_alarm_ios
 
 final class WarmAlarmRequestRegistrationTests: XCTestCase {
+    func testScheduledEventIsEmittedOnMainThread() {
+        let emitted = expectation(description: "scheduled event emitted")
+        var wasEmittedOnMainThread = false
+        let eventsApi = RecordingWarmAlarmEventsApi { _ in
+            wasEmittedOnMainThread = Thread.isMainThread
+            emitted.fulfill()
+        }
+        let delegate = WarmAlarmDelegate(
+            eventsApi: eventsApi,
+            notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.event_thread")
+        )
+
+        DispatchQueue.global().async {
+            delegate.emitScheduled(alarmId: 42)
+        }
+
+        wait(for: [emitted], timeout: 1)
+        XCTAssertTrue(wasEmittedOnMainThread)
+    }
+
     func testAddsEveryRecurringIdentifierBeforeCompleting() {
         let completed = expectation(description: "registration completes")
         var added = [String]()
@@ -2997,12 +3017,18 @@ final class WarmAlarmRequestTests: XCTestCase {
 
 private final class RecordingWarmAlarmEventsApi: WarmAlarmEventsApiProtocol {
     private(set) var events = [WarmAlarmEventWire]()
+    private let onEmit: ((WarmAlarmEventWire) -> Void)?
+
+    init(onEmit: ((WarmAlarmEventWire) -> Void)? = nil) {
+        self.onEmit = onEmit
+    }
 
     func emitEvent(
         event: WarmAlarmEventWire,
         completion: @escaping (Result<Void, PigeonError>) -> Void
     ) {
         events.append(event)
+        onEmit?(event)
         completion(.success(()))
     }
 }
