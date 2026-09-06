@@ -87,6 +87,61 @@ void main() {
   });
 
   group('WarmAlarmIOS events', () {
+    test('registerWith preserves an early native event for the first listener only', () async {
+      WarmAlarmEventsApi.setUp(null);
+      addTearDown(() => WarmAlarmEventsApi.setUp(null));
+      WarmAlarmIOS.registerWith();
+      final platform = WarmAlarmPlatform.instance as WarmAlarmIOS;
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
+        'dev.flutter.pigeon.warm_alarm.WarmAlarmEventsApi.emitEvent',
+        WarmAlarmEventsApi.pigeonChannelCodec.encodeMessage(<Object?>[
+          WarmAlarmEventWire(
+            alarmId: 42,
+            type: WarmAlarmEventTypeWire.fired,
+            occurredAtMillis: now,
+          ),
+        ]),
+        null,
+      );
+
+      final firstListenerEvents = <WarmAlarmEvent>[];
+      final firstSubscription = platform.events.listen(firstListenerEvents.add);
+      await Future<void>.delayed(Duration.zero);
+      expect(firstListenerEvents, hasLength(1));
+      expect(firstListenerEvents.single, isA<WarmAlarmFired>());
+      await firstSubscription.cancel();
+
+      final secondListenerEvents = <WarmAlarmEvent>[];
+      final secondSubscription = platform.events.listen(secondListenerEvents.add);
+      await Future<void>.delayed(Duration.zero);
+      expect(secondListenerEvents, isEmpty);
+      await secondSubscription.cancel();
+    });
+
+    test('retains only the 64 newest events before the first listener', () async {
+      final platform = WarmAlarmIOS(api: _MockWarmAlarmApi());
+      for (var alarmId = 0; alarmId < 65; alarmId++) {
+        await platform.emitEvent(
+          WarmAlarmEventWire(
+            alarmId: alarmId,
+            type: WarmAlarmEventTypeWire.scheduled,
+            occurredAtMillis: alarmId,
+          ),
+        );
+      }
+
+      final emitted = <WarmAlarmEvent>[];
+      final subscription = platform.events.listen(emitted.add);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(emitted, hasLength(64));
+      expect(emitted.first.alarmId, 1);
+      expect(emitted.last.alarmId, 64);
+      await subscription.cancel();
+    });
+
     test('emitEvent adds WarmAlarmFired to events stream', () async {
       final api = _MockWarmAlarmApi();
       final platform = WarmAlarmIOS(api: api);
