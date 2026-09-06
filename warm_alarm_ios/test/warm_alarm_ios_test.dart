@@ -1,3 +1,8 @@
+import 'dart:async';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:warm_alarm_ios/src/messages.g.dart';
@@ -6,8 +11,24 @@ import 'package:warm_alarm_platform_interface/warm_alarm_platform_interface.dart
 
 class _MockWarmAlarmApi extends Mock implements WarmAlarmApi {}
 
+class _CustomWidgetsFlutterBinding extends WidgetsFlutterBinding {}
+
+const _eventsChannelName = 'dev.flutter.pigeon.warm_alarm.WarmAlarmEventsApi.emitEvent';
+
+Future<ByteData?> _pushEvent(WarmAlarmEventWire event) {
+  final reply = Completer<ByteData?>();
+  ui.channelBuffers.push(
+    _eventsChannelName,
+    WarmAlarmEventsApi.pigeonChannelCodec.encodeMessage(<Object?>[event]),
+    reply.complete,
+  );
+  return reply.future;
+}
+
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+  WarmAlarmIOS.registerWith();
+  final registeredPlatform = WarmAlarmPlatform.instance as WarmAlarmIOS;
+  final customBinding = _CustomWidgetsFlutterBinding();
 
   group(WarmAlarmIOS, () {
     late WarmAlarmIOS warmAlarm;
@@ -54,12 +75,9 @@ void main() {
       }
     });
 
-    test('can be registered', () {
-      WarmAlarmIOS.registerWith();
-      expect(
-        WarmAlarmPlatform.instance,
-        isA<WarmAlarmIOS>(),
-      );
+    test('registers before the app selects its Flutter binding', () {
+      expect(registeredPlatform, isA<WarmAlarmIOS>());
+      expect(customBinding, isA<_CustomWidgetsFlutterBinding>());
     });
 
     test('getCapabilities returns typed stub values', () async {
@@ -87,44 +105,35 @@ void main() {
   });
 
   group('WarmAlarmIOS events', () {
-    test('registerWith defers the event channel until events is accessed', () async {
+    test('registerWith buffers platform events until events is accessed', () async {
       WarmAlarmEventsApi.setUp(null);
-      addTearDown(() => WarmAlarmEventsApi.setUp(null));
-      WarmAlarmIOS.registerWith();
-      final platform = WarmAlarmPlatform.instance as WarmAlarmIOS;
       final now = DateTime.now().millisecondsSinceEpoch;
 
-      await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
-        'dev.flutter.pigeon.warm_alarm.WarmAlarmEventsApi.emitEvent',
-        WarmAlarmEventsApi.pigeonChannelCodec.encodeMessage(<Object?>[
-          WarmAlarmEventWire(
-            alarmId: 41,
-            type: WarmAlarmEventTypeWire.fired,
-            occurredAtMillis: now,
-          ),
-        ]),
-        null,
+      final firstReply = _pushEvent(
+        WarmAlarmEventWire(
+          alarmId: 41,
+          type: WarmAlarmEventTypeWire.fired,
+          occurredAtMillis: now,
+        ),
+      );
+      final secondReply = _pushEvent(
+        WarmAlarmEventWire(
+          alarmId: 42,
+          type: WarmAlarmEventTypeWire.fired,
+          occurredAtMillis: now,
+        ),
       );
 
       final events = <WarmAlarmEvent>[];
-      final subscription = platform.events.listen(events.add);
+      final subscription = registeredPlatform.events.listen(events.add);
       addTearDown(subscription.cancel);
-      await Future<void>.delayed(Duration.zero);
-      expect(events, isEmpty);
+      final replies = await Future.wait(<Future<ByteData?>>[firstReply, secondReply]);
 
-      await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
-        'dev.flutter.pigeon.warm_alarm.WarmAlarmEventsApi.emitEvent',
-        WarmAlarmEventsApi.pigeonChannelCodec.encodeMessage(<Object?>[
-          WarmAlarmEventWire(
-            alarmId: 42,
-            type: WarmAlarmEventTypeWire.fired,
-            occurredAtMillis: now,
-          ),
-        ]),
-        null,
+      expect(events.map((event) => event.alarmId), <int>[41, 42]);
+      expect(
+        replies.map(WarmAlarmEventsApi.pigeonChannelCodec.decodeMessage),
+        everyElement(<Object?>[]),
       );
-      await Future<void>.delayed(Duration.zero);
-      expect(events.single.alarmId, 42);
     });
 
     test('preserves an event before the first listener only', () async {
