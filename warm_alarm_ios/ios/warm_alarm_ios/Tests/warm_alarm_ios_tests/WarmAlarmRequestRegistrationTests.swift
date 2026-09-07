@@ -2607,11 +2607,14 @@ final class WarmAlarmRequestTests: XCTestCase {
             eventsApi: RecordingWarmAlarmEventsApi(),
             notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.unrelated_scene_launch")
         )
+        let content = UNMutableNotificationContent()
+        content.categoryIdentifier = "OTHER_ALARM"
+        content.userInfo["alarmId"] = "42"
 
         let handled = delegate.handleNotificationResponse(
             actionIdentifier: UNNotificationDefaultActionIdentifier,
             deliveredIdentifier: "unrelated",
-            content: UNMutableNotificationContent(),
+            content: content,
             deliveredAtMillis: 1_000,
             completionHandler: {}
         )

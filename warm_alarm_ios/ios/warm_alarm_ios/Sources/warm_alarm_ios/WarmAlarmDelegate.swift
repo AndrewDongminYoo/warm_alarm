@@ -273,7 +273,8 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         deliveredAtMillis: Int64,
         completionHandler: @escaping () -> Void
     ) -> Bool {
-        guard let alarmIdString = content.userInfo["alarmId"] as? String,
+        guard content.categoryIdentifier == Self.categoryIdentifier,
+              let alarmIdString = content.userInfo["alarmId"] as? String,
               let alarmId = Int64(alarmIdString) else {
             completionHandler()
             return false
