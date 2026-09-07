@@ -1,6 +1,6 @@
 name: warm_alarm_ios
 description: iOS implementation of the warm_alarm plugin
-version: 0.1.3
+version: 0.1.4
 
 homepage: https://github.com/AndrewDongminYoo/warm_alarm
 repository: https://github.com/AndrewDongminYoo/warm_alarm

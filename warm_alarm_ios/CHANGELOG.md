@@ -1,3 +1,7 @@
+# 0.1.4
+
+- Handle alarm notification responses from scene connection options. This lets a terminated scene-based app emit the alarm event when the user taps the notification.
+
 # 0.1.3
 
 - Preserve alarm events that arrive before the app registers its first Dart listener. This lets a cold-start notification tap reach the app instead of being dropped during startup.
