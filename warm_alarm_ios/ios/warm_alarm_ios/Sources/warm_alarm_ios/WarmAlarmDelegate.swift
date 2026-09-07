@@ -256,29 +256,45 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        guard let alarmIdString = response.notification.request.content.userInfo["alarmId"] as? String,
+        _ = handleNotificationResponse(
+            actionIdentifier: response.actionIdentifier,
+            deliveredIdentifier: response.notification.request.identifier,
+            content: response.notification.request.content,
+            deliveredAtMillis: Int64(response.notification.date.timeIntervalSince1970 * 1_000),
+            completionHandler: completionHandler
+        )
+    }
+
+    @discardableResult
+    func handleNotificationResponse(
+        actionIdentifier: String,
+        deliveredIdentifier: String,
+        content: UNNotificationContent,
+        deliveredAtMillis: Int64,
+        completionHandler: @escaping () -> Void
+    ) -> Bool {
+        guard let alarmIdString = content.userInfo["alarmId"] as? String,
               let alarmId = Int64(alarmIdString) else {
             completionHandler()
-            return
+            return false
         }
 
-        let deliveredIdentifier = response.notification.request.identifier
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
         let occurrenceToken = WarmAlarmPlugin.foregroundOccurrenceToken(
-            content: response.notification.request.content,
+            content: content,
             identifier: deliveredIdentifier,
             alarmId: alarmId,
-            deliveredAtMillis: Int64(response.notification.date.timeIntervalSince1970 * 1_000),
+            deliveredAtMillis: deliveredAtMillis,
             schedule: schedule
         )
-        switch response.actionIdentifier {
+        switch actionIdentifier {
         case Self.stopActionIdentifier:
             enqueueNotificationAction({ [weak self] in
                 self?.handleStop(
                     alarmId: alarmId,
                     occurrenceToken: occurrenceToken,
                     deliveredIdentifier: deliveredIdentifier,
-                    content: response.notification.request.content
+                    content: content
                 )
             }, completionHandler: completionHandler)
         case Self.snoozeActionIdentifier:
@@ -292,7 +308,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
                     alarmId: alarmId,
                     occurrenceToken: occurrenceToken,
                     deliveredIdentifier: deliveredIdentifier,
-                    content: response.notification.request.content
+                    content: content
                 ) {
                     completionHandler()
                     finish()
@@ -302,14 +318,15 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             handleForegroundDelivery(
                 alarmId: alarmId,
                 identifier: deliveredIdentifier,
-                content: response.notification.request.content,
-                deliveredAtMillis: Int64(response.notification.date.timeIntervalSince1970 * 1_000)
+                content: content,
+                deliveredAtMillis: deliveredAtMillis
             ) { _ in
                 completionHandler()
             }
         default:
             completionHandler()
         }
+        return true
     }
 
     // MARK: - Actions

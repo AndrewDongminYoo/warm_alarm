@@ -2559,6 +2559,66 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertTrue(eventsApi.events.isEmpty)
     }
 
+    func testSceneLaunchDefaultActionEmitsFiredEvent() {
+        let alarmId = Int64(4_242_424_248)
+        let occurrenceMillis = Int64(1_000)
+        let wire = makeWireSchedule(id: alarmId, scheduledAtMillis: occurrenceMillis)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: wire,
+            fallbackAnchorMillis: occurrenceMillis,
+            calendar: utcCalendar()
+        )
+        let eventEmitted = expectation(description: "fired event emitted")
+        let eventsApi = RecordingWarmAlarmEventsApi { _ in eventEmitted.fulfill() }
+        let delegate = WarmAlarmDelegate(
+            eventsApi: eventsApi,
+            notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.scene_launch")
+        )
+        let content = WarmAlarmPlugin.makeRequests(
+            for: wire,
+            content: delegate.makeContent(from: schedule),
+            fallbackAnchorMillis: occurrenceMillis,
+            calendar: utcCalendar(),
+            occurrenceSeriesToken: schedule.occurrenceSeriesToken
+        )[0].content
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(schedule)
+        let responseCompleted = expectation(description: "notification response completed")
+        defer {
+            delegate.stopIfPlaying(alarmId: alarmId)
+            WarmAlarmStore.shared.remove(id: alarmId)
+        }
+
+        let handled = delegate.handleNotificationResponse(
+            actionIdentifier: UNNotificationDefaultActionIdentifier,
+            deliveredIdentifier: String(alarmId),
+            content: content,
+            deliveredAtMillis: occurrenceMillis,
+            completionHandler: { responseCompleted.fulfill() }
+        )
+
+        wait(for: [eventEmitted, responseCompleted], timeout: 1)
+        XCTAssertTrue(handled)
+        XCTAssertEqual(eventsApi.events.map(\.type), [.fired])
+    }
+
+    func testSceneLaunchLeavesUnrelatedNotificationUnclaimed() {
+        let delegate = WarmAlarmDelegate(
+            eventsApi: RecordingWarmAlarmEventsApi(),
+            notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.unrelated_scene_launch")
+        )
+
+        let handled = delegate.handleNotificationResponse(
+            actionIdentifier: UNNotificationDefaultActionIdentifier,
+            deliveredIdentifier: "unrelated",
+            content: UNMutableNotificationContent(),
+            deliveredAtMillis: 1_000,
+            completionHandler: {}
+        )
+
+        XCTAssertFalse(handled)
+    }
+
     func testForegroundDeliveryRejectsCanceledAlarmAfterQueuedCancellation() {
         let alarmId = Int64(4_242_424_247)
         let occurrenceMillis = Int64(1_000)

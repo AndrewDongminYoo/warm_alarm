@@ -410,7 +410,7 @@ private struct WarmAlarmOccurrenceMetadata {
     }
 }
 
-public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
+public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate, WarmAlarmApi {
     private let delegate: WarmAlarmDelegate
     private let notificationMutationQueue: WarmAlarmMutationQueue
     private static let killWarningNotifId = "warm_alarm_kill_warning_notif"
@@ -485,7 +485,23 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         UNUserNotificationCenter.current().delegate = delegate
         WarmAlarmDelegate.registerCategories()
         WarmAlarmApiSetup.setUp(binaryMessenger: binaryMessenger, api: instance)
+        registrar.addSceneDelegate(instance)
         registrar.publish(instance)
+    }
+
+    public func scene(
+        _ scene: UIScene,
+        willConnectTo session: UISceneSession,
+        options connectionOptions: UIScene.ConnectionOptions?
+    ) -> Bool {
+        guard let response = connectionOptions?.notificationResponse else { return false }
+        return delegate.handleNotificationResponse(
+            actionIdentifier: response.actionIdentifier,
+            deliveredIdentifier: response.notification.request.identifier,
+            content: response.notification.request.content,
+            deliveredAtMillis: Int64(response.notification.date.timeIntervalSince1970 * 1_000),
+            completionHandler: {}
+        )
     }
 
     func initialize(completion: @escaping (Result<Void, Error>) -> Void) {
