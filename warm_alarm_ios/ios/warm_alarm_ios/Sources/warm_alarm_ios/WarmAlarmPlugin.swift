@@ -1,3 +1,4 @@
+import CoreFoundation
 import Flutter
 import UIKit
 import UserNotifications
@@ -388,9 +389,8 @@ private struct WarmAlarmOccurrenceMetadata {
     }
 
     private static func int(_ value: Any?) -> Int? {
-        guard !(value is Bool) else { return nil }
-        if let value = value as? Int { return value }
         guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID(),
               number.doubleValue.isFinite,
               number.doubleValue.rounded() == number.doubleValue else {
             return nil
@@ -399,9 +399,8 @@ private struct WarmAlarmOccurrenceMetadata {
     }
 
     private static func int64(_ value: Any?) -> Int64? {
-        guard !(value is Bool) else { return nil }
-        if let value = value as? Int64 { return value }
         guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID(),
               number.doubleValue.isFinite,
               number.doubleValue.rounded() == number.doubleValue else {
             return nil
@@ -410,7 +409,8 @@ private struct WarmAlarmOccurrenceMetadata {
     }
 }
 
-public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate, WarmAlarmApi {
+public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate, WarmAlarmApi,
+    UNUserNotificationCenterDelegate {
     private let delegate: WarmAlarmDelegate
     private let notificationMutationQueue: WarmAlarmMutationQueue
     private static let killWarningNotifId = "warm_alarm_kill_warning_notif"
@@ -482,11 +482,35 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
             notificationMutationQueue: notificationMutationQueue
         )
 
-        UNUserNotificationCenter.current().delegate = delegate
         WarmAlarmDelegate.registerCategories()
         WarmAlarmApiSetup.setUp(binaryMessenger: binaryMessenger, api: instance)
+        registrar.addApplicationDelegate(instance)
         registrar.addSceneDelegate(instance)
         registrar.publish(instance)
+    }
+
+    public func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        delegate.userNotificationCenter(
+            center,
+            willPresent: notification,
+            withCompletionHandler: completionHandler
+        )
+    }
+
+    public func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        delegate.userNotificationCenter(
+            center,
+            didReceive: response,
+            withCompletionHandler: completionHandler
+        )
     }
 
     public func scene(

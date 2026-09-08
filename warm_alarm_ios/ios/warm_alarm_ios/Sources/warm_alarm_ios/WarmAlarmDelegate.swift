@@ -181,9 +181,9 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        guard let alarmIdString = notification.request.content.userInfo["alarmId"] as? String,
+        guard notification.request.content.categoryIdentifier == Self.categoryIdentifier,
+              let alarmIdString = notification.request.content.userInfo["alarmId"] as? String,
               let alarmId = Int64(alarmIdString) else {
-            completionHandler([.alert, .sound])
             return
         }
         handleForegroundDelivery(
@@ -276,7 +276,6 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         guard content.categoryIdentifier == Self.categoryIdentifier,
               let alarmIdString = content.userInfo["alarmId"] as? String,
               let alarmId = Int64(alarmIdString) else {
-            completionHandler()
             return false
         }
 

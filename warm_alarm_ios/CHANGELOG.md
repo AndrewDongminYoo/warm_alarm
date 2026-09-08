@@ -1,3 +1,8 @@
+# 0.1.5
+
+- Preserve an existing notification center delegate during plugin registration, and forward warm-alarm callbacks through Flutter's application delegate multiplexer.
+- Leave unrelated notification callbacks unclaimed so other registered notification plugins can handle them.
+
 # 0.1.4
 
 - Handle alarm notification responses from scene connection options. This lets a terminated scene-based app emit the alarm event when the user taps the notification.

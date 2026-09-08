@@ -1,9 +1,33 @@
+// cspell:words NSKeyedUnarchiver
+
+import Flutter
 import XCTest
 import UserNotifications
 
 @testable import warm_alarm_ios
 
 final class WarmAlarmRequestRegistrationTests: XCTestCase {
+    func testPluginRegistrationPreservesExistingNotificationCenterDelegate() {
+        let engine = FlutterEngine(name: "warm_alarm_registration_test")
+        XCTAssertTrue(engine.run())
+        guard let registrar = engine.registrar(forPlugin: "WarmAlarmRegistrationTest") else {
+            XCTFail("Expected FlutterEngine to provide a plugin registrar")
+            return
+        }
+        let center = UNUserNotificationCenter.current()
+        let previousDelegate = center.delegate
+        let existingDelegate = ExistingNotificationCenterDelegate()
+        center.delegate = existingDelegate
+        defer { center.delegate = previousDelegate }
+
+        WarmAlarmPlugin.register(with: registrar)
+
+        XCTAssertTrue(
+            center.delegate === existingDelegate,
+            "Expected the existing delegate, got \(String(describing: center.delegate))"
+        )
+    }
+
     func testScheduledEventIsEmittedOnMainThread() {
         let emitted = expectation(description: "scheduled event emitted")
         var wasEmittedOnMainThread = false
@@ -2602,6 +2626,40 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertEqual(eventsApi.events.map(\.type), [.fired])
     }
 
+    func testForegroundNotificationMatchesAfterSecureCodingRoundTrip() throws {
+        let alarmId = Int64(4_242_424_249)
+        let occurrenceMillis = Int64(1_000)
+        let wire = makeWireSchedule(id: alarmId, scheduledAtMillis: occurrenceMillis)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: wire,
+            fallbackAnchorMillis: occurrenceMillis,
+            calendar: utcCalendar(),
+            occurrenceSeriesToken: "secure-coding-round-trip"
+        )
+        let delegate = WarmAlarmDelegate(
+            eventsApi: RecordingWarmAlarmEventsApi(),
+            notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.secure_coding")
+        )
+        let request = WarmAlarmPlugin.makeRequests(
+            for: wire,
+            content: delegate.makeContent(from: schedule),
+            fallbackAnchorMillis: occurrenceMillis,
+            calendar: utcCalendar(),
+            occurrenceSeriesToken: schedule.occurrenceSeriesToken
+        )[0]
+        let data = try NSKeyedArchiver.archivedData(withRootObject: request, requiringSecureCoding: true)
+        let decoded = try XCTUnwrap(
+            NSKeyedUnarchiver.unarchivedObject(ofClass: UNNotificationRequest.self, from: data)
+        )
+
+        let metadata = try XCTUnwrap(decoded.content.userInfo["_warmAlarmOccurrenceV1"] as? [String: Any])
+
+        XCTAssertTrue(
+            WarmAlarmPlugin.notificationContent(schedule, matches: decoded.content),
+            "Decoded metadata types: \(metadata.mapValues { String(reflecting: type(of: $0)) })"
+        )
+    }
+
     func testSceneLaunchLeavesUnrelatedNotificationUnclaimed() {
         let delegate = WarmAlarmDelegate(
             eventsApi: RecordingWarmAlarmEventsApi(),
@@ -2610,16 +2668,18 @@ final class WarmAlarmRequestTests: XCTestCase {
         let content = UNMutableNotificationContent()
         content.categoryIdentifier = "OTHER_ALARM"
         content.userInfo["alarmId"] = "42"
+        var didComplete = false
 
         let handled = delegate.handleNotificationResponse(
             actionIdentifier: UNNotificationDefaultActionIdentifier,
             deliveredIdentifier: "unrelated",
             content: content,
             deliveredAtMillis: 1_000,
-            completionHandler: {}
+            completionHandler: { didComplete = true }
         )
 
         XCTAssertFalse(handled)
+        XCTAssertFalse(didComplete)
     }
 
     func testForegroundDeliveryRejectsCanceledAlarmAfterQueuedCancellation() {
@@ -3077,6 +3137,8 @@ final class WarmAlarmRequestTests: XCTestCase {
         return Int64(date.timeIntervalSince1970 * 1_000)
     }
 }
+
+private final class ExistingNotificationCenterDelegate: NSObject, UNUserNotificationCenterDelegate {}
 
 private final class RecordingWarmAlarmEventsApi: WarmAlarmEventsApiProtocol {
     private(set) var events = [WarmAlarmEventWire]()
