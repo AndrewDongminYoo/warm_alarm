@@ -410,15 +410,60 @@ private struct WarmAlarmOccurrenceMetadata {
 }
 
 final class WarmAlarmNotificationCenterDelegate: NSObject, UNUserNotificationCenterDelegate {
+    private final class WeakDelegateReference {
+        weak var delegate: WarmAlarmNotificationCenterDelegate?
+
+        init(_ delegate: WarmAlarmNotificationCenterDelegate) {
+            self.delegate = delegate
+        }
+    }
+
+    private static let installationLock = NSLock()
     private let warmAlarmDelegate: WarmAlarmDelegate
+    private let previousWarmAlarmDelegates: [WeakDelegateReference]
     weak var forwardingDelegate: UNUserNotificationCenterDelegate?
 
     init(
         warmAlarmDelegate: WarmAlarmDelegate,
-        forwardingDelegate: UNUserNotificationCenterDelegate?
+        forwardingDelegate: UNUserNotificationCenterDelegate?,
+        previousWarmAlarmDelegate: WarmAlarmNotificationCenterDelegate? = nil
     ) {
         self.warmAlarmDelegate = warmAlarmDelegate
         self.forwardingDelegate = forwardingDelegate
+        previousWarmAlarmDelegates = previousWarmAlarmDelegate.map {
+            [WeakDelegateReference($0)] + $0.previousWarmAlarmDelegates
+        } ?? []
+    }
+
+    var restorationDelegate: UNUserNotificationCenterDelegate? {
+        previousWarmAlarmDelegates.lazy.compactMap(\.delegate).first ?? forwardingDelegate
+    }
+
+    static func install(
+        warmAlarmDelegate: WarmAlarmDelegate,
+        on notificationCenter: UNUserNotificationCenter
+    ) -> WarmAlarmNotificationCenterDelegate {
+        installationLock.lock()
+        defer { installationLock.unlock() }
+
+        let installedDelegate = notificationCenter.delegate
+        let previousWarmAlarmDelegate = installedDelegate as? WarmAlarmNotificationCenterDelegate
+        let forwardingDelegate = previousWarmAlarmDelegate?.forwardingDelegate ?? installedDelegate
+        let delegate = WarmAlarmNotificationCenterDelegate(
+            warmAlarmDelegate: warmAlarmDelegate,
+            forwardingDelegate: forwardingDelegate,
+            previousWarmAlarmDelegate: previousWarmAlarmDelegate
+        )
+        notificationCenter.delegate = delegate
+        return delegate
+    }
+
+    func uninstall(from notificationCenter: UNUserNotificationCenter) {
+        Self.installationLock.lock()
+        defer { Self.installationLock.unlock() }
+
+        guard notificationCenter.delegate === self else { return }
+        notificationCenter.delegate = restorationDelegate
     }
 
     func target(for content: UNNotificationContent) -> UNUserNotificationCenterDelegate? {
@@ -496,9 +541,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
 
     deinit {
         lifecycleObservers.forEach { NotificationCenter.default.removeObserver($0) }
-        if notificationCenter.delegate === notificationCenterDelegate {
-            notificationCenter.delegate = notificationCenterDelegate.forwardingDelegate
-        }
+        notificationCenterDelegate.uninstall(from: notificationCenter)
     }
 
     private func setupLifecycleObservers() {
@@ -545,12 +588,9 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
             notificationMutationQueue: notificationMutationQueue
         )
         let notificationCenter = UNUserNotificationCenter.current()
-        let installedDelegate = notificationCenter.delegate
-        let forwardingDelegate = (installedDelegate as? WarmAlarmNotificationCenterDelegate)?.forwardingDelegate
-            ?? installedDelegate
-        let notificationCenterDelegate = WarmAlarmNotificationCenterDelegate(
+        let notificationCenterDelegate = WarmAlarmNotificationCenterDelegate.install(
             warmAlarmDelegate: delegate,
-            forwardingDelegate: forwardingDelegate
+            on: notificationCenter
         )
         let instance = WarmAlarmPlugin(
             delegate: delegate,
@@ -563,7 +603,6 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         WarmAlarmApiSetup.setUp(binaryMessenger: binaryMessenger, api: instance)
         registrar.addApplicationDelegate(instance)
         registrar.addSceneDelegate(instance)
-        notificationCenter.delegate = notificationCenterDelegate
         registrar.publish(instance)
     }
 

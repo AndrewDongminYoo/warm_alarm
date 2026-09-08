@@ -1,7 +1,7 @@
 # 0.1.5
 
 - Route warm-alarm notification callbacks through a forwarding notification center delegate, while preserving unrelated callbacks for the delegate that was installed first.
-- Flatten repeated plugin registrations so an earlier Flutter engine can stop without disconnecting unrelated notification callbacks.
+- Keep an ordered weak chain for repeated plugin registrations so Flutter engines can stop in any order without disconnecting the remaining alarm or unrelated notification callbacks.
 - Complete malformed warm-alarm callbacks without blocking the system completion handler.
 
 # 0.1.4

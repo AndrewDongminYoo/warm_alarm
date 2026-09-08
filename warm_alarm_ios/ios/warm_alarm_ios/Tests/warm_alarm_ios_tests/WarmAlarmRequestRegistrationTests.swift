@@ -54,6 +54,95 @@ final class WarmAlarmRequestRegistrationTests: XCTestCase {
         XCTAssertNotNil(installedDelegate)
         XCTAssertFalse(installedDelegate === firstProxy)
         XCTAssertTrue(installedDelegate?.forwardingDelegate === existingDelegate)
+        XCTAssertTrue(installedDelegate?.restorationDelegate === firstProxy)
+    }
+
+    func testNotificationCenterDelegateRestoresNewestLiveProxyFromThreeRegistrations() {
+        let existingDelegate = ExistingNotificationCenterDelegate()
+        var firstProxy: WarmAlarmNotificationCenterDelegate? = makeNotificationCenterDelegate(
+            forwardingDelegate: existingDelegate,
+            label: "first"
+        )
+        var secondProxy: WarmAlarmNotificationCenterDelegate? = makeNotificationCenterDelegate(
+            forwardingDelegate: existingDelegate,
+            previousWarmAlarmDelegate: firstProxy,
+            label: "second"
+        )
+        let thirdProxy = makeNotificationCenterDelegate(
+            forwardingDelegate: existingDelegate,
+            previousWarmAlarmDelegate: secondProxy,
+            label: "third"
+        )
+
+        XCTAssertTrue(thirdProxy.restorationDelegate === secondProxy)
+        weak let releasedSecondProxy = secondProxy
+        secondProxy = nil
+        XCTAssertNil(releasedSecondProxy)
+        XCTAssertTrue(thirdProxy.restorationDelegate === firstProxy)
+        weak let releasedFirstProxy = firstProxy
+        firstProxy = nil
+        XCTAssertNil(releasedFirstProxy)
+        XCTAssertTrue(thirdProxy.restorationDelegate === existingDelegate)
+    }
+
+    func testNotificationCenterDelegateUninstallsInLastRegisteredFirstOrder() {
+        let center = UNUserNotificationCenter.current()
+        let previousDelegate = center.delegate
+        let existingDelegate = ExistingNotificationCenterDelegate()
+        center.delegate = existingDelegate
+        defer { center.delegate = previousDelegate }
+        let firstProxy = WarmAlarmNotificationCenterDelegate.install(
+            warmAlarmDelegate: makeWarmAlarmDelegate(label: "lifo_first"),
+            on: center
+        )
+        let secondProxy = WarmAlarmNotificationCenterDelegate.install(
+            warmAlarmDelegate: makeWarmAlarmDelegate(label: "lifo_second"),
+            on: center
+        )
+        let thirdProxy = WarmAlarmNotificationCenterDelegate.install(
+            warmAlarmDelegate: makeWarmAlarmDelegate(label: "lifo_third"),
+            on: center
+        )
+
+        XCTAssertTrue(center.delegate === thirdProxy)
+        thirdProxy.uninstall(from: center)
+        XCTAssertTrue(center.delegate === secondProxy)
+        secondProxy.uninstall(from: center)
+        XCTAssertTrue(center.delegate === firstProxy)
+        firstProxy.uninstall(from: center)
+        XCTAssertTrue(center.delegate === existingDelegate)
+    }
+
+    func testNotificationCenterDelegateDoesNotOverwriteAnExternalReplacement() {
+        let center = UNUserNotificationCenter.current()
+        let previousDelegate = center.delegate
+        let existingDelegate = ExistingNotificationCenterDelegate()
+        let externalReplacement = ExistingNotificationCenterDelegate()
+        center.delegate = existingDelegate
+        defer { center.delegate = previousDelegate }
+        let proxy = WarmAlarmNotificationCenterDelegate.install(
+            warmAlarmDelegate: makeWarmAlarmDelegate(label: "external_replacement"),
+            on: center
+        )
+
+        center.delegate = externalReplacement
+        proxy.uninstall(from: center)
+
+        XCTAssertTrue(center.delegate === externalReplacement)
+    }
+
+    func testNotificationCenterDelegateDoesNotRetainOriginalDelegate() {
+        var existingDelegate: ExistingNotificationCenterDelegate? = ExistingNotificationCenterDelegate()
+        weak let releasedDelegate = existingDelegate
+        let proxy = makeNotificationCenterDelegate(
+            forwardingDelegate: existingDelegate,
+            label: "weak_original"
+        )
+
+        existingDelegate = nil
+
+        XCTAssertNil(releasedDelegate)
+        XCTAssertNil(proxy.restorationDelegate)
     }
 
     func testNotificationCenterDelegateRoutesOnlyWarmAlarmContentToWarmAlarmDelegate() {
@@ -114,6 +203,25 @@ final class WarmAlarmRequestRegistrationTests: XCTestCase {
 
         wait(for: [emitted], timeout: 1)
         XCTAssertTrue(wasEmittedOnMainThread)
+    }
+
+    private func makeWarmAlarmDelegate(label: String) -> WarmAlarmDelegate {
+        WarmAlarmDelegate(
+            eventsApi: RecordingWarmAlarmEventsApi(),
+            notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.\(label)")
+        )
+    }
+
+    private func makeNotificationCenterDelegate(
+        forwardingDelegate: UNUserNotificationCenterDelegate?,
+        previousWarmAlarmDelegate: WarmAlarmNotificationCenterDelegate? = nil,
+        label: String
+    ) -> WarmAlarmNotificationCenterDelegate {
+        WarmAlarmNotificationCenterDelegate(
+            warmAlarmDelegate: makeWarmAlarmDelegate(label: label),
+            forwardingDelegate: forwardingDelegate,
+            previousWarmAlarmDelegate: previousWarmAlarmDelegate
+        )
     }
 
     func testAddsEveryRecurringIdentifierBeforeCompleting() {
