@@ -164,6 +164,60 @@ final class WarmAlarmRequestRegistrationTests: XCTestCase {
         XCTAssertTrue(delegate.target(for: unrelatedContent) === existingDelegate)
     }
 
+    func testNotificationCenterDelegatePreservesFlutterLifeCycleProviderConformance() {
+        let center = UNUserNotificationCenter.current()
+        let previousDelegate = center.delegate
+        let flutterAppDelegate = FlutterAppDelegate()
+        center.delegate = flutterAppDelegate
+        defer { center.delegate = previousDelegate }
+
+        let delegate = WarmAlarmNotificationCenterDelegate.install(
+            warmAlarmDelegate: makeWarmAlarmDelegate(label: "flutter_lifecycle_provider"),
+            on: center
+        )
+
+        XCTAssertTrue(delegate is FlutterAppLifeCycleProvider)
+        XCTAssertTrue(delegate.forwardingDelegate === flutterAppDelegate)
+    }
+
+    func testNotificationCenterDelegateDoesNotClaimFlutterLifeCycleForAnUnrelatedDelegate() {
+        let center = UNUserNotificationCenter.current()
+        let previousDelegate = center.delegate
+        let existingDelegate = ExistingNotificationCenterDelegate()
+        center.delegate = existingDelegate
+        defer { center.delegate = previousDelegate }
+
+        let delegate = WarmAlarmNotificationCenterDelegate.install(
+            warmAlarmDelegate: makeWarmAlarmDelegate(label: "unrelated_delegate"),
+            on: center
+        )
+
+        XCTAssertFalse(delegate is FlutterAppLifeCycleProvider)
+        XCTAssertTrue(delegate.forwardingDelegate === existingDelegate)
+    }
+
+    func testNotificationCenterDelegatePreservesFlutterLifeCycleProviderAcrossRegistrations() {
+        let center = UNUserNotificationCenter.current()
+        let previousDelegate = center.delegate
+        let flutterAppDelegate = FlutterAppDelegate()
+        center.delegate = flutterAppDelegate
+        defer { center.delegate = previousDelegate }
+
+        let firstDelegate = WarmAlarmNotificationCenterDelegate.install(
+            warmAlarmDelegate: makeWarmAlarmDelegate(label: "first_flutter_lifecycle_provider"),
+            on: center
+        )
+        let secondDelegate = WarmAlarmNotificationCenterDelegate.install(
+            warmAlarmDelegate: makeWarmAlarmDelegate(label: "second_flutter_lifecycle_provider"),
+            on: center
+        )
+
+        XCTAssertTrue(firstDelegate is FlutterAppLifeCycleProvider)
+        XCTAssertTrue(secondDelegate is FlutterAppLifeCycleProvider)
+        XCTAssertTrue(secondDelegate.forwardingDelegate === flutterAppDelegate)
+        XCTAssertTrue(secondDelegate.restorationDelegate === firstDelegate)
+    }
+
     func testMalformedWarmAlarmResponseCompletesWithoutMutatingState() {
         let delegate = WarmAlarmDelegate(
             eventsApi: RecordingWarmAlarmEventsApi(),
