@@ -545,9 +545,12 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
             notificationMutationQueue: notificationMutationQueue
         )
         let notificationCenter = UNUserNotificationCenter.current()
+        let installedDelegate = notificationCenter.delegate
+        let forwardingDelegate = (installedDelegate as? WarmAlarmNotificationCenterDelegate)?.forwardingDelegate
+            ?? installedDelegate
         let notificationCenterDelegate = WarmAlarmNotificationCenterDelegate(
             warmAlarmDelegate: delegate,
-            forwardingDelegate: notificationCenter.delegate
+            forwardingDelegate: forwardingDelegate
         )
         let instance = WarmAlarmPlugin(
             delegate: delegate,

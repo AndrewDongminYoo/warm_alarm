@@ -27,6 +27,35 @@ final class WarmAlarmRequestRegistrationTests: XCTestCase {
         XCTAssertTrue(installedDelegate?.forwardingDelegate === existingDelegate)
     }
 
+    func testPluginRegistrationFlattensAnExistingWarmAlarmDelegateChain() {
+        let engine = FlutterEngine(name: "warm_alarm_second_registration_test")
+        XCTAssertTrue(engine.run())
+        guard let registrar = engine.registrar(forPlugin: "WarmAlarmSecondRegistrationTest") else {
+            XCTFail("Expected FlutterEngine to provide a plugin registrar")
+            return
+        }
+        let center = UNUserNotificationCenter.current()
+        let previousDelegate = center.delegate
+        let existingDelegate = ExistingNotificationCenterDelegate()
+        let firstWarmAlarmDelegate = WarmAlarmDelegate(
+            eventsApi: RecordingWarmAlarmEventsApi(),
+            notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.first_registration")
+        )
+        let firstProxy = WarmAlarmNotificationCenterDelegate(
+            warmAlarmDelegate: firstWarmAlarmDelegate,
+            forwardingDelegate: existingDelegate
+        )
+        center.delegate = firstProxy
+        defer { center.delegate = previousDelegate }
+
+        WarmAlarmPlugin.register(with: registrar)
+
+        let installedDelegate = center.delegate as? WarmAlarmNotificationCenterDelegate
+        XCTAssertNotNil(installedDelegate)
+        XCTAssertFalse(installedDelegate === firstProxy)
+        XCTAssertTrue(installedDelegate?.forwardingDelegate === existingDelegate)
+    }
+
     func testNotificationCenterDelegateRoutesOnlyWarmAlarmContentToWarmAlarmDelegate() {
         let warmAlarmDelegate = WarmAlarmDelegate(
             eventsApi: RecordingWarmAlarmEventsApi(),
