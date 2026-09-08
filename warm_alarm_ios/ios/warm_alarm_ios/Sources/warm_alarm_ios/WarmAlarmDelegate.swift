@@ -181,9 +181,12 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        guard notification.request.content.categoryIdentifier == Self.categoryIdentifier else {
+            return
+        }
         guard let alarmIdString = notification.request.content.userInfo["alarmId"] as? String,
               let alarmId = Int64(alarmIdString) else {
-            completionHandler([.alert, .sound])
+            completionHandler([])
             return
         }
         handleForegroundDelivery(
@@ -256,13 +259,15 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        _ = handleNotificationResponse(
+        if !handleNotificationResponse(
             actionIdentifier: response.actionIdentifier,
             deliveredIdentifier: response.notification.request.identifier,
             content: response.notification.request.content,
             deliveredAtMillis: Int64(response.notification.date.timeIntervalSince1970 * 1_000),
             completionHandler: completionHandler
-        )
+        ) {
+            completionHandler()
+        }
     }
 
     @discardableResult
@@ -273,11 +278,13 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         deliveredAtMillis: Int64,
         completionHandler: @escaping () -> Void
     ) -> Bool {
-        guard content.categoryIdentifier == Self.categoryIdentifier,
-              let alarmIdString = content.userInfo["alarmId"] as? String,
+        guard content.categoryIdentifier == Self.categoryIdentifier else {
+            return false
+        }
+        guard let alarmIdString = content.userInfo["alarmId"] as? String,
               let alarmId = Int64(alarmIdString) else {
             completionHandler()
-            return false
+            return true
         }
 
         let schedule = WarmAlarmStore.shared.load(id: alarmId)

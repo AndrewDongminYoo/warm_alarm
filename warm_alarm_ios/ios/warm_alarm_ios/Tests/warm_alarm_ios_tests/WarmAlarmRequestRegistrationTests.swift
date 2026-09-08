@@ -1,9 +1,190 @@
+// cspell:words NSKeyedUnarchiver
+
+import Flutter
 import XCTest
 import UserNotifications
 
 @testable import warm_alarm_ios
 
 final class WarmAlarmRequestRegistrationTests: XCTestCase {
+    func testPluginRegistrationInstallsForwardingNotificationCenterDelegate() {
+        let engine = FlutterEngine(name: "warm_alarm_registration_test")
+        XCTAssertTrue(engine.run())
+        guard let registrar = engine.registrar(forPlugin: "WarmAlarmRegistrationTest") else {
+            XCTFail("Expected FlutterEngine to provide a plugin registrar")
+            return
+        }
+        let center = UNUserNotificationCenter.current()
+        let previousDelegate = center.delegate
+        let existingDelegate = ExistingNotificationCenterDelegate()
+        center.delegate = existingDelegate
+        defer { center.delegate = previousDelegate }
+
+        WarmAlarmPlugin.register(with: registrar)
+
+        let installedDelegate = center.delegate as? WarmAlarmNotificationCenterDelegate
+        XCTAssertNotNil(installedDelegate)
+        XCTAssertTrue(installedDelegate?.forwardingDelegate === existingDelegate)
+    }
+
+    func testPluginRegistrationFlattensAnExistingWarmAlarmDelegateChain() {
+        let engine = FlutterEngine(name: "warm_alarm_second_registration_test")
+        XCTAssertTrue(engine.run())
+        guard let registrar = engine.registrar(forPlugin: "WarmAlarmSecondRegistrationTest") else {
+            XCTFail("Expected FlutterEngine to provide a plugin registrar")
+            return
+        }
+        let center = UNUserNotificationCenter.current()
+        let previousDelegate = center.delegate
+        let existingDelegate = ExistingNotificationCenterDelegate()
+        let firstWarmAlarmDelegate = WarmAlarmDelegate(
+            eventsApi: RecordingWarmAlarmEventsApi(),
+            notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.first_registration")
+        )
+        let firstProxy = WarmAlarmNotificationCenterDelegate(
+            warmAlarmDelegate: firstWarmAlarmDelegate,
+            forwardingDelegate: existingDelegate
+        )
+        center.delegate = firstProxy
+        defer { center.delegate = previousDelegate }
+
+        WarmAlarmPlugin.register(with: registrar)
+
+        let installedDelegate = center.delegate as? WarmAlarmNotificationCenterDelegate
+        XCTAssertNotNil(installedDelegate)
+        XCTAssertFalse(installedDelegate === firstProxy)
+        XCTAssertTrue(installedDelegate?.forwardingDelegate === existingDelegate)
+        XCTAssertTrue(installedDelegate?.restorationDelegate === firstProxy)
+    }
+
+    func testNotificationCenterDelegateRestoresNewestLiveProxyFromThreeRegistrations() {
+        let existingDelegate = ExistingNotificationCenterDelegate()
+        var firstProxy: WarmAlarmNotificationCenterDelegate? = makeNotificationCenterDelegate(
+            forwardingDelegate: existingDelegate,
+            label: "first"
+        )
+        var secondProxy: WarmAlarmNotificationCenterDelegate? = makeNotificationCenterDelegate(
+            forwardingDelegate: existingDelegate,
+            previousWarmAlarmDelegate: firstProxy,
+            label: "second"
+        )
+        let thirdProxy = makeNotificationCenterDelegate(
+            forwardingDelegate: existingDelegate,
+            previousWarmAlarmDelegate: secondProxy,
+            label: "third"
+        )
+
+        XCTAssertTrue(thirdProxy.restorationDelegate === secondProxy)
+        weak let releasedSecondProxy = secondProxy
+        secondProxy = nil
+        XCTAssertNil(releasedSecondProxy)
+        XCTAssertTrue(thirdProxy.restorationDelegate === firstProxy)
+        weak let releasedFirstProxy = firstProxy
+        firstProxy = nil
+        XCTAssertNil(releasedFirstProxy)
+        XCTAssertTrue(thirdProxy.restorationDelegate === existingDelegate)
+    }
+
+    func testNotificationCenterDelegateUninstallsInLastRegisteredFirstOrder() {
+        let center = UNUserNotificationCenter.current()
+        let previousDelegate = center.delegate
+        let existingDelegate = ExistingNotificationCenterDelegate()
+        center.delegate = existingDelegate
+        defer { center.delegate = previousDelegate }
+        let firstProxy = WarmAlarmNotificationCenterDelegate.install(
+            warmAlarmDelegate: makeWarmAlarmDelegate(label: "lifo_first"),
+            on: center
+        )
+        let secondProxy = WarmAlarmNotificationCenterDelegate.install(
+            warmAlarmDelegate: makeWarmAlarmDelegate(label: "lifo_second"),
+            on: center
+        )
+        let thirdProxy = WarmAlarmNotificationCenterDelegate.install(
+            warmAlarmDelegate: makeWarmAlarmDelegate(label: "lifo_third"),
+            on: center
+        )
+
+        XCTAssertTrue(center.delegate === thirdProxy)
+        thirdProxy.uninstall(from: center)
+        XCTAssertTrue(center.delegate === secondProxy)
+        secondProxy.uninstall(from: center)
+        XCTAssertTrue(center.delegate === firstProxy)
+        firstProxy.uninstall(from: center)
+        XCTAssertTrue(center.delegate === existingDelegate)
+    }
+
+    func testNotificationCenterDelegateDoesNotOverwriteAnExternalReplacement() {
+        let center = UNUserNotificationCenter.current()
+        let previousDelegate = center.delegate
+        let existingDelegate = ExistingNotificationCenterDelegate()
+        let externalReplacement = ExistingNotificationCenterDelegate()
+        center.delegate = existingDelegate
+        defer { center.delegate = previousDelegate }
+        let proxy = WarmAlarmNotificationCenterDelegate.install(
+            warmAlarmDelegate: makeWarmAlarmDelegate(label: "external_replacement"),
+            on: center
+        )
+
+        center.delegate = externalReplacement
+        proxy.uninstall(from: center)
+
+        XCTAssertTrue(center.delegate === externalReplacement)
+    }
+
+    func testNotificationCenterDelegateDoesNotRetainOriginalDelegate() {
+        var existingDelegate: ExistingNotificationCenterDelegate? = ExistingNotificationCenterDelegate()
+        weak let releasedDelegate = existingDelegate
+        let proxy = makeNotificationCenterDelegate(
+            forwardingDelegate: existingDelegate,
+            label: "weak_original"
+        )
+
+        existingDelegate = nil
+
+        XCTAssertNil(releasedDelegate)
+        XCTAssertNil(proxy.restorationDelegate)
+    }
+
+    func testNotificationCenterDelegateRoutesOnlyWarmAlarmContentToWarmAlarmDelegate() {
+        let warmAlarmDelegate = WarmAlarmDelegate(
+            eventsApi: RecordingWarmAlarmEventsApi(),
+            notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.notification_routing")
+        )
+        let existingDelegate = ExistingNotificationCenterDelegate()
+        let delegate = WarmAlarmNotificationCenterDelegate(
+            warmAlarmDelegate: warmAlarmDelegate,
+            forwardingDelegate: existingDelegate
+        )
+        let warmContent = UNMutableNotificationContent()
+        warmContent.categoryIdentifier = WarmAlarmDelegate.categoryIdentifier
+        let unrelatedContent = UNMutableNotificationContent()
+        unrelatedContent.categoryIdentifier = "OTHER_ALARM"
+
+        XCTAssertTrue(delegate.target(for: warmContent) === warmAlarmDelegate)
+        XCTAssertTrue(delegate.target(for: unrelatedContent) === existingDelegate)
+    }
+
+    func testMalformedWarmAlarmResponseCompletesWithoutMutatingState() {
+        let delegate = WarmAlarmDelegate(
+            eventsApi: RecordingWarmAlarmEventsApi(),
+            notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.malformed_response")
+        )
+        let content = UNMutableNotificationContent()
+        content.categoryIdentifier = WarmAlarmDelegate.categoryIdentifier
+        var didComplete = false
+
+        let handled = delegate.handleNotificationResponse(
+            actionIdentifier: UNNotificationDefaultActionIdentifier,
+            deliveredIdentifier: "malformed",
+            content: content,
+            deliveredAtMillis: 1_000,
+            completionHandler: { didComplete = true }
+        )
+
+        XCTAssertTrue(handled)
+        XCTAssertTrue(didComplete)
+    }
+
     func testScheduledEventIsEmittedOnMainThread() {
         let emitted = expectation(description: "scheduled event emitted")
         var wasEmittedOnMainThread = false
@@ -22,6 +203,25 @@ final class WarmAlarmRequestRegistrationTests: XCTestCase {
 
         wait(for: [emitted], timeout: 1)
         XCTAssertTrue(wasEmittedOnMainThread)
+    }
+
+    private func makeWarmAlarmDelegate(label: String) -> WarmAlarmDelegate {
+        WarmAlarmDelegate(
+            eventsApi: RecordingWarmAlarmEventsApi(),
+            notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.\(label)")
+        )
+    }
+
+    private func makeNotificationCenterDelegate(
+        forwardingDelegate: UNUserNotificationCenterDelegate?,
+        previousWarmAlarmDelegate: WarmAlarmNotificationCenterDelegate? = nil,
+        label: String
+    ) -> WarmAlarmNotificationCenterDelegate {
+        WarmAlarmNotificationCenterDelegate(
+            warmAlarmDelegate: makeWarmAlarmDelegate(label: label),
+            forwardingDelegate: forwardingDelegate,
+            previousWarmAlarmDelegate: previousWarmAlarmDelegate
+        )
     }
 
     func testAddsEveryRecurringIdentifierBeforeCompleting() {
@@ -2602,6 +2802,40 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertEqual(eventsApi.events.map(\.type), [.fired])
     }
 
+    func testForegroundNotificationMatchesAfterSecureCodingRoundTrip() throws {
+        let alarmId = Int64(4_242_424_249)
+        let occurrenceMillis = Int64(1_000)
+        let wire = makeWireSchedule(id: alarmId, scheduledAtMillis: occurrenceMillis)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: wire,
+            fallbackAnchorMillis: occurrenceMillis,
+            calendar: utcCalendar(),
+            occurrenceSeriesToken: "secure-coding-round-trip"
+        )
+        let delegate = WarmAlarmDelegate(
+            eventsApi: RecordingWarmAlarmEventsApi(),
+            notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.secure_coding")
+        )
+        let request = WarmAlarmPlugin.makeRequests(
+            for: wire,
+            content: delegate.makeContent(from: schedule),
+            fallbackAnchorMillis: occurrenceMillis,
+            calendar: utcCalendar(),
+            occurrenceSeriesToken: schedule.occurrenceSeriesToken
+        )[0]
+        let data = try NSKeyedArchiver.archivedData(withRootObject: request, requiringSecureCoding: true)
+        let decoded = try XCTUnwrap(
+            NSKeyedUnarchiver.unarchivedObject(ofClass: UNNotificationRequest.self, from: data)
+        )
+
+        let metadata = try XCTUnwrap(decoded.content.userInfo["_warmAlarmOccurrenceV1"] as? [String: Any])
+
+        XCTAssertTrue(
+            WarmAlarmPlugin.notificationContent(schedule, matches: decoded.content),
+            "Decoded metadata types: \(metadata.mapValues { String(reflecting: type(of: $0)) })"
+        )
+    }
+
     func testSceneLaunchLeavesUnrelatedNotificationUnclaimed() {
         let delegate = WarmAlarmDelegate(
             eventsApi: RecordingWarmAlarmEventsApi(),
@@ -2610,16 +2844,18 @@ final class WarmAlarmRequestTests: XCTestCase {
         let content = UNMutableNotificationContent()
         content.categoryIdentifier = "OTHER_ALARM"
         content.userInfo["alarmId"] = "42"
+        var didComplete = false
 
         let handled = delegate.handleNotificationResponse(
             actionIdentifier: UNNotificationDefaultActionIdentifier,
             deliveredIdentifier: "unrelated",
             content: content,
             deliveredAtMillis: 1_000,
-            completionHandler: {}
+            completionHandler: { didComplete = true }
         )
 
         XCTAssertFalse(handled)
+        XCTAssertFalse(didComplete)
     }
 
     func testForegroundDeliveryRejectsCanceledAlarmAfterQueuedCancellation() {
@@ -3077,6 +3313,8 @@ final class WarmAlarmRequestTests: XCTestCase {
         return Int64(date.timeIntervalSince1970 * 1_000)
     }
 }
+
+private final class ExistingNotificationCenterDelegate: NSObject, UNUserNotificationCenterDelegate {}
 
 private final class RecordingWarmAlarmEventsApi: WarmAlarmEventsApiProtocol {
     private(set) var events = [WarmAlarmEventWire]()
