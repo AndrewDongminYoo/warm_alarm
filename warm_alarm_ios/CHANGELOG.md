@@ -1,3 +1,7 @@
+# 0.1.6
+
+- Preserve Flutter lifecycle-provider conformance when wrapping Flutter's notification delegate, which prevents Firebase Messaging from replacing the proxy and recursively forwarding foreground notifications.
+
 # 0.1.5
 
 - Route warm-alarm notification callbacks through a forwarding notification center delegate, while preserving unrelated callbacks for the delegate that was installed first.
