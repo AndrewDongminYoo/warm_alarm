@@ -7,7 +7,7 @@ import UserNotifications
 @testable import warm_alarm_ios
 
 final class WarmAlarmRequestRegistrationTests: XCTestCase {
-    func testPluginRegistrationPreservesExistingNotificationCenterDelegate() {
+    func testPluginRegistrationInstallsForwardingNotificationCenterDelegate() {
         let engine = FlutterEngine(name: "warm_alarm_registration_test")
         XCTAssertTrue(engine.run())
         guard let registrar = engine.registrar(forPlugin: "WarmAlarmRegistrationTest") else {
@@ -22,10 +22,49 @@ final class WarmAlarmRequestRegistrationTests: XCTestCase {
 
         WarmAlarmPlugin.register(with: registrar)
 
-        XCTAssertTrue(
-            center.delegate === existingDelegate,
-            "Expected the existing delegate, got \(String(describing: center.delegate))"
+        let installedDelegate = center.delegate as? WarmAlarmNotificationCenterDelegate
+        XCTAssertNotNil(installedDelegate)
+        XCTAssertTrue(installedDelegate?.forwardingDelegate === existingDelegate)
+    }
+
+    func testNotificationCenterDelegateRoutesOnlyWarmAlarmContentToWarmAlarmDelegate() {
+        let warmAlarmDelegate = WarmAlarmDelegate(
+            eventsApi: RecordingWarmAlarmEventsApi(),
+            notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.notification_routing")
         )
+        let existingDelegate = ExistingNotificationCenterDelegate()
+        let delegate = WarmAlarmNotificationCenterDelegate(
+            warmAlarmDelegate: warmAlarmDelegate,
+            forwardingDelegate: existingDelegate
+        )
+        let warmContent = UNMutableNotificationContent()
+        warmContent.categoryIdentifier = WarmAlarmDelegate.categoryIdentifier
+        let unrelatedContent = UNMutableNotificationContent()
+        unrelatedContent.categoryIdentifier = "OTHER_ALARM"
+
+        XCTAssertTrue(delegate.target(for: warmContent) === warmAlarmDelegate)
+        XCTAssertTrue(delegate.target(for: unrelatedContent) === existingDelegate)
+    }
+
+    func testMalformedWarmAlarmResponseCompletesWithoutMutatingState() {
+        let delegate = WarmAlarmDelegate(
+            eventsApi: RecordingWarmAlarmEventsApi(),
+            notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.malformed_response")
+        )
+        let content = UNMutableNotificationContent()
+        content.categoryIdentifier = WarmAlarmDelegate.categoryIdentifier
+        var didComplete = false
+
+        let handled = delegate.handleNotificationResponse(
+            actionIdentifier: UNNotificationDefaultActionIdentifier,
+            deliveredIdentifier: "malformed",
+            content: content,
+            deliveredAtMillis: 1_000,
+            completionHandler: { didComplete = true }
+        )
+
+        XCTAssertTrue(handled)
+        XCTAssertTrue(didComplete)
     }
 
     func testScheduledEventIsEmittedOnMainThread() {

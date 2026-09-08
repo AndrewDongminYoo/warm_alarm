@@ -409,10 +409,70 @@ private struct WarmAlarmOccurrenceMetadata {
     }
 }
 
-public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate, WarmAlarmApi,
-    UNUserNotificationCenterDelegate {
+final class WarmAlarmNotificationCenterDelegate: NSObject, UNUserNotificationCenterDelegate {
+    private let warmAlarmDelegate: WarmAlarmDelegate
+    weak var forwardingDelegate: UNUserNotificationCenterDelegate?
+
+    init(
+        warmAlarmDelegate: WarmAlarmDelegate,
+        forwardingDelegate: UNUserNotificationCenterDelegate?
+    ) {
+        self.warmAlarmDelegate = warmAlarmDelegate
+        self.forwardingDelegate = forwardingDelegate
+    }
+
+    func target(for content: UNNotificationContent) -> UNUserNotificationCenterDelegate? {
+        if content.categoryIdentifier == WarmAlarmDelegate.categoryIdentifier {
+            return warmAlarmDelegate
+        }
+        return forwardingDelegate
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        guard let target = target(for: notification.request.content),
+              target.userNotificationCenter?(
+                  center,
+                  willPresent: notification,
+                  withCompletionHandler: completionHandler
+              ) != nil else {
+            completionHandler([])
+            return
+        }
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        guard let target = target(for: response.notification.request.content),
+              target.userNotificationCenter?(
+                  center,
+                  didReceive: response,
+                  withCompletionHandler: completionHandler
+              ) != nil else {
+            completionHandler()
+            return
+        }
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        openSettingsFor notification: UNNotification?
+    ) {
+        forwardingDelegate?.userNotificationCenter?(center, openSettingsFor: notification)
+    }
+}
+
+public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate, WarmAlarmApi {
     private let delegate: WarmAlarmDelegate
     private let notificationMutationQueue: WarmAlarmMutationQueue
+    private let notificationCenter: UNUserNotificationCenter
+    private let notificationCenterDelegate: WarmAlarmNotificationCenterDelegate
     private static let killWarningNotifId = "warm_alarm_kill_warning_notif"
     private static let killWarningDefaultsKey = "warm_alarm_kill_warning"
     private static let fallbackCount = 6
@@ -422,16 +482,23 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
 
     init(
         delegate: WarmAlarmDelegate,
-        notificationMutationQueue: WarmAlarmMutationQueue
+        notificationMutationQueue: WarmAlarmMutationQueue,
+        notificationCenter: UNUserNotificationCenter,
+        notificationCenterDelegate: WarmAlarmNotificationCenterDelegate
     ) {
         self.delegate = delegate
         self.notificationMutationQueue = notificationMutationQueue
+        self.notificationCenter = notificationCenter
+        self.notificationCenterDelegate = notificationCenterDelegate
         super.init()
         setupLifecycleObservers()
     }
 
     deinit {
         lifecycleObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        if notificationCenter.delegate === notificationCenterDelegate {
+            notificationCenter.delegate = notificationCenterDelegate.forwardingDelegate
+        }
     }
 
     private func setupLifecycleObservers() {
@@ -477,40 +544,24 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
             eventsApi: eventsApi,
             notificationMutationQueue: notificationMutationQueue
         )
+        let notificationCenter = UNUserNotificationCenter.current()
+        let notificationCenterDelegate = WarmAlarmNotificationCenterDelegate(
+            warmAlarmDelegate: delegate,
+            forwardingDelegate: notificationCenter.delegate
+        )
         let instance = WarmAlarmPlugin(
             delegate: delegate,
-            notificationMutationQueue: notificationMutationQueue
+            notificationMutationQueue: notificationMutationQueue,
+            notificationCenter: notificationCenter,
+            notificationCenterDelegate: notificationCenterDelegate
         )
 
         WarmAlarmDelegate.registerCategories()
         WarmAlarmApiSetup.setUp(binaryMessenger: binaryMessenger, api: instance)
         registrar.addApplicationDelegate(instance)
         registrar.addSceneDelegate(instance)
+        notificationCenter.delegate = notificationCenterDelegate
         registrar.publish(instance)
-    }
-
-    public func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
-        willPresent notification: UNNotification,
-        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
-    ) {
-        delegate.userNotificationCenter(
-            center,
-            willPresent: notification,
-            withCompletionHandler: completionHandler
-        )
-    }
-
-    public func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
-        didReceive response: UNNotificationResponse,
-        withCompletionHandler completionHandler: @escaping () -> Void
-    ) {
-        delegate.userNotificationCenter(
-            center,
-            didReceive: response,
-            withCompletionHandler: completionHandler
-        )
     }
 
     public func scene(

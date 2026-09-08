@@ -1,7 +1,7 @@
 # 0.1.5
 
-- Preserve an existing notification center delegate during plugin registration, and forward warm-alarm callbacks through Flutter's application delegate multiplexer.
-- Leave unrelated notification callbacks unclaimed so other registered notification plugins can handle them.
+- Route warm-alarm notification callbacks through a forwarding notification center delegate, while preserving unrelated callbacks for the delegate that was installed first.
+- Complete malformed warm-alarm callbacks without blocking the system completion handler.
 
 # 0.1.4
 
