@@ -409,7 +409,7 @@ private struct WarmAlarmOccurrenceMetadata {
     }
 }
 
-final class WarmAlarmNotificationCenterDelegate: NSObject, UNUserNotificationCenterDelegate {
+class WarmAlarmNotificationCenterDelegate: NSObject, UNUserNotificationCenterDelegate {
     private final class WeakDelegateReference {
         weak var delegate: WarmAlarmNotificationCenterDelegate?
 
@@ -449,11 +449,20 @@ final class WarmAlarmNotificationCenterDelegate: NSObject, UNUserNotificationCen
         let installedDelegate = notificationCenter.delegate
         let previousWarmAlarmDelegate = installedDelegate as? WarmAlarmNotificationCenterDelegate
         let forwardingDelegate = previousWarmAlarmDelegate?.forwardingDelegate ?? installedDelegate
-        let delegate = WarmAlarmNotificationCenterDelegate(
-            warmAlarmDelegate: warmAlarmDelegate,
-            forwardingDelegate: forwardingDelegate,
-            previousWarmAlarmDelegate: previousWarmAlarmDelegate
-        )
+        // Firebase Messaging keeps Flutter lifecycle fan-out only when this conformance survives delegate replacement.
+        let delegate = if forwardingDelegate is FlutterAppLifeCycleProvider {
+            WarmAlarmFlutterNotificationCenterDelegate(
+                warmAlarmDelegate: warmAlarmDelegate,
+                forwardingDelegate: forwardingDelegate,
+                previousWarmAlarmDelegate: previousWarmAlarmDelegate
+            )
+        } else {
+            WarmAlarmNotificationCenterDelegate(
+                warmAlarmDelegate: warmAlarmDelegate,
+                forwardingDelegate: forwardingDelegate,
+                previousWarmAlarmDelegate: previousWarmAlarmDelegate
+            )
+        }
         notificationCenter.delegate = delegate
         return delegate
     }
@@ -510,6 +519,12 @@ final class WarmAlarmNotificationCenterDelegate: NSObject, UNUserNotificationCen
         openSettingsFor notification: UNNotification?
     ) {
         forwardingDelegate?.userNotificationCenter?(center, openSettingsFor: notification)
+    }
+}
+
+final class WarmAlarmFlutterNotificationCenterDelegate: WarmAlarmNotificationCenterDelegate, FlutterAppLifeCycleProvider {
+    func add(_ delegate: FlutterApplicationLifeCycleDelegate) {
+        (forwardingDelegate as? FlutterAppLifeCycleProvider)?.add(delegate)
     }
 }
 
