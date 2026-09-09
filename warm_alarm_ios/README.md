@@ -107,7 +107,7 @@ Unsupported hosts return null.
 Preparation errors fail the request instead of substituting a default sound.
 Preparation runs on the existing serial mutation queue, away from the platform thread, and replies on the platform thread.
 Prepared sounds are staging files and should be scheduled promptly.
-After successful initialization, the plugin removes owned files last modified more than 24 hours ago if no stored alarm references them.
+Initialization removes unreferenced owned files last modified more than 24 hours ago after native state is reconciled or before the first AlarmKit authorization request.
 Recent staging files and sounds referenced by stored alarms are retained.
 
 After scheduling, read `WarmAlarmSnapshot.systemManagedAudio` before starting app audio.

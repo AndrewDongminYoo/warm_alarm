@@ -701,6 +701,50 @@ final class WarmAlarmRequestTests: XCTestCase {
         }
     }
 
+    func testInitializationCleansAbandonedSoundBeforeFirstAlarmKitAuthorization() throws {
+        guard #available(iOS 26.0, *) else { throw XCTSkip("AlarmKit requires iOS 26") }
+        let previous = Array(WarmAlarmStore.shared.loadAll().values)
+        WarmAlarmStore.shared.clear()
+        let input = try makeSoundLifecycleRecording()
+        defer {
+            try? FileManager.default.removeItem(at: input)
+            WarmAlarmStore.shared.clear()
+            previous.forEach { WarmAlarmStore.shared.save($0) }
+        }
+        let backend = RecordingAlarmKitBackend(scheduleError: nil, authorizationState: .notDetermined)
+        let plugin = makeSoundLifecyclePlugin(backend: backend)
+        let prepared = expectation(description: "sound preparation before authorization completes")
+        var output: String?
+        plugin.prepareSystemSound(primaryFilePath: input.path, backgroundAssetPath: nil) { result in
+            switch result {
+            case let .success(path): output = path
+            case let .failure(error): XCTFail("Preparation failed: \(error)")
+            }
+            prepared.fulfill()
+        }
+        wait(for: [prepared], timeout: 10)
+        let outputPath = try XCTUnwrap(output)
+        defer { WarmAlarmSoundFiles.remove(named: URL(fileURLWithPath: outputPath).lastPathComponent) }
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date().addingTimeInterval(-25 * 60 * 60)], ofItemAtPath: outputPath
+        )
+        XCTAssertTrue(WarmAlarmStore.shared.loadAll().isEmpty)
+        let initialized = expectation(description: "empty initialization cleans abandoned sound")
+
+        plugin.initialize { result in
+            if case let .failure(error) = result { XCTFail("Initialization failed: \(error)") }
+            initialized.fulfill()
+        }
+
+        wait(for: [initialized], timeout: 10)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: outputPath))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: input.path))
+        XCTAssertTrue(backend.scheduledPlans.isEmpty)
+        XCTAssertTrue(backend.cancelledIDs.isEmpty)
+        XCTAssertEqual(backend.cancelAllCount, 0)
+        withExtendedLifetime(plugin) {}
+    }
+
     func testInitializationCancelsOnlyOwnedOrphansWithEmptyOrMixedStore() {
         let previous = Array(WarmAlarmStore.shared.loadAll().values)
         defer {

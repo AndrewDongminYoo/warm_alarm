@@ -864,6 +864,9 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
             let nowMillis = Int64(Date().timeIntervalSince1970 * 1000)
             let storedSchedules = Array(WarmAlarmStore.shared.loadAll().values)
             guard !storedSchedules.isEmpty || self.alarmKitBackend?.authorizationState == .authorized else {
+                if self.alarmKitBackend?.authorizationState == .notDetermined {
+                    self.removeExpiredPreparedSounds()
+                }
                 WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
                 return
             }
