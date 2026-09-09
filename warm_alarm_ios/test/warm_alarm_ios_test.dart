@@ -39,6 +39,38 @@ void main() {
       warmAlarm = WarmAlarmIOS(api: api);
     });
 
+    test('prepareSystemSound forwards both sources and returns the prepared path', () async {
+      when(() => api.prepareSystemSound('/recording.m4a', 'assets/tone.mp3')).thenAnswer(
+        (_) async => '/Library/Sounds/prepared.caf',
+      );
+
+      expect(
+        await warmAlarm.prepareSystemSound(
+          primaryFilePath: '/recording.m4a',
+          backgroundAssetPath: 'assets/tone.mp3',
+        ),
+        '/Library/Sounds/prepared.caf',
+      );
+      verify(() => api.prepareSystemSound('/recording.m4a', 'assets/tone.mp3')).called(1);
+    });
+
+    test('prepareSystemSound preserves an unsupported result without a background', () async {
+      when(() => api.prepareSystemSound('/recording.m4a', null)).thenAnswer((_) async => null);
+
+      expect(await warmAlarm.prepareSystemSound(primaryFilePath: '/recording.m4a'), isNull);
+      verify(() => api.prepareSystemSound('/recording.m4a', null)).called(1);
+    });
+
+    test('prepareSystemSound propagates native preparation failures', () async {
+      final failure = StateError('Audio preparation failed.');
+      when(() => api.prepareSystemSound('/missing.m4a', null)).thenAnswer((_) async => throw failure);
+
+      await expectLater(
+        warmAlarm.prepareSystemSound(primaryFilePath: '/missing.m4a'),
+        throwsA(same(failure)),
+      );
+    });
+
     test('remediation maps every wire status and readiness reason', () async {
       const statuses = <WarmAlarmRemediationStatusWire, WarmAlarmRemediationStatus>{
         WarmAlarmRemediationStatusWire.completed: WarmAlarmRemediationStatus.completed,
@@ -372,6 +404,34 @@ void main() {
       expect(captured.single.payload, 'ios-sched-payload');
     });
 
+    test('system sound override crosses the wire without replacing legacy audio', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmIOS(api: api);
+      late WarmAlarmScheduleWire captured;
+      when(() => api.scheduleAlarm(any())).thenAnswer((inv) async {
+        captured = inv.positionalArguments.single as WarmAlarmScheduleWire;
+        return WarmAlarmScheduleResultWire(
+          alarmId: 20,
+          readiness: WarmAlarmReadinessWire(level: WarmAlarmReadinessLevelWire.ready, reasons: []),
+        );
+      });
+      await platform.scheduleAlarm(
+        WarmAlarmSchedule(
+          id: 20,
+          scheduledAt: DateTime(2026),
+          notification: const WarmAlarmNotification(title: 'Alarm', body: ''),
+          audio: const WarmAlarmAudio(
+            filePath: '/voice.aac',
+            assetPath: 'assets/tone.mp3',
+            systemSoundFilePath: '/mixed.caf',
+          ),
+        ),
+      );
+      expect(captured.audio.filePath, '/voice.aac');
+      expect(captured.audio.assetPath, 'assets/tone.mp3');
+      expect(captured.audio.systemSoundFilePath, '/mixed.caf');
+    });
+
     test('getScheduledAlarms maps enriched snapshot fields', () async {
       final api = _MockWarmAlarmApi();
       final platform = WarmAlarmIOS(api: api);
@@ -393,6 +453,7 @@ void main() {
               volumeEnforced: false,
             ),
             payload: 'snap-payload',
+            systemManagedAudio: true,
           ),
         ],
       );
@@ -403,6 +464,7 @@ void main() {
       expect(snapshots.single.notification.title, 'iOS Alarm');
       expect(snapshots.single.audio.vibrate, isTrue);
       expect(snapshots.single.payload, 'snap-payload');
+      expect(snapshots.single.systemManagedAudio, isTrue);
       expect(snapshots.single.wakeCheck, isNull);
     });
   });

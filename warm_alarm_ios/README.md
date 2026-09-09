@@ -12,17 +12,78 @@ This package is [endorsed][endorsed_link], which means you do **not** add it dir
 
 ## Platform capabilities
 
-| Feature                   | Support    | Notes                                                     |
-| ------------------------- | ---------- | --------------------------------------------------------- |
-| Notification scheduling   | ✅ Full    | `UNUserNotificationCenter`                                |
-| Exact alarm scheduling    | ⚠️ Limited | Notification-based; system may throttle background launch |
-| Background audio playback | ⚠️ Limited | `AVAudioSession` `.playback` category; Silent mode bypass |
-| Full-screen presentation  | ❌ None    | Full-screen intent is not supported; notification only    |
-| Wake-check                | ❌ None    | iOS cannot self-trigger background wakes after dismissal  |
+| Feature                   | Support               | Notes                                                                |
+| ------------------------- | --------------------- | -------------------------------------------------------------------- |
+| Notification scheduling   | ✅ Full               | `UNUserNotificationCenter`                                           |
+| Exact alarm scheduling    | ✅ Full or ⚠️ Limited | AlarmKit on configured iOS 26+ hosts; notification fallback          |
+| Background audio playback | ⚠️ Limited            | `AVAudioSession` `.playback` applies only while the app process runs |
+| Full-screen presentation  | ❌ None               | AlarmKit presents system UI; it does not open a Flutter screen       |
+| Wake-check                | ❌ None               | iOS does not provide the Android wake-check flow                     |
 
 **⚠️ Limited** means the alarm fires via a `UNUserNotificationCenter` notification. The app is not
 guaranteed to launch automatically in the background — audio plays only after the user interacts
 with the notification (or if the app is already in the foreground).
+
+## AlarmKit opt-in
+
+The plugin uses AlarmKit when the app runs on iOS 26 or later, the build SDK contains AlarmKit, the host app has a non-empty `NSAlarmKitUsageDescription`, and AlarmKit authorization is not denied.
+The first AlarmKit schedule can show the system authorization prompt while the authorization state is `notDetermined`.
+If AlarmKit is unavailable, unconfigured, or denied, the plugin uses the existing User Notifications backend.
+If AlarmKit fails to schedule, the plugin removes any native alarm with the same stable ID before it installs the User Notifications fallback.
+The scheduling call fails instead of installing a second backend when native cleanup cannot be confirmed.
+`WarmAlarmScheduleResult.warning` identifies a runtime fallback caused by an AlarmKit scheduling error.
+
+Add a usage description to the host app's `Info.plist`.
+
+```xml
+<key>NSAlarmKitUsageDescription</key>
+<string>Allow alarms that you schedule in this app to alert you.</string>
+```
+
+`requestNotificationPermission()` requests User Notifications authorization only.
+AlarmKit requests its own authorization when the app schedules its first native alarm.
+If AlarmKit authorization is denied, `getPermissionState()` reports `exactAlarmGranted: false`, `getReadiness()` includes `exactAlarmPermissionDenied`, and `openReadinessSettings(exactAlarmPermissionDenied)` opens the app settings page.
+
+### Snooze host requirement
+
+AlarmKit implements `WarmAlarmSnooze.duration` as a post-alert countdown.
+Apple requires a Widget Extension that supplies the corresponding Live Activity presentation when an alarm supports a countdown.
+Declare `extension Never: @retroactive AlarmMetadata {}` in the Widget Extension and register an `ActivityConfiguration` for `AlarmAttributes<Never>`.
+The plugin provides `nil` metadata through this module-independent type, so the extension does not need to link the plugin module.
+After the extension is ready, enable Live Activities and the plugin opt-in in the app target's `Info.plist`.
+
+```xml
+<key>NSSupportsLiveActivities</key>
+<true/>
+<key>WarmAlarmAlarmKitLiveActivityEnabled</key>
+<true/>
+```
+
+Without the extension and this opt-in, schedules with Snooze use the User Notifications fallback and return a warning.
+
+The AlarmKit Pause and Resume buttons use the `Pause` and `Resume` localization keys in the host app's `Localizable` table.
+Add translations for those keys to the host app's strings catalog or localized `Localizable.strings` files.
+The English keys remain the fallback labels.
+
+### Schedule mapping
+
+| `WarmAlarmSchedule` value                  | AlarmKit mapping                                                                     |
+| ------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `id`                                       | Stable UUID derived from the signed 64-bit alarm ID                                  |
+| `scheduledAt` without recurrence           | Fixed schedule that does not move after a time-zone change                           |
+| `scheduledAt` with recurrence              | Local hour and minute for a relative weekly schedule                                 |
+| `recurrence.weekdays`                      | ISO weekdays mapped to AlarmKit weekdays                                             |
+| `notification.title`                       | Native alarm title                                                                   |
+| `notification.stopActionTitle`             | Custom stop title on iOS 26.0; iOS 26.1+ uses the system stop control                |
+| `notification.snoozeActionTitle`, `snooze` | Native countdown button and post-alert duration                                      |
+| `audio.systemSoundFilePath`                | Complete sound prepared for AlarmKit; it takes priority over the normal audio inputs |
+| `audio.filePath`, `audio.assetPath`        | File-first audio converted to a named CAF when no complete system sound is provided  |
+| `notification.body`, `payload`             | Retained for the existing in-app and notification flow                               |
+
+AlarmKit handles native Stop and Snooze actions without launching the Flutter process.
+Those system actions cannot emit `WarmAlarmStopped` or `WarmAlarmSnoozed` while the app is not running.
+On the next `initialize()`, the plugin emits one `WarmAlarmSnoozed` event for an unobserved countdown or paused state.
+It emits `WarmAlarmStopped` when a missing AlarmKit one-shot has expired.
 
 ---
 
@@ -30,11 +91,44 @@ with the notification (or if the app is already in the foreground).
 
 ### Scheduling
 
-Alarms are scheduled as `UNNotificationRequest` objects via `UNUserNotificationCenter`. The
-`UNCalendarNotificationTrigger` fires at the exact `scheduledAt` time (subject to the operating
-system's throttling policy for background notification delivery).
+Configured iOS 26 or later hosts schedule alarms through `AlarmManager`.
+Older and unconfigured hosts schedule `UNNotificationRequest` objects through `UNUserNotificationCenter`.
+The plugin removes the other backend's requests only after it confirms the replacement or cleanup.
+`initialize()` fails without adding fallback requests when the current AlarmKit inventory cannot be read.
+The persisted backend marker lets a later authorization or host-configuration change remove an existing native alarm before it restores the notification fallback.
+`getScheduledAlarms()` and `isRinging()` read AlarmKit state so native Stop, Snooze countdown fire dates, and alerting states are reflected in the public API.
+Flutter cancellation uses AlarmKit `stop(id:)` while a native alarm is alerting and `cancel(id:)` for its other states.
 
 ### Audio
+
+On configured AlarmKit hosts, call `prepareSystemSound` with a recording and an optional Flutter tone asset before scheduling.
+The renderer preserves the recording length, repeats a shorter tone through the full recording, and mixes both sources at half gain.
+Before decoding, it rejects inputs whose planned PCM buffers exceed 134,217,728 bytes in total.
+The limit includes the source, converted audio, retained voice during background decoding, and input chunks; it does not measure codec-internal allocations.
+It writes a unique PCM CAF under `Library/Sounds` with protection that permits access after the first device unlock.
+Pass the returned path as `WarmAlarmAudio.systemSoundFilePath` and retain the normal audio inputs for User Notifications fallback.
+Unsupported hosts return null.
+Preparation errors fail the request instead of substituting a default sound.
+The preparation API runs on a dedicated serial queue so it does not delay alarm mutations, and replies on the platform thread.
+Legacy sound conversion during scheduling remains part of the serial schedule transaction.
+Prepared sounds are staging files and should be scheduled promptly.
+A failed fallback preserves caller-provided sound files for retry and removes only unused internal conversions.
+Initialization removes unreferenced owned files last modified more than 24 hours ago after native state is reconciled or before the first AlarmKit authorization request.
+Recent staging files and sounds referenced by stored alarms are retained.
+
+After scheduling, read `WarmAlarmSnapshot.systemManagedAudio` before starting app audio.
+It is true only when AlarmKit adopted a complete system sound; a requested override or capability check alone does not establish ownership.
+Legacy `filePath` or `assetPath` inputs alone do not opt into this complete-sound contract, because the host may still play additional audio.
+To prevent a second host player, prepare the full sound and pass it through `systemSoundFilePath`.
+AlarmKit alerts do not start a second `AVAudioPlayer`.
+The system controls repetition, volume, and Stop/Snooze; the normal `loop`, volume, and fade settings remain specific to the legacy player.
+
+Keep prepared files immutable while any alarm references them.
+Successful replacement, cancellation, one-shot Stop, and confirmed backend removal release unreferenced generated files.
+Recurring Stop and Snooze retain their sound.
+If native scheduling and rollback both fail, candidate files are retained because native ownership is uncertain.
+
+The following behavior applies to the User Notifications backend.
 
 When the notification action is handled, `WarmAlarmDelegate` starts `AVAudioPlayer` with the
 configured audio source (a local file path or a Flutter asset). If neither is provided, no in-app

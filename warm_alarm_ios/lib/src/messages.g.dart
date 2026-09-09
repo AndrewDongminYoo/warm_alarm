@@ -630,6 +630,7 @@ class WarmAlarmAudioWire {
     required this.vibrate,
     required this.volumeEnforced,
     this.fadeSteps,
+    this.systemSoundFilePath,
   });
 
   String? filePath;
@@ -648,6 +649,8 @@ class WarmAlarmAudioWire {
 
   List<WarmAlarmVolumeFadeStepWire>? fadeSteps;
 
+  String? systemSoundFilePath;
+
   List<Object?> _toList() {
     return <Object?>[
       filePath,
@@ -658,6 +661,7 @@ class WarmAlarmAudioWire {
       vibrate,
       volumeEnforced,
       fadeSteps,
+      systemSoundFilePath,
     ];
   }
 
@@ -675,6 +679,7 @@ class WarmAlarmAudioWire {
       vibrate: result[5]! as bool,
       volumeEnforced: result[6]! as bool,
       fadeSteps: (result[7] as List<Object?>?)?.cast<WarmAlarmVolumeFadeStepWire>(),
+      systemSoundFilePath: result[8] as String?,
     );
   }
 
@@ -687,7 +692,7 @@ class WarmAlarmAudioWire {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(filePath, other.filePath) && _deepEquals(assetPath, other.assetPath) && _deepEquals(loop, other.loop) && _deepEquals(volume, other.volume) && _deepEquals(fadeInDurationMillis, other.fadeInDurationMillis) && _deepEquals(vibrate, other.vibrate) && _deepEquals(volumeEnforced, other.volumeEnforced) && _deepEquals(fadeSteps, other.fadeSteps);
+    return _deepEquals(filePath, other.filePath) && _deepEquals(assetPath, other.assetPath) && _deepEquals(loop, other.loop) && _deepEquals(volume, other.volume) && _deepEquals(fadeInDurationMillis, other.fadeInDurationMillis) && _deepEquals(vibrate, other.vibrate) && _deepEquals(volumeEnforced, other.volumeEnforced) && _deepEquals(fadeSteps, other.fadeSteps) && _deepEquals(systemSoundFilePath, other.systemSoundFilePath);
   }
 
   @override
@@ -854,6 +859,7 @@ class WarmAlarmSnapshotWire {
     this.recurrence,
     this.snooze,
     this.payload,
+    this.systemManagedAudio,
   });
 
   int id;
@@ -870,6 +876,8 @@ class WarmAlarmSnapshotWire {
 
   String? payload;
 
+  bool? systemManagedAudio;
+
   List<Object?> _toList() {
     return <Object?>[
       id,
@@ -879,6 +887,7 @@ class WarmAlarmSnapshotWire {
       recurrence,
       snooze,
       payload,
+      systemManagedAudio,
     ];
   }
 
@@ -895,6 +904,7 @@ class WarmAlarmSnapshotWire {
       recurrence: result[4] as WarmAlarmRecurrenceWire?,
       snooze: result[5] as WarmAlarmSnoozeWire?,
       payload: result[6] as String?,
+      systemManagedAudio: result[7] as bool?,
     );
   }
 
@@ -907,7 +917,7 @@ class WarmAlarmSnapshotWire {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(id, other.id) && _deepEquals(scheduledAtMillis, other.scheduledAtMillis) && _deepEquals(notification, other.notification) && _deepEquals(audio, other.audio) && _deepEquals(recurrence, other.recurrence) && _deepEquals(snooze, other.snooze) && _deepEquals(payload, other.payload);
+    return _deepEquals(id, other.id) && _deepEquals(scheduledAtMillis, other.scheduledAtMillis) && _deepEquals(notification, other.notification) && _deepEquals(audio, other.audio) && _deepEquals(recurrence, other.recurrence) && _deepEquals(snooze, other.snooze) && _deepEquals(payload, other.payload) && _deepEquals(systemManagedAudio, other.systemManagedAudio);
   }
 
   @override
@@ -1256,6 +1266,25 @@ class WarmAlarmApi {
     )
     ;
     return pigeonVar_replyValue! as WarmAlarmScheduleResultWire;
+  }
+
+  Future<String?> prepareSystemSound(String primaryFilePath, String? backgroundAssetPath) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.prepareSystemSound$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[primaryFilePath, backgroundAssetPath]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+    return pigeonVar_replyValue as String?;
   }
 
   Future<void> cancelAlarm(int id) async {

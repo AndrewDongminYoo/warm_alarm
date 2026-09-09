@@ -30,6 +30,14 @@ struct WarmAlarmScheduleData: Codable {
     let keepNotificationAfterAlarmEnds: Bool?
     let activeSnoozeUntilMillis: Int64?
     let fallbackAnchorMillis: Int64?
+    let alarmKitManaged: Bool
+    let alarmKitSnoozeObserved: Bool
+    var systemSoundFilePath: String? = nil
+    var alarmKitSoundName: String? = nil
+
+    var systemManagedAudio: Bool {
+        alarmKitManaged && systemSoundFilePath != nil && alarmKitSoundName != nil
+    }
 
     // Explicit CodingKeys lets the synthesized encode(to:) work while we
     // override init(from:) in the extension below to add migration defaults.
@@ -40,7 +48,8 @@ struct WarmAlarmScheduleData: Codable {
         case loop, volume, vibrate, fadeInDurationMillis
         case recurrenceWeekdays, recurrenceHour, recurrenceMinute, snoozeDurationMillis, payload
         case volumeEnforced, fadeSteps, keepNotificationAfterAlarmEnds, activeSnoozeUntilMillis
-        case fallbackAnchorMillis
+        case fallbackAnchorMillis, alarmKitManaged, alarmKitSnoozeObserved
+        case systemSoundFilePath, alarmKitSoundName
     }
 }
 
@@ -104,6 +113,10 @@ extension WarmAlarmScheduleData {
             Bool.self, forKey: .keepNotificationAfterAlarmEnds)
         activeSnoozeUntilMillis = try c.decodeIfPresent(Int64.self, forKey: .activeSnoozeUntilMillis)
         fallbackAnchorMillis = try c.decodeIfPresent(Int64.self, forKey: .fallbackAnchorMillis)
+        alarmKitManaged = try c.decodeIfPresent(Bool.self, forKey: .alarmKitManaged) ?? false
+        alarmKitSnoozeObserved = try c.decodeIfPresent(Bool.self, forKey: .alarmKitSnoozeObserved) ?? false
+        systemSoundFilePath = try c.decodeIfPresent(String.self, forKey: .systemSoundFilePath)
+        alarmKitSoundName = try c.decodeIfPresent(String.self, forKey: .alarmKitSoundName)
     }
 
     static func from(
@@ -144,7 +157,45 @@ extension WarmAlarmScheduleData {
             fadeSteps: wire.audio.fadeSteps?.map { FadeStep(timeMillis: $0.timeMillis, volume: $0.volume) },
             keepNotificationAfterAlarmEnds: wire.notification.keepNotificationAfterAlarmEnds,
             activeSnoozeUntilMillis: nil,
-            fallbackAnchorMillis: fallbackAnchorMillis
+            fallbackAnchorMillis: fallbackAnchorMillis,
+            alarmKitManaged: false,
+            alarmKitSnoozeObserved: false,
+            systemSoundFilePath: wire.audio.systemSoundFilePath
+        )
+    }
+
+    func withAlarmKitManaged(_ managed: Bool) -> WarmAlarmScheduleData {
+        var copy = copying(
+            recurrenceHour: recurrenceHour,
+            recurrenceMinute: recurrenceMinute,
+            activeSnoozeUntilMillis: activeSnoozeUntilMillis,
+            fallbackAnchorMillis: fallbackAnchorMillis,
+            alarmKitManaged: managed,
+            alarmKitSnoozeObserved: alarmKitSnoozeObserved
+        )
+        if !managed {
+            copy.systemSoundFilePath = nil
+            copy.alarmKitSoundName = nil
+        }
+        return copy
+    }
+
+    func withAlarmKitSound(named name: String?) -> WarmAlarmScheduleData {
+        var copy = self
+        copy.alarmKitSoundName = name
+        if systemSoundFilePath != nil {
+            copy.systemSoundFilePath = WarmAlarmSoundFiles.ownedURL(named: name)?.path
+        }
+        return copy
+    }
+
+    func withAlarmKitSnoozeObserved() -> WarmAlarmScheduleData {
+        copying(
+            recurrenceHour: recurrenceHour,
+            recurrenceMinute: recurrenceMinute,
+            activeSnoozeUntilMillis: activeSnoozeUntilMillis,
+            fallbackAnchorMillis: fallbackAnchorMillis,
+            alarmKitSnoozeObserved: true
         )
     }
 
@@ -156,7 +207,8 @@ extension WarmAlarmScheduleData {
             recurrenceHour: recurrenceHour,
             recurrenceMinute: recurrenceMinute,
             activeSnoozeUntilMillis: untilMillis,
-            fallbackAnchorMillis: fallbackAnchorMillis
+            fallbackAnchorMillis: fallbackAnchorMillis,
+            alarmKitSnoozeObserved: true
         )
     }
 
@@ -193,7 +245,8 @@ extension WarmAlarmScheduleData {
             recurrenceHour: recurrenceHour,
             recurrenceMinute: recurrenceMinute,
             activeSnoozeUntilMillis: nil,
-            fallbackAnchorMillis: nil
+            fallbackAnchorMillis: nil,
+            alarmKitSnoozeObserved: false
         )
     }
 
@@ -202,7 +255,9 @@ extension WarmAlarmScheduleData {
         recurrenceHour: Int?,
         recurrenceMinute: Int?,
         activeSnoozeUntilMillis: Int64?,
-        fallbackAnchorMillis: Int64?
+        fallbackAnchorMillis: Int64?,
+        alarmKitManaged: Bool? = nil,
+        alarmKitSnoozeObserved: Bool? = nil
     ) -> WarmAlarmScheduleData {
         WarmAlarmScheduleData(
             id: id, scheduledAtMillis: scheduledAtMillis ?? self.scheduledAtMillis,
@@ -221,7 +276,11 @@ extension WarmAlarmScheduleData {
             fadeSteps: fadeSteps,
             keepNotificationAfterAlarmEnds: keepNotificationAfterAlarmEnds,
             activeSnoozeUntilMillis: activeSnoozeUntilMillis,
-            fallbackAnchorMillis: fallbackAnchorMillis
+            fallbackAnchorMillis: fallbackAnchorMillis,
+            alarmKitManaged: alarmKitManaged ?? self.alarmKitManaged,
+            alarmKitSnoozeObserved: alarmKitSnoozeObserved ?? self.alarmKitSnoozeObserved,
+            systemSoundFilePath: systemSoundFilePath,
+            alarmKitSoundName: alarmKitSoundName
         )
     }
 }
@@ -234,8 +293,10 @@ final class WarmAlarmStore: @unchecked Sendable {
 
     func save(_ data: WarmAlarmScheduleData) {
         var all = loadRaw()
+        let oldSound = all[String(data.id)]?.alarmKitSoundName
         all[String(data.id)] = data
         persist(all)
+        if oldSound != data.alarmKitSoundName { removeSoundIfUnreferenced(oldSound) }
     }
 
     func load(id: Int64) -> WarmAlarmScheduleData? {
@@ -244,8 +305,9 @@ final class WarmAlarmStore: @unchecked Sendable {
 
     func remove(id: Int64) {
         var all = loadRaw()
-        all.removeValue(forKey: String(id))
+        let oldSound = all.removeValue(forKey: String(id))?.alarmKitSoundName
         persist(all)
+        removeSoundIfUnreferenced(oldSound)
     }
 
     func loadAll() -> [Int64: WarmAlarmScheduleData] {
@@ -257,7 +319,14 @@ final class WarmAlarmStore: @unchecked Sendable {
     }
 
     func clear() {
+        let sounds = loadRaw().values.compactMap(\.alarmKitSoundName)
         defaults.removeObject(forKey: key)
+        sounds.forEach { WarmAlarmSoundFiles.remove(named: $0) }
+    }
+
+    func removeSoundIfUnreferenced(_ name: String?) {
+        guard let name, !loadRaw().values.contains(where: { $0.alarmKitSoundName == name }) else { return }
+        WarmAlarmSoundFiles.remove(named: name)
     }
 
     private func loadRaw() -> [String: WarmAlarmScheduleData] {

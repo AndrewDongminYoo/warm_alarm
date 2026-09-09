@@ -47,6 +47,12 @@ class WarmAlarmIOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   Future<void> init() => api.initialize();
 
   @override
+  Future<String?> prepareSystemSound({
+    required String primaryFilePath,
+    String? backgroundAssetPath,
+  }) => api.prepareSystemSound(primaryFilePath, backgroundAssetPath);
+
+  @override
   Future<void> cancelAlarm(int id) => api.cancelAlarm(id);
 
   @override
@@ -124,6 +130,7 @@ WarmAlarmAudioWire _audioToWire(WarmAlarmAudio audio) {
   return WarmAlarmAudioWire(
     filePath: audio.filePath,
     assetPath: audio.assetPath,
+    systemSoundFilePath: audio.systemSoundFilePath,
     loop: audio.loop,
     volume: audio.volume,
     fadeInDurationMillis: audio.fadeInDuration?.inMilliseconds,
@@ -137,6 +144,7 @@ WarmAlarmAudio _audioFromWire(WarmAlarmAudioWire wire) {
   return WarmAlarmAudio(
     filePath: wire.filePath,
     assetPath: wire.assetPath,
+    systemSoundFilePath: wire.systemSoundFilePath,
     loop: wire.loop,
     volume: wire.volume,
     fadeInDuration: wire.fadeInDurationMillis == null ? null : Duration(milliseconds: wire.fadeInDurationMillis!),
@@ -366,6 +374,7 @@ WarmAlarmScheduleWire _scheduleToWire(WarmAlarmSchedule schedule) {
 
 WarmAlarmSnapshot _snapshotFromWire(WarmAlarmSnapshotWire wire) {
   return WarmAlarmSnapshot(
+    systemManagedAudio: wire.systemManagedAudio ?? false,
     id: wire.id,
     scheduledAt: DateTime.fromMillisecondsSinceEpoch(wire.scheduledAtMillis),
     notification: _notificationFromWire(wire.notification),

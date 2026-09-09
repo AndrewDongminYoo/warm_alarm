@@ -21,6 +21,7 @@
 		97C147101CF9000F007C117D /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97C147111CF9000F007C117D /* SceneDelegate.swift */; };
 		A897DD86A2DB71364E3D3FBA /* WarmAlarmMutationQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F1E550AB0E9EF57A4333357 /* WarmAlarmMutationQueueTests.swift */; };
 		AC9BB2D3B3974B6122E372C3 /* WarmAlarmStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74D654FC1A129F7EB17C8E08 /* WarmAlarmStoreTests.swift */; };
+		091CBDDD526E406B8CBF65DC /* WarmAlarmSoundRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F45E0E343CE496AB364F01C /* WarmAlarmSoundRendererTests.swift */; };
 		AFBB24222795A1290FF50E54 /* WarmAlarmRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E713B65BD9501484EEB7A051 /* WarmAlarmRecoveryTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -59,6 +60,7 @@
 		74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Runner-Bridging-Header.h"; sourceTree = "<group>"; };
 		74858FAE1ED2DC5600515810 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		74D654FC1A129F7EB17C8E08 /* WarmAlarmStoreTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmStoreTests.swift; sourceTree = "<group>"; };
+		2F45E0E343CE496AB364F01C /* WarmAlarmSoundRendererTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmSoundRendererTests.swift; sourceTree = "<group>"; };
 		78E0A7A72DC9AD7400C4905E /* FlutterGeneratedPluginSwiftPackage */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = FlutterGeneratedPluginSwiftPackage; path = Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage; sourceTree = "<group>"; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Flutter/Release.xcconfig; sourceTree = "<group>"; };
 		92B43DD0AD58E6356D15892C /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
@@ -172,6 +174,7 @@
 				109E51BED23F0B96E0307E3B /* WarmAlarmRecurrenceTests.swift */,
 				3FC58045D2B9E8F22EF1930C /* WarmAlarmRequestRegistrationTests.swift */,
 				74D654FC1A129F7EB17C8E08 /* WarmAlarmStoreTests.swift */,
+				2F45E0E343CE496AB364F01C /* WarmAlarmSoundRendererTests.swift */,
 			);
 			name = RunnerTests;
 			path = ../../../warm_alarm_ios/ios/warm_alarm_ios/Tests/warm_alarm_ios_tests;
@@ -347,6 +350,7 @@
 				5A0448E6CC51531A15EB7C26 /* WarmAlarmRecurrenceTests.swift in Sources */,
 				550EEACF41D783F7B970EA15 /* WarmAlarmRequestRegistrationTests.swift in Sources */,
 				AC9BB2D3B3974B6122E372C3 /* WarmAlarmStoreTests.swift in Sources */,
+				091CBDDD526E406B8CBF65DC /* WarmAlarmSoundRendererTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
