@@ -34,6 +34,22 @@ void main() {
       WarmAlarmPlatform.instance = warmAlarmPlatform;
     });
 
+    test('prepareSystemSound forwards both sources and returns the prepared path', () async {
+      when(
+        () => warmAlarmPlatform.prepareSystemSound(
+          primaryFilePath: '/voice.aac',
+          backgroundAssetPath: 'assets/tone.mp3',
+        ),
+      ).thenAnswer((_) async => '/complete.caf');
+      expect(
+        await WarmAlarm.prepareSystemSound(
+          primaryFilePath: '/voice.aac',
+          backgroundAssetPath: 'assets/tone.mp3',
+        ),
+        '/complete.caf',
+      );
+    });
+
     test(
       'scheduleAlarm accepts zero values and forwards the typed result',
       () async {

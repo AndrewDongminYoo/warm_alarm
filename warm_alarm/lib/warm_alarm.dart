@@ -9,6 +9,14 @@ class WarmAlarm {
 
   static Future<void> init() => _platform.init();
 
+  static Future<String?> prepareSystemSound({
+    required String primaryFilePath,
+    String? backgroundAssetPath,
+  }) => _platform.prepareSystemSound(
+    primaryFilePath: primaryFilePath,
+    backgroundAssetPath: backgroundAssetPath,
+  );
+
   static Future<WarmAlarmCapabilities> getCapabilities() => _platform.getCapabilities();
 
   static Future<WarmAlarmPermissionState> getPermissionState() => _platform.getPermissionState();

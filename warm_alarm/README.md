@@ -100,7 +100,7 @@ await WarmAlarm.cancelAlarm(1);
 | Feature                   | Android    | iOS        | macOS      |
 | ------------------------- | ---------- | ---------- | ---------- |
 | Notification scheduling   | ✅ Full    | ✅ Full    | ✅ Full    |
-| Exact alarm scheduling    | ✅ Full    | ⚠️ Limited | ⚠️ Limited |
+| Exact alarm scheduling    | ✅ Full    | ✅ or ⚠️   | ⚠️ Limited |
 | Background audio playback | ⚠️ Limited | ⚠️ Limited | ⚠️ Limited |
 | Full-screen presentation  | ✅ Full    | ❌ None    | ❌ None    |
 | Wake-check                | ✅ Full    | ❌ None    | ❌ None    |
@@ -109,6 +109,25 @@ await WarmAlarm.cancelAlarm(1);
 
 Call `getReadiness()` at runtime and surface the `reasons` list to your users so they can take
 corrective action (grant permissions, disable battery optimization, etc.).
+
+### iOS 26 AlarmKit setup
+
+Add a non-empty `NSAlarmKitUsageDescription` to the host app's `Info.plist` to opt in to AlarmKit on iOS 26 or later.
+The first native schedule can show the AlarmKit authorization prompt.
+The plugin falls back to User Notifications when AlarmKit is unavailable, unconfigured, denied, or fails to schedule and native cleanup succeeds.
+It returns an error instead of installing a second backend when native cleanup cannot be confirmed.
+`getCapabilities()` reports exact scheduling as `supported` only when the runtime and host configuration allow the AlarmKit backend.
+The system AlarmKit UI does not open an arbitrary Flutter full-screen route.
+
+AlarmKit Snooze uses a post-alert countdown.
+Apple requires a Widget Extension with an `ActivityConfiguration` for `AlarmAttributes<Never>` when the host enables this countdown.
+Declare `extension Never: @retroactive AlarmMetadata {}` in the extension so it uses the same module-independent empty metadata type as the plugin.
+Set both `NSSupportsLiveActivities` and `WarmAlarmAlarmKitLiveActivityEnabled` to `true` in the app target's `Info.plist` only after the extension is ready.
+Until then, schedules with Snooze use the User Notifications fallback and return a warning.
+Call `prepareSystemSound` with a recording and optional tone, then pass its returned path as `WarmAlarmAudio.systemSoundFilePath`.
+Keep the legacy audio inputs for fallback, and start app audio only when the saved snapshot does not report `systemManagedAudio`.
+Unsupported hosts return null; preparation failures throw without replacing an existing alarm.
+See the [`warm_alarm_ios` host requirements][warm_alarm_ios_requirements] for the complete value mapping, preparation limits, file lifetime, and event limitations.
 
 ---
 
@@ -119,6 +138,7 @@ corrective action (grant permissions, disable battery optimization, etc.).
 | Method                            | Returns                      | Description                                                 |
 | --------------------------------- | ---------------------------- | ----------------------------------------------------------- |
 | `init()`                          | `Future<void>`               | Rehydrate native alarm state after a process restart        |
+| `prepareSystemSound(...)`         | `Future<String?>`            | Prepare an AlarmKit sound; return null if unsupported       |
 | `getCapabilities()`               | `WarmAlarmCapabilities`      | Per-feature support status for the current platform         |
 | `getPermissionState()`            | `WarmAlarmPermissionState`   | Current notification and exact-alarm permission grants      |
 | `getReadiness()`                  | `WarmAlarmReadiness`         | Overall system readiness with actionable reason codes       |
@@ -226,3 +246,4 @@ BSD-3-Clause — Copyright (c) 2026, Dongmin Yu. See [LICENSE](LICENSE) for deta
 [very_good_analysis_link]: https://pub.dev/packages/very_good_analysis
 [alarm_package_link]: https://pub.dev/packages/alarm
 [warmwake_link]: https://warmwake.donminzzi.kr
+[warm_alarm_ios_requirements]: https://github.com/AndrewDongminYoo/warm_alarm/tree/main/warm_alarm_ios#alarmkit-opt-in
