@@ -59,6 +59,31 @@ final class WarmAlarmSoundRendererTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
     }
 
+    func testRenderRejectsPrimaryBuffersAboveTheMemoryBudget() throws {
+        let voice = try fixture("voice.caf", samples: [Float](repeating: 0.2, count: 8_000), sampleRate: 8_000)
+        let output = directory.appendingPathComponent("oversized.caf")
+
+        XCTAssertThrowsError(try WarmAlarmSoundRenderer.render(
+            primary: voice, background: nil, to: output, maximumBufferBytes: 256 * 1_024
+        )) { error in
+            XCTAssertEqual((error as NSError).code, 4)
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
+    }
+
+    func testRenderIncludesRetainedVoiceWhenCheckingBackgroundMemory() throws {
+        let voice = try fixture("voice.caf", samples: [Float](repeating: 0.4, count: 8_000), sampleRate: 8_000)
+        let tone = try fixture("tone.caf", samples: [Float](repeating: 0.2, count: 8_000), sampleRate: 8_000)
+        let output = directory.appendingPathComponent("oversized-mix.caf")
+
+        XCTAssertThrowsError(try WarmAlarmSoundRenderer.render(
+            primary: voice, background: tone, to: output, maximumBufferBytes: 600 * 1_024
+        )) { error in
+            XCTAssertEqual((error as NSError).code, 4)
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
+    }
+
     func testSoundFilesRemoveOnlyOwnedFilesAndPreserveRecording() throws {
         let recording = try fixture("voice.caf", samples: [Float](repeating: 0.2, count: 8_000))
         let output = try WarmAlarmSoundFiles.prepare(primary: recording, background: nil, directory: directory)
@@ -70,6 +95,35 @@ final class WarmAlarmSoundRendererTests: XCTestCase {
         WarmAlarmSoundFiles.remove(named: output.lastPathComponent, directory: directory)
         XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: recording.path))
+    }
+
+    func testSoundCleanupRemovesOnlyExpiredUnreferencedOwnedFiles() throws {
+        let cutoff = Date(timeIntervalSince1970: 2_000_000)
+        let stale = "warm-alarm-stale.caf"
+        let retained = "warm-alarm-in-use.caf"
+        let pending = "warm-alarm-pending.caf"
+        let recording = "recording.caf"
+        for name in [stale, retained, pending, recording] {
+            let url = directory.appendingPathComponent(name)
+            try Data([0]).write(to: url)
+            try FileManager.default.setAttributes(
+                [.modificationDate: cutoff.addingTimeInterval(name == pending ? 1 : -1)], ofItemAtPath: url.path
+            )
+        }
+        let ownedDirectory = directory.appendingPathComponent("warm-alarm-directory.caf")
+        try FileManager.default.createDirectory(at: ownedDirectory, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes(
+            [.modificationDate: cutoff.addingTimeInterval(-1)], ofItemAtPath: ownedDirectory.path
+        )
+
+        WarmAlarmSoundFiles.removeUnreferenced(
+            keeping: [retained], olderThan: cutoff, directory: directory
+        )
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent(stale).path))
+        for name in [retained, pending, recording, ownedDirectory.lastPathComponent] {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: directory.appendingPathComponent(name).path), name)
+        }
     }
 
     #if os(iOS)

@@ -50,9 +50,11 @@ AlarmKit implements `WarmAlarmSnooze.duration` as a post-alert countdown.
 Apple requires a Widget Extension that supplies the corresponding Live Activity presentation when an alarm supports a countdown.
 Declare `extension Never: @retroactive AlarmMetadata {}` in the Widget Extension and register an `ActivityConfiguration` for `AlarmAttributes<Never>`.
 The plugin provides `nil` metadata through this module-independent type, so the extension does not need to link the plugin module.
-After the extension is ready, add the following explicit opt-in to the app target's `Info.plist`.
+After the extension is ready, enable Live Activities and the plugin opt-in in the app target's `Info.plist`.
 
 ```xml
+<key>NSSupportsLiveActivities</key>
+<true/>
 <key>WarmAlarmAlarmKitLiveActivityEnabled</key>
 <true/>
 ```
@@ -97,10 +99,16 @@ Flutter cancellation uses AlarmKit `stop(id:)` while a native alarm is alerting 
 
 On configured AlarmKit hosts, call `prepareSystemSound` with a recording and an optional Flutter tone asset before scheduling.
 The renderer preserves the recording length, repeats a shorter tone through the full recording, and mixes both sources at half gain.
+Before decoding, it rejects inputs whose planned PCM buffers exceed 134,217,728 bytes in total.
+The limit includes the source, converted audio, retained voice during background decoding, and input chunks; it does not measure codec-internal allocations.
 It writes a unique PCM CAF under `Library/Sounds` with protection that permits access after the first device unlock.
 Pass the returned path as `WarmAlarmAudio.systemSoundFilePath` and retain the normal audio inputs for User Notifications fallback.
 Unsupported hosts return null.
 Preparation errors fail the request instead of substituting a default sound.
+Preparation runs on the existing serial mutation queue, away from the platform thread, and replies on the platform thread.
+Prepared sounds are staging files and should be scheduled promptly.
+After successful initialization, the plugin removes owned files last modified more than 24 hours ago if no stored alarm references them.
+Recent staging files and sounds referenced by stored alarms are retained.
 
 After scheduling, read `WarmAlarmSnapshot.systemManagedAudio` before starting app audio.
 It is true only when AlarmKit adopted a complete system sound; a requested override or capability check alone does not establish ownership.

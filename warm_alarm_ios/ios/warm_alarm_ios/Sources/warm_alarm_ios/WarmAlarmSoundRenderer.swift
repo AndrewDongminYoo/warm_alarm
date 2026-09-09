@@ -19,6 +19,21 @@ enum WarmAlarmSoundFiles {
         try? FileManager.default.removeItem(at: url)
     }
 
+    static func removeUnreferenced(keeping names: Set<String>, olderThan cutoff: Date, directory: URL = directory) {
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else { return }
+        for file in files {
+            let name = file.lastPathComponent
+            guard ownedURL(named: name, directory: directory) != nil, !names.contains(name),
+                  let values = try? file.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey]),
+                  values.isRegularFile == true,
+                  let modified = values.contentModificationDate, modified < cutoff else { continue }
+            try? FileManager.default.removeItem(at: file)
+        }
+    }
+
     @available(iOS 26.0, macOS 15.0, *)
     static func prepare(primary: URL, background: URL?, directory: URL = directory) throws -> URL {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -57,7 +72,7 @@ enum WarmAlarmSoundRenderer {
             state.withLock { state in
                 let remaining = state.buffer.frameLength - state.position
                 guard remaining > 0,
-                      let chunk = AVAudioPCMBuffer(pcmFormat: state.buffer.format, frameCapacity: min(count, remaining))
+                      let chunk = AVAudioPCMBuffer(pcmFormat: state.buffer.format, frameCapacity: min(4_096, min(count, remaining)))
                 else {
                     status.pointee = .endOfStream
                     return nil
@@ -76,10 +91,16 @@ enum WarmAlarmSoundRenderer {
         }
     }
 
-    static func render(primary: URL, background: URL?, to output: URL) throws {
+    static func render(
+        primary: URL, background: URL?, to output: URL,
+        maximumBufferBytes: Int = 128 * 1_024 * 1_024
+    ) throws {
         let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 2)!
-        let voice = try decode(primary, format: format)
-        let tone = try background.map { try decode($0, format: format) }
+        let voice = try decode(primary, format: format, maximumBufferBytes: maximumBufferBytes)
+        let retainedBytes = Double(voice.frameCapacity) * Double(format.channelCount) * Double(MemoryLayout<Float>.size)
+        let tone = try background.map {
+            try decode($0, format: format, maximumBufferBytes: maximumBufferBytes, retainedBytes: retainedBytes)
+        }
         if let tone {
             let voiceFrames = Int(voice.frameLength)
             let toneFrames = Int(tone.frameLength)
@@ -106,8 +127,20 @@ enum WarmAlarmSoundRenderer {
         try file.write(from: voice)
     }
 
-    private static func decode(_ url: URL, format: AVAudioFormat) throws -> AVAudioPCMBuffer {
+    private static func decode(
+        _ url: URL, format: AVAudioFormat, maximumBufferBytes: Int, retainedBytes: Double = 0
+    ) throws -> AVAudioPCMBuffer {
         let file = try AVAudioFile(forReading: url, commonFormat: .pcmFormatFloat32, interleaved: false)
+        let sourceFormat = file.processingFormat
+        let convertedCapacity = ceil(Double(file.length) * format.sampleRate / sourceFormat.sampleRate) + 1_024
+        let inputSamples = (Double(file.length) + 8_192) * Double(sourceFormat.channelCount)
+        let outputSamples = convertedCapacity * Double(format.channelCount)
+        let requiredBytes = retainedBytes + (inputSamples + outputSamples) * Double(MemoryLayout<Float>.size)
+        guard requiredBytes.isFinite, requiredBytes <= Double(maximumBufferBytes) else {
+            throw NSError(domain: "WarmAlarmSoundRenderer", code: 4, userInfo: [
+                NSLocalizedDescriptionKey: "The alarm sound exceeds the audio preparation memory limit."
+            ])
+        }
         guard file.length > 0,
               file.length <= Int64(UInt32.max),
               let input = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length))

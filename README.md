@@ -113,7 +113,7 @@ The system AlarmKit UI does not open an arbitrary Flutter full-screen route.
 AlarmKit Snooze uses a post-alert countdown.
 Apple requires a Widget Extension with an `ActivityConfiguration` for `AlarmAttributes<Never>` when the host enables this countdown.
 Declare `extension Never: @retroactive AlarmMetadata {}` in the extension so it uses the same module-independent empty metadata type as the plugin.
-Set `WarmAlarmAlarmKitLiveActivityEnabled` to `true` in the app target's `Info.plist` only after the extension is ready.
+Set both `NSSupportsLiveActivities` and `WarmAlarmAlarmKitLiveActivityEnabled` to `true` in the app target's `Info.plist` only after the extension is ready.
 Until then, schedules with Snooze use the User Notifications fallback and return a warning.
 See the [`warm_alarm_ios` host requirements][warm_alarm_ios_requirements] for the complete value mapping and event limitations.
 

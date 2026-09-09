@@ -691,6 +691,16 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
 
     private func handleAlarmKitUpdate(_ snapshot: WarmAlarmAlarmKitSnapshot) {
         let observationUpdate = alarmKitObservationState.update(snapshot)
+        notificationMutationQueue.enqueueOnMain { [weak self] finish in
+            defer { finish() }
+            self?.applyAlarmKitUpdate(snapshot, observationUpdate: observationUpdate)
+        }
+    }
+
+    private func applyAlarmKitUpdate(
+        _ snapshot: WarmAlarmAlarmKitSnapshot,
+        observationUpdate: WarmAlarmAlarmKitObservationUpdate
+    ) {
         let previous = observationUpdate.previous
         let schedules = WarmAlarmStore.shared.loadAll().values
         for schedule in schedules where schedule.alarmKitManaged {
@@ -853,7 +863,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
             }
             let nowMillis = Int64(Date().timeIntervalSince1970 * 1000)
             let storedSchedules = Array(WarmAlarmStore.shared.loadAll().values)
-            guard !storedSchedules.isEmpty else {
+            guard !storedSchedules.isEmpty || self.alarmKitBackend?.authorizationState == .authorized else {
                 WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
                 return
             }
@@ -865,7 +875,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
             guard backendChoice == .alarmKit, let alarmKitBackend = self.alarmKitBackend else {
                 let alarmKitManagedSchedules = storedSchedules.filter { $0.alarmKitManaged }
                 guard let alarmKitBackend = self.alarmKitBackend,
-                      !alarmKitManagedSchedules.isEmpty else {
+                      !alarmKitManagedSchedules.isEmpty || alarmKitBackend.authorizationState == .authorized else {
                     let notificationSchedules = storedSchedules.map { schedule in
                         let updated = schedule.withAlarmKitManaged(false)
                         if schedule.alarmKitManaged { WarmAlarmStore.shared.save(updated) }
@@ -883,17 +893,13 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                 self.beginAlarmKitMutation(ids: alarmKitManagedSchedules.map {
                     WarmAlarmAlarmKitPlan.id(for: $0.id)
                 })
-                WarmAlarmRecovery.recoverAll(
-                    alarmKitManagedSchedules.map { WarmAlarmAlarmKitPlan.id(for: $0.id) },
-                    recover: alarmKitBackend.cancel
-                ) { result in
-                    switch result {
-                    case let .failure(error):
+                alarmKitBackend.cancelAll { error in
+                    if let error {
                         self.finishAlarmKitMutation(ids: alarmKitManagedSchedules.map {
                             WarmAlarmAlarmKitPlan.id(for: $0.id)
                         })
                         WarmAlarmPlatformReply.complete(.failure(error), completion: completion, finish: finish)
-                    case .success:
+                    } else {
                         let notificationSchedules = storedSchedules.map { schedule in
                             let updated = schedule.withAlarmKitManaged(false)
                             if schedule.alarmKitManaged { WarmAlarmStore.shared.save(updated) }
@@ -931,19 +937,26 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                         snapshot: snapshot,
                         liveActivityConfigured: self.alarmKitLiveActivityEnabled
                     )
-                    self.beginAlarmKitMutation(ids: incompatibleIDs)
+                    let knownIDs = Set(storedSchedules.map { WarmAlarmAlarmKitPlan.id(for: $0.id) })
+                    let orphanedIDs = snapshot.scheduledAlarmIDs.filter {
+                        WarmAlarmAlarmKitPlan.owns($0) && !knownIDs.contains($0)
+                    }
+                    let cleanupIDs = Array(Set(incompatibleIDs).union(orphanedIDs)).sorted {
+                        $0.uuidString < $1.uuidString
+                    }
+                    self.beginAlarmKitMutation(ids: cleanupIDs)
                     WarmAlarmRecovery.recoverAll(
-                        incompatibleIDs,
+                        cleanupIDs,
                         recover: alarmKitBackend.cancel
                     ) { cancellationResult in
                         if case let .failure(error) = cancellationResult {
-                            self.finishAlarmKitMutation(ids: incompatibleIDs)
+                            self.finishAlarmKitMutation(ids: cleanupIDs)
                             WarmAlarmPlatformReply.complete(
                                 .failure(error), completion: completion, finish: finish
                             )
                             return
                         }
-                        let reconciledSnapshot = snapshot.removing(ids: Set(incompatibleIDs))
+                        let reconciledSnapshot = snapshot.removing(ids: Set(cleanupIDs))
                         self.replayUnobservedAlarmKitSnoozes(from: reconciledSnapshot)
                         let currentSchedules = Array(WarmAlarmStore.shared.loadAll().values)
                         switch Self.resolveAlarmKitInitializationWork(
@@ -953,7 +966,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                             save: { WarmAlarmStore.shared.save($0) }
                         ) {
                         case let .failure(error):
-                            self.finishAlarmKitMutation(ids: incompatibleIDs)
+                            self.finishAlarmKitMutation(ids: cleanupIDs)
                             WarmAlarmPlatformReply.complete(
                                 .failure(error), completion: completion, finish: finish
                             )
@@ -967,7 +980,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                                     WarmAlarmStore.shared.remove(id: alarmId)
                                 }
                             }
-                            self.finishAlarmKitMutation(ids: incompatibleIDs)
+                            self.finishAlarmKitMutation(ids: cleanupIDs)
                             self.initializeNotificationState(
                                 schedules: work.notificationRecovery,
                                 alarmKitManaged: work.alarmKitManaged,
@@ -1134,6 +1147,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                 nowMillis: nowMillis
             )
             guard !recoverableAlarms.isEmpty else {
+                self.removeExpiredPreparedSounds()
                 WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
                 return
             }
@@ -1143,6 +1157,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                 nowMillis: nowMillis,
                 center: self.notificationCenter
             ) { result in
+                if case .success = result { self.removeExpiredPreparedSounds() }
                 WarmAlarmPlatformReply.complete(result, completion: completion, finish: finish)
             }
         }
@@ -1655,6 +1670,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
 
     /// Reads permission and readiness from one settings query so the two cannot disagree.
     private func captureNotificationSnapshot(
+        effectiveBackend: WarmAlarmAppleSchedulingBackend? = nil,
         _ handler: @escaping (WarmAlarmPermissionStateWire, WarmAlarmReadinessWire) -> Void
     ) {
         UNUserNotificationCenter.current().getNotificationSettings { settings in
@@ -1668,7 +1684,8 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
             let snapshot = Self.permissionSnapshot(
                 notificationsGranted: granted,
                 alarmKitConfigured: alarmKitConfigured,
-                alarmKitAuthorization: self.alarmKitBackend?.authorizationState
+                alarmKitAuthorization: self.alarmKitBackend?.authorizationState,
+                effectiveBackend: effectiveBackend
             )
             handler(snapshot.permissionState, snapshot.readiness)
         }
@@ -1677,7 +1694,8 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
     static func permissionSnapshot(
         notificationsGranted: Bool,
         alarmKitConfigured: Bool,
-        alarmKitAuthorization: WarmAlarmAlarmKitAuthorization?
+        alarmKitAuthorization: WarmAlarmAlarmKitAuthorization?,
+        effectiveBackend: WarmAlarmAppleSchedulingBackend? = nil
     ) -> WarmAlarmPermissionSnapshot {
         let exactAlarmGranted = alarmKitConfigured && alarmKitAuthorization == .authorized
         let permissionState = WarmAlarmPermissionStateWire(
@@ -1685,13 +1703,13 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
             exactAlarmGranted: exactAlarmGranted,
             fullScreenIntentGranted: false
         )
-        if exactAlarmGranted {
+        if effectiveBackend != .userNotifications, exactAlarmGranted {
             return WarmAlarmPermissionSnapshot(
                 permissionState: permissionState,
                 readiness: WarmAlarmReadinessWire(level: .ready, reasons: [])
             )
         }
-        if alarmKitConfigured, alarmKitAuthorization == .notDetermined {
+        if effectiveBackend != .userNotifications, alarmKitConfigured, alarmKitAuthorization == .notDetermined {
             return WarmAlarmPermissionSnapshot(
                 permissionState: permissionState,
                 readiness: WarmAlarmReadinessWire(level: .limited, reasons: [.unknown])
@@ -2520,13 +2538,33 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                 }
                 return url
             }
-            let output = try WarmAlarmSoundFiles.prepare(
-                primary: URL(fileURLWithPath: primaryFilePath), background: background
-            )
-            completion(.success(output.path))
+            notificationMutationQueue.enqueue { finish in
+                do {
+                    let output = try WarmAlarmSoundFiles.prepare(
+                        primary: URL(fileURLWithPath: primaryFilePath), background: background
+                    )
+                    WarmAlarmPlatformReply.complete(.success(output.path), completion: completion, finish: finish)
+                } catch {
+                    WarmAlarmPlatformReply.complete(.failure(error), completion: completion, finish: finish)
+                }
+            }
         } catch {
             completion(.failure(error))
         }
+    }
+
+    private func removeExpiredPreparedSounds() {
+        var names = Set<String>()
+        for schedule in WarmAlarmStore.shared.loadAll().values {
+            names.formUnion([
+                schedule.alarmKitSoundName,
+                schedule.systemSoundFilePath.map { URL(fileURLWithPath: $0).lastPathComponent },
+                schedule.filePath.map { URL(fileURLWithPath: $0).lastPathComponent }
+            ].compactMap { $0 })
+        }
+        WarmAlarmSoundFiles.removeUnreferenced(
+            keeping: names, olderThan: Date().addingTimeInterval(-24 * 60 * 60)
+        )
     }
 
     func scheduleAlarm(
@@ -2729,12 +2767,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                                     warning = WarmAlarmWarningWire(message: message)
                                 }
                             }
-                            self.getReadiness { readinessResult in
-                                let readiness = (try? readinessResult.get())
-                                    ?? WarmAlarmReadinessWire(
-                                        level: .limited,
-                                        reasons: [.backgroundExecutionLimited]
-                                    )
+                            self.captureNotificationSnapshot(effectiveBackend: outcome.backend) { _, readiness in
                                 WarmAlarmPlatformReply.complete(.success(WarmAlarmScheduleResultWire(
                                     alarmId: schedule.id,
                                     readiness: readiness,
@@ -2835,7 +2868,8 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
             let hasAlarmKitManagedSchedule = WarmAlarmStore.shared.loadAll().values.contains {
                 $0.alarmKitManaged
             }
-            guard hasAlarmKitManagedSchedule, let alarmKitBackend = self.alarmKitBackend else {
+            guard let alarmKitBackend = self.alarmKitBackend,
+                  hasAlarmKitManagedSchedule || alarmKitBackend.authorizationState == .authorized else {
                 cleanupLocalState()
                 WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
                 return
