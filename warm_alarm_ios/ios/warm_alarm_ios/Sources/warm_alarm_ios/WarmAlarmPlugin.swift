@@ -3056,16 +3056,23 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
             withIdentifiers: [WarmAlarmPlugin.killWarningNotifId])
     }
 
-    /// Posts the kill warning on genuine termination (`willTerminate`), for any
-    /// alarm that is scheduled in the future or currently ringing. Shares the
-    /// notification id with `postKillWarningIfNeeded()` so the two paths coalesce
-    /// into one notification when both fire during a ring-then-terminate.
+    static func needsKillWarningOnTerminate(
+        schedules: [WarmAlarmScheduleData], currentlyPlayingAlarmId: Int64?, nowMillis: Int64
+    ) -> Bool {
+        currentlyPlayingAlarmId != nil || schedules.contains { data in
+            !data.alarmKitManaged && data.snapshotScheduledAtMillis(nowMillis: nowMillis) > nowMillis
+        }
+    }
+
+    /// Posts the kill warning on genuine termination for future process-owned alarms or active playback.
+    /// Shares the notification id with `postKillWarningIfNeeded()` so both paths produce one notification.
     private func postKillWarningOnTerminate() {
         let nowMillis = Int64(Date().timeIntervalSince1970 * 1000)
-        let hasFutureAlarm = WarmAlarmStore.shared.loadAll().values.contains { data in
-            data.snapshotScheduledAtMillis(nowMillis: nowMillis) > nowMillis
-        }
-        guard hasFutureAlarm || delegate.currentlyPlayingAlarmId != nil,
+        guard Self.needsKillWarningOnTerminate(
+            schedules: Array(WarmAlarmStore.shared.loadAll().values),
+            currentlyPlayingAlarmId: delegate.currentlyPlayingAlarmId,
+            nowMillis: nowMillis
+        ),
               let dict = UserDefaults.standard.dictionary(forKey: Self.killWarningDefaultsKey),
               let title = dict["title"] as? String,
               let body = dict["body"] as? String

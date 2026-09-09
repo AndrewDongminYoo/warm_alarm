@@ -2788,6 +2788,28 @@ final class WarmAlarmRequestTests: XCTestCase {
         ), 0)
     }
 
+    func testKillWarningRequiresAProcessOwnedScheduleOrActivePlayback() {
+        let nowMillis: Int64 = 1_900_000_000_000
+        let future = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: nowMillis + 60_000)
+        )
+        let expired = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: nowMillis - 60_000)
+        )
+        XCTAssertFalse(WarmAlarmPlugin.needsKillWarningOnTerminate(
+            schedules: [future.withAlarmKitManaged(true)], currentlyPlayingAlarmId: nil, nowMillis: nowMillis
+        ))
+        XCTAssertTrue(WarmAlarmPlugin.needsKillWarningOnTerminate(
+            schedules: [future.withAlarmKitManaged(true), future], currentlyPlayingAlarmId: nil, nowMillis: nowMillis
+        ))
+        XCTAssertTrue(WarmAlarmPlugin.needsKillWarningOnTerminate(
+            schedules: [], currentlyPlayingAlarmId: future.id, nowMillis: nowMillis
+        ))
+        XCTAssertFalse(WarmAlarmPlugin.needsKillWarningOnTerminate(
+            schedules: [expired], currentlyPlayingAlarmId: nil, nowMillis: nowMillis
+        ))
+    }
+
     func testKillWarningConfigurationRequiresAnAvailableSlot() {
         XCTAssertFalse(WarmAlarmPlugin.canConfigureKillWarning(
             pendingIdentifiers: Set((0..<64).map { "existing-\($0)" }),
