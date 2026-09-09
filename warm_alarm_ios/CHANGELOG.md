@@ -1,3 +1,10 @@
+# 0.1.7
+
+- Add optional AlarmKit scheduling with native Stop and Snooze state reconciliation.
+- Prepare complete recording and tone audio for system playback from `Library/Sounds`.
+- Report system playback ownership and prevent a second native player from starting during AlarmKit alerts.
+- Keep generated sounds while alarms need them, and remove unreferenced sounds after confirmed state changes.
+
 # 0.1.6
 
 - Preserve Flutter lifecycle-provider conformance when wrapping Flutter's notification delegate, which prevents Firebase Messaging from replacing the proxy and recursively forwarding foreground notifications.

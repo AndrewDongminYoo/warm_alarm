@@ -92,7 +92,7 @@ await WarmAlarm.cancelAlarm(1);
 | Feature                   | Android    | iOS            | macOS          |
 | ------------------------- | ---------- | -------------- | -------------- |
 | Notification scheduling   | ✅ Full    | ✅ Full        | ✅ Full        |
-| Exact alarm scheduling    | ✅ Full    | ⚠️ Limited     | ❌ Unsupported |
+| Exact alarm scheduling    | ✅ Full    | ✅ or ⚠️       | ❌ Unsupported |
 | Background audio playback | ⚠️ Limited | ⚠️ Limited     | ⚠️ Limited     |
 | Full-screen presentation  | ✅ Full    | ❌ Unsupported | ❌ Unsupported |
 | Wake-check                | ✅ Full    | ❌ Unsupported | ❌ Unsupported |
@@ -100,6 +100,22 @@ await WarmAlarm.cancelAlarm(1);
 **⚠️ Limited** means the native implementation reports conditional support. Call `getReadiness()` before you schedule an alarm.
 
 Call `getReadiness()` at runtime and surface the reasons to your users so they can take corrective action (grant permissions, disable battery optimization, etc.).
+
+### iOS 26 AlarmKit setup
+
+Add a non-empty `NSAlarmKitUsageDescription` to the host app's `Info.plist` to opt in to AlarmKit on iOS 26 or later.
+The first native schedule can show the AlarmKit authorization prompt.
+The plugin falls back to User Notifications when AlarmKit is unavailable, unconfigured, denied, or fails to schedule and native cleanup succeeds.
+It returns an error instead of installing a second backend when native cleanup cannot be confirmed.
+`getCapabilities()` reports exact scheduling as `supported` only when the runtime and host configuration allow the AlarmKit backend.
+The system AlarmKit UI does not open an arbitrary Flutter full-screen route.
+
+AlarmKit Snooze uses a post-alert countdown.
+Apple requires a Widget Extension with an `ActivityConfiguration` for `AlarmAttributes<Never>` when the host enables this countdown.
+Declare `extension Never: @retroactive AlarmMetadata {}` in the extension so it uses the same module-independent empty metadata type as the plugin.
+Set `WarmAlarmAlarmKitLiveActivityEnabled` to `true` in the app target's `Info.plist` only after the extension is ready.
+Until then, schedules with Snooze use the User Notifications fallback and return a warning.
+See the [`warm_alarm_ios` host requirements][warm_alarm_ios_requirements] for the complete value mapping and event limitations.
 
 ---
 
@@ -296,3 +312,4 @@ BSD-3-Clause — Copyright (c) 2026, Dongmin Yu. See [LICENSE](LICENSE) for deta
 [fluttium_install]: https://fluttium.dev/docs/getting-started/installing-cli
 [conventional_commits_link]: https://www.conventionalcommits.org/
 [alarm_package_link]: https://pub.dev/packages/alarm
+[warm_alarm_ios_requirements]: https://github.com/AndrewDongminYoo/warm_alarm/tree/main/warm_alarm_ios#alarmkit-opt-in

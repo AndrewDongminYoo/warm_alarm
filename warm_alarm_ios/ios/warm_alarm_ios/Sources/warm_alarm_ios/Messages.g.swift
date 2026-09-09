@@ -620,6 +620,7 @@ struct WarmAlarmAudioWire: Hashable {
   var vibrate: Bool
   var volumeEnforced: Bool
   var fadeSteps: [WarmAlarmVolumeFadeStepWire]? = nil
+  var systemSoundFilePath: String? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -632,6 +633,7 @@ struct WarmAlarmAudioWire: Hashable {
     let vibrate = pigeonVar_list[5] as! Bool
     let volumeEnforced = pigeonVar_list[6] as! Bool
     let fadeSteps: [WarmAlarmVolumeFadeStepWire]? = nilOrValue(pigeonVar_list[7])
+    let systemSoundFilePath: String? = nilOrValue(pigeonVar_list[8])
 
     return WarmAlarmAudioWire(
       filePath: filePath,
@@ -641,7 +643,8 @@ struct WarmAlarmAudioWire: Hashable {
       fadeInDurationMillis: fadeInDurationMillis,
       vibrate: vibrate,
       volumeEnforced: volumeEnforced,
-      fadeSteps: fadeSteps
+      fadeSteps: fadeSteps,
+      systemSoundFilePath: systemSoundFilePath
     )
   }
   func toList() -> [Any?] {
@@ -654,13 +657,14 @@ struct WarmAlarmAudioWire: Hashable {
       vibrate,
       volumeEnforced,
       fadeSteps,
+      systemSoundFilePath,
     ]
   }
   static func == (lhs: WarmAlarmAudioWire, rhs: WarmAlarmAudioWire) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return deepEqualsMessages(lhs.filePath, rhs.filePath) && deepEqualsMessages(lhs.assetPath, rhs.assetPath) && deepEqualsMessages(lhs.loop, rhs.loop) && deepEqualsMessages(lhs.volume, rhs.volume) && deepEqualsMessages(lhs.fadeInDurationMillis, rhs.fadeInDurationMillis) && deepEqualsMessages(lhs.vibrate, rhs.vibrate) && deepEqualsMessages(lhs.volumeEnforced, rhs.volumeEnforced) && deepEqualsMessages(lhs.fadeSteps, rhs.fadeSteps)
+    return deepEqualsMessages(lhs.filePath, rhs.filePath) && deepEqualsMessages(lhs.assetPath, rhs.assetPath) && deepEqualsMessages(lhs.loop, rhs.loop) && deepEqualsMessages(lhs.volume, rhs.volume) && deepEqualsMessages(lhs.fadeInDurationMillis, rhs.fadeInDurationMillis) && deepEqualsMessages(lhs.vibrate, rhs.vibrate) && deepEqualsMessages(lhs.volumeEnforced, rhs.volumeEnforced) && deepEqualsMessages(lhs.fadeSteps, rhs.fadeSteps) && deepEqualsMessages(lhs.systemSoundFilePath, rhs.systemSoundFilePath)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -673,6 +677,7 @@ struct WarmAlarmAudioWire: Hashable {
     deepHashMessages(value: vibrate, hasher: &hasher)
     deepHashMessages(value: volumeEnforced, hasher: &hasher)
     deepHashMessages(value: fadeSteps, hasher: &hasher)
+    deepHashMessages(value: systemSoundFilePath, hasher: &hasher)
   }
 }
 
@@ -808,6 +813,7 @@ struct WarmAlarmSnapshotWire: Hashable {
   var recurrence: WarmAlarmRecurrenceWire? = nil
   var snooze: WarmAlarmSnoozeWire? = nil
   var payload: String? = nil
+  var systemManagedAudio: Bool? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -819,6 +825,7 @@ struct WarmAlarmSnapshotWire: Hashable {
     let recurrence: WarmAlarmRecurrenceWire? = nilOrValue(pigeonVar_list[4])
     let snooze: WarmAlarmSnoozeWire? = nilOrValue(pigeonVar_list[5])
     let payload: String? = nilOrValue(pigeonVar_list[6])
+    let systemManagedAudio: Bool? = nilOrValue(pigeonVar_list[7])
 
     return WarmAlarmSnapshotWire(
       id: id,
@@ -827,7 +834,8 @@ struct WarmAlarmSnapshotWire: Hashable {
       audio: audio,
       recurrence: recurrence,
       snooze: snooze,
-      payload: payload
+      payload: payload,
+      systemManagedAudio: systemManagedAudio
     )
   }
   func toList() -> [Any?] {
@@ -839,13 +847,14 @@ struct WarmAlarmSnapshotWire: Hashable {
       recurrence,
       snooze,
       payload,
+      systemManagedAudio,
     ]
   }
   static func == (lhs: WarmAlarmSnapshotWire, rhs: WarmAlarmSnapshotWire) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return deepEqualsMessages(lhs.id, rhs.id) && deepEqualsMessages(lhs.scheduledAtMillis, rhs.scheduledAtMillis) && deepEqualsMessages(lhs.notification, rhs.notification) && deepEqualsMessages(lhs.audio, rhs.audio) && deepEqualsMessages(lhs.recurrence, rhs.recurrence) && deepEqualsMessages(lhs.snooze, rhs.snooze) && deepEqualsMessages(lhs.payload, rhs.payload)
+    return deepEqualsMessages(lhs.id, rhs.id) && deepEqualsMessages(lhs.scheduledAtMillis, rhs.scheduledAtMillis) && deepEqualsMessages(lhs.notification, rhs.notification) && deepEqualsMessages(lhs.audio, rhs.audio) && deepEqualsMessages(lhs.recurrence, rhs.recurrence) && deepEqualsMessages(lhs.snooze, rhs.snooze) && deepEqualsMessages(lhs.payload, rhs.payload) && deepEqualsMessages(lhs.systemManagedAudio, rhs.systemManagedAudio)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -857,6 +866,7 @@ struct WarmAlarmSnapshotWire: Hashable {
     deepHashMessages(value: recurrence, hasher: &hasher)
     deepHashMessages(value: snooze, hasher: &hasher)
     deepHashMessages(value: payload, hasher: &hasher)
+    deepHashMessages(value: systemManagedAudio, hasher: &hasher)
   }
 }
 
@@ -1086,6 +1096,7 @@ protocol WarmAlarmApi {
   func requestNotificationPermission(completion: @escaping (Result<WarmAlarmRemediationResultWire, Error>) -> Void)
   func openReadinessSettings(reason: WarmAlarmReadinessReasonWire, completion: @escaping (Result<WarmAlarmRemediationResultWire, Error>) -> Void)
   func scheduleAlarm(schedule: WarmAlarmScheduleWire, completion: @escaping (Result<WarmAlarmScheduleResultWire, Error>) -> Void)
+  func prepareSystemSound(primaryFilePath: String, backgroundAssetPath: String?, completion: @escaping (Result<String?, Error>) -> Void)
   func cancelAlarm(id: Int64, completion: @escaping (Result<Void, Error>) -> Void)
   func cancelAllAlarms(completion: @escaping (Result<Void, Error>) -> Void)
   func getScheduledAlarms(completion: @escaping (Result<[WarmAlarmSnapshotWire], Error>) -> Void)
@@ -1208,6 +1219,24 @@ class WarmAlarmApiSetup {
       }
     } else {
       scheduleAlarmChannel.setMessageHandler(nil)
+    }
+    let prepareSystemSoundChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.warm_alarm.WarmAlarmApi.prepareSystemSound\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      prepareSystemSoundChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let primaryFilePathArg = args[0] as! String
+        let backgroundAssetPathArg: String? = nilOrValue(args[1])
+        api.prepareSystemSound(primaryFilePath: primaryFilePathArg, backgroundAssetPath: backgroundAssetPathArg) { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      prepareSystemSoundChannel.setMessageHandler(nil)
     }
     let cancelAlarmChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.warm_alarm.WarmAlarmApi.cancelAlarm\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {

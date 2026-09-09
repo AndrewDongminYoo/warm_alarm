@@ -23,6 +23,48 @@ final class WarmAlarmStoreTests: XCTestCase {
         XCTAssertNil(WarmAlarmStore.shared.load(id: 2))
     }
 
+    func testReplacingAndRemovingSchedulesDeletesOnlyUnreferencedSounds() throws {
+        let directory = WarmAlarmSoundFiles.directory
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let oldName = "warm-alarm-\(UUID().uuidString).caf"
+        let newName = "warm-alarm-\(UUID().uuidString).caf"
+        let oldURL = directory.appendingPathComponent(oldName)
+        let newURL = directory.appendingPathComponent(newName)
+        try Data([1]).write(to: oldURL)
+        try Data([2]).write(to: newURL)
+        var first = makeData(id: 1).withAlarmKitManaged(true)
+        first.systemSoundFilePath = oldURL.path
+        first.alarmKitSoundName = oldName
+        WarmAlarmStore.shared.save(first)
+        var second = makeData(id: 2).withAlarmKitManaged(true)
+        second.systemSoundFilePath = oldURL.path
+        second.alarmKitSoundName = oldName
+        WarmAlarmStore.shared.save(second)
+
+        first.systemSoundFilePath = newURL.path
+        first.alarmKitSoundName = newName
+        WarmAlarmStore.shared.save(first)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: oldURL.path))
+        WarmAlarmStore.shared.remove(id: 2)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: oldURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: newURL.path))
+        XCTAssertTrue(WarmAlarmStore.shared.load(id: 1)!.systemManagedAudio)
+        WarmAlarmStore.shared.save(first.withAlarmKitManaged(false))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: newURL.path))
+        XCTAssertFalse(WarmAlarmStore.shared.load(id: 1)!.systemManagedAudio)
+        XCTAssertNil(WarmAlarmStore.shared.load(id: 1)!.systemSoundFilePath)
+    }
+
+    func testSnoozeAndRecurringStateCopiesKeepSystemSoundOwnership() {
+        var data = makeData(id: 3).withAlarmKitManaged(true)
+        data.systemSoundFilePath = "/Library/Sounds/warm-alarm-test.caf"
+        data.alarmKitSoundName = "warm-alarm-test.caf"
+        let snoozed = data.withActiveSnooze(untilMillis: 1000)
+        XCTAssertTrue(snoozed.systemManagedAudio)
+        XCTAssertEqual(snoozed.clearingActiveSnooze().alarmKitSoundName, data.alarmKitSoundName)
+        XCTAssertEqual(snoozed.withRecurrenceTime(hour: 8, minute: 0).systemSoundFilePath, data.systemSoundFilePath)
+    }
+
     func testLoadAllReturnsAllSaved() {
         WarmAlarmStore.shared.save(makeData(id: 10))
         WarmAlarmStore.shared.save(makeData(id: 11))
@@ -54,7 +96,9 @@ final class WarmAlarmStoreTests: XCTestCase {
             fadeSteps: nil,
             keepNotificationAfterAlarmEnds: nil,
             activeSnoozeUntilMillis: 9_500,
-            fallbackAnchorMillis: 9_100
+            fallbackAnchorMillis: 9_100,
+            alarmKitManaged: true,
+            alarmKitSnoozeObserved: true
         )
         WarmAlarmStore.shared.save(data)
         let loaded = WarmAlarmStore.shared.load(id: 99)!
@@ -75,6 +119,8 @@ final class WarmAlarmStoreTests: XCTestCase {
         XCTAssertEqual(loaded.fallbackAnchorMillis, 9_100)
         XCTAssertEqual(loaded.oneShotOccurrenceEpochMillis, 8_900)
         XCTAssertEqual(loaded.occurrenceSeriesToken, "series-99")
+        XCTAssertTrue(loaded.alarmKitManaged)
+        XCTAssertTrue(loaded.alarmKitSnoozeObserved)
     }
 
     func testRoundtripNilOptionals() {
@@ -91,6 +137,28 @@ final class WarmAlarmStoreTests: XCTestCase {
         XCTAssertNil(loaded.payload)
         XCTAssertNil(loaded.activeSnoozeUntilMillis)
         XCTAssertNil(loaded.fallbackAnchorMillis)
+        XCTAssertFalse(loaded.alarmKitManaged)
+    }
+
+    func testAlarmKitManagementMarkerCanBeChangedWithoutLosingScheduleData() {
+        let schedule = makeData(id: 42, title: "Wake up", scheduledAt: 1_000)
+
+        let managed = schedule.withAlarmKitManaged(true)
+        let fallback = managed.withAlarmKitManaged(false)
+
+        XCTAssertTrue(managed.alarmKitManaged)
+        XCTAssertEqual(managed.notificationTitle, "Wake up")
+        XCTAssertEqual(managed.scheduledAtMillis, 1_000)
+        XCTAssertFalse(fallback.alarmKitManaged)
+    }
+
+    func testAlarmKitSnoozeObservationMarkerSurvivesRoundtripAndClearsWithSnooze() {
+        let schedule = makeData(id: 43).withAlarmKitSnoozeObserved()
+        WarmAlarmStore.shared.save(schedule)
+
+        let loaded = WarmAlarmStore.shared.load(id: 43)!
+        XCTAssertTrue(loaded.alarmKitSnoozeObserved)
+        XCTAssertFalse(loaded.clearingActiveSnooze().alarmKitSnoozeObserved)
     }
 
     func testAddingActiveSnoozeClearsFallbackAnchorAndPreservesRecurringScheduleTime() {
@@ -285,7 +353,9 @@ final class WarmAlarmStoreTests: XCTestCase {
             volumeEnforced: nil, fadeSteps: nil,
             keepNotificationAfterAlarmEnds: nil,
             activeSnoozeUntilMillis: nil,
-            fallbackAnchorMillis: fallbackAnchorMillis
+            fallbackAnchorMillis: fallbackAnchorMillis,
+            alarmKitManaged: false,
+            alarmKitSnoozeObserved: false
         )
     }
 }

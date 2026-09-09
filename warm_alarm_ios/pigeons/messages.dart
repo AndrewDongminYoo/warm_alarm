@@ -182,6 +182,7 @@ class WarmAlarmAudioWire {
     this.volume,
     this.fadeInDurationMillis,
     this.fadeSteps,
+    this.systemSoundFilePath,
   });
 
   final String? filePath;
@@ -192,6 +193,7 @@ class WarmAlarmAudioWire {
   final bool vibrate;
   final bool volumeEnforced;
   final List<WarmAlarmVolumeFadeStepWire>? fadeSteps;
+  final String? systemSoundFilePath;
 }
 
 class WarmAlarmRecurrenceWire {
@@ -239,6 +241,7 @@ class WarmAlarmSnapshotWire {
     this.recurrence,
     this.snooze,
     this.payload,
+    this.systemManagedAudio,
   });
 
   final int id;
@@ -248,6 +251,7 @@ class WarmAlarmSnapshotWire {
   final WarmAlarmRecurrenceWire? recurrence;
   final WarmAlarmSnoozeWire? snooze;
   final String? payload;
+  final bool? systemManagedAudio;
 }
 
 class WarmAlarmEventWire {
@@ -290,6 +294,9 @@ abstract class WarmAlarmApi {
 
   @async
   WarmAlarmScheduleResultWire scheduleAlarm(WarmAlarmScheduleWire schedule);
+
+  @async
+  String? prepareSystemSound(String primaryFilePath, String? backgroundAssetPath);
 
   @async
   void cancelAlarm(int id);

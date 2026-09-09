@@ -1,3 +1,4 @@
+import AVFAudio
 import CoreFoundation
 import Flutter
 import UIKit
@@ -528,35 +529,236 @@ final class WarmAlarmFlutterNotificationCenterDelegate: WarmAlarmNotificationCen
     }
 }
 
+enum WarmAlarmAppleSchedulingBackend {
+    case alarmKit
+    case userNotifications
+}
+
+private struct WarmAlarmNotificationSchedulingOutcome {
+    let didSchedule: Bool
+    let warning: WarmAlarmWarningWire?
+}
+
+struct WarmAlarmPermissionSnapshot {
+    let permissionState: WarmAlarmPermissionStateWire
+    let readiness: WarmAlarmReadinessWire
+}
+
+struct WarmAlarmAlarmKitInitializationWork {
+    let alarmKitManaged: [WarmAlarmScheduleData]
+    let notificationRecovery: [WarmAlarmScheduleData]
+    let expiredAlarmIDs: [Int64]
+}
+
+struct WarmAlarmAlarmKitObservationUpdate {
+    let previous: WarmAlarmAlarmKitSnapshot
+    let suppressedTerminalIDs: Set<UUID>
+}
+
+final class WarmAlarmAlarmKitObservationState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var snapshot = WarmAlarmAlarmKitSnapshot(states: [:])
+    private var locallyMutatingIDs = Set<UUID>()
+
+    func update(_ next: WarmAlarmAlarmKitSnapshot) -> WarmAlarmAlarmKitObservationUpdate {
+        lock.lock()
+        defer { lock.unlock() }
+        let previous = snapshot
+        snapshot = next
+        var suppressedTerminalIDs = Set<UUID>()
+        for id in locallyMutatingIDs {
+            let previousState = previous.states[id]
+            let currentState = next.states[id]
+            if previousState == .alerting || previousState == .countdown || previousState == .paused,
+               currentState == nil || currentState == .scheduled {
+                suppressedTerminalIDs.insert(id)
+            }
+        }
+        locallyMutatingIDs.subtract(suppressedTerminalIDs)
+        return WarmAlarmAlarmKitObservationUpdate(
+            previous: previous,
+            suppressedTerminalIDs: suppressedTerminalIDs
+        )
+    }
+
+    func beginMutation(ids: some Sequence<UUID>) {
+        lock.lock()
+        locallyMutatingIDs.formUnion(ids)
+        lock.unlock()
+    }
+
+    func finishMutation(ids: some Sequence<UUID>) {
+        lock.lock()
+        locallyMutatingIDs.subtract(ids)
+        lock.unlock()
+    }
+
+    func finishSchedule(id: UUID) {
+        lock.lock()
+        locallyMutatingIDs.remove(id)
+        var states = snapshot.states
+        states[id] = .scheduled
+        var nextTriggerDates = snapshot.nextTriggerDates
+        nextTriggerDates.removeValue(forKey: id)
+        snapshot = WarmAlarmAlarmKitSnapshot(
+            states: states,
+            nextTriggerDates: nextTriggerDates
+        )
+        lock.unlock()
+    }
+}
+
 public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate, WarmAlarmApi {
     private let delegate: WarmAlarmDelegate
     private let notificationMutationQueue: WarmAlarmMutationQueue
     private let notificationCenter: UNUserNotificationCenter
     private let notificationCenterDelegate: WarmAlarmNotificationCenterDelegate
+    private let alarmKitBackend: WarmAlarmAlarmKitScheduling?
+    private let alarmKitUsageDescription: String?
+    private let alarmKitLiveActivityEnabled: Bool
     private static let killWarningNotifId = "warm_alarm_kill_warning_notif"
     private static let killWarningDefaultsKey = "warm_alarm_kill_warning"
     private static let fallbackCount = 6
     private static let fallbackIntervalMillis: Int64 = 30_000
     private static let pendingNotificationLimit = 64
     private var lifecycleObservers: [NSObjectProtocol] = []
+    private let alarmKitObservationState = WarmAlarmAlarmKitObservationState()
+
+    static func schedulingBackend(
+        alarmKitAvailable: Bool,
+        alarmKitUsageDescription: String?,
+        authorizationState: WarmAlarmAlarmKitAuthorization
+    ) -> WarmAlarmAppleSchedulingBackend {
+        guard alarmKitAvailable,
+              let alarmKitUsageDescription,
+              !alarmKitUsageDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              authorizationState != .denied
+        else {
+            return .userNotifications
+        }
+        return .alarmKit
+    }
+
+    static func canUseAlarmKit(
+        for plan: WarmAlarmAlarmKitPlan,
+        liveActivityConfigured: Bool
+    ) -> Bool {
+        plan.snoozeDuration == nil || liveActivityConfigured
+    }
 
     init(
         delegate: WarmAlarmDelegate,
         notificationMutationQueue: WarmAlarmMutationQueue,
         notificationCenter: UNUserNotificationCenter,
-        notificationCenterDelegate: WarmAlarmNotificationCenterDelegate
+        notificationCenterDelegate: WarmAlarmNotificationCenterDelegate,
+        alarmKitBackend: WarmAlarmAlarmKitScheduling? = WarmAlarmAlarmKitBackendFactory.make(),
+        alarmKitUsageDescription: String? = Bundle.main.object(
+            forInfoDictionaryKey: "NSAlarmKitUsageDescription"
+        ) as? String,
+        alarmKitLiveActivityEnabled: Bool = Bundle.main.object(
+            forInfoDictionaryKey: "WarmAlarmAlarmKitLiveActivityEnabled"
+        ) as? Bool ?? false
     ) {
         self.delegate = delegate
         self.notificationMutationQueue = notificationMutationQueue
         self.notificationCenter = notificationCenter
         self.notificationCenterDelegate = notificationCenterDelegate
+        self.alarmKitBackend = alarmKitBackend
+        self.alarmKitUsageDescription = alarmKitUsageDescription
+        self.alarmKitLiveActivityEnabled = alarmKitLiveActivityEnabled
         super.init()
         setupLifecycleObservers()
+        setupAlarmKitObserver()
     }
 
     deinit {
+        alarmKitBackend?.stopObserving()
         lifecycleObservers.forEach { NotificationCenter.default.removeObserver($0) }
         notificationCenterDelegate.uninstall(from: notificationCenter)
+    }
+
+    private func setupAlarmKitObserver() {
+        guard let alarmKitBackend,
+              let alarmKitUsageDescription,
+              !alarmKitUsageDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            return
+        }
+        alarmKitBackend.observe { [weak self] snapshot in
+            self?.handleAlarmKitUpdate(snapshot)
+        }
+    }
+
+    private func handleAlarmKitUpdate(_ snapshot: WarmAlarmAlarmKitSnapshot) {
+        let observationUpdate = alarmKitObservationState.update(snapshot)
+        let previous = observationUpdate.previous
+        let schedules = WarmAlarmStore.shared.loadAll().values
+        for schedule in schedules where schedule.alarmKitManaged {
+            let alarmKitID = WarmAlarmAlarmKitPlan.id(for: schedule.id)
+            let previousState = previous.states[alarmKitID]
+            let currentState = snapshot.states[alarmKitID]
+            if observationUpdate.suppressedTerminalIDs.contains(alarmKitID) {
+                continue
+            }
+            if previousState == .alerting,
+               currentState == .countdown || currentState == .paused {
+                delegate.handleAlarmKitSnooze(
+                    schedule: schedule,
+                    fireAtMillis: snapshot.nextTriggerDates[alarmKitID].map {
+                        Int64($0.timeIntervalSince1970 * 1_000)
+                    }
+                )
+            } else if currentState == .countdown,
+                      let fireAtMillis = snapshot.nextTriggerDates[alarmKitID].map({
+                          Int64($0.timeIntervalSince1970 * 1_000)
+                      }) {
+                if schedule.alarmKitSnoozeObserved {
+                    delegate.synchronizeAlarmKitSnooze(
+                        schedule: schedule,
+                        fireAtMillis: fireAtMillis
+                    )
+                } else {
+                    delegate.handleAlarmKitSnooze(
+                        schedule: schedule,
+                        fireAtMillis: fireAtMillis
+                    )
+                }
+            } else if currentState == .paused, !schedule.alarmKitSnoozeObserved {
+                delegate.handleAlarmKitSnooze(schedule: schedule, fireAtMillis: nil)
+            } else if (previousState == .alerting || previousState == .countdown || previousState == .paused),
+                      currentState == nil || currentState == .scheduled {
+                delegate.handleAlarmKitStop(schedule: schedule)
+            } else if previousState != .alerting, currentState == .alerting {
+                delegate.handleAlarmKitAlert(schedule: schedule)
+            }
+        }
+    }
+
+    private func replayUnobservedAlarmKitSnoozes(from snapshot: WarmAlarmAlarmKitSnapshot) {
+        for schedule in WarmAlarmStore.shared.loadAll().values where !schedule.alarmKitSnoozeObserved {
+            let alarmKitID = WarmAlarmAlarmKitPlan.id(for: schedule.id)
+            guard snapshot.states[alarmKitID] == .countdown || snapshot.states[alarmKitID] == .paused else {
+                continue
+            }
+            delegate.handleAlarmKitSnooze(
+                schedule: schedule,
+                fireAtMillis: snapshot.nextTriggerDates[alarmKitID].map {
+                    Int64($0.timeIntervalSince1970 * 1_000)
+                }
+            )
+        }
+    }
+
+    private func beginAlarmKitMutation(ids: some Sequence<UUID>) {
+        alarmKitObservationState.beginMutation(ids: ids)
+    }
+
+    private func finishAlarmKitMutation(ids: some Sequence<UUID>) {
+        alarmKitObservationState.finishMutation(ids: ids)
+    }
+
+    private func finishAlarmKitSchedule(id: UUID) {
+        alarmKitObservationState.finishSchedule(id: id)
     }
 
     private func setupLifecycleObservers() {
@@ -611,7 +813,14 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
             delegate: delegate,
             notificationMutationQueue: notificationMutationQueue,
             notificationCenter: notificationCenter,
-            notificationCenterDelegate: notificationCenterDelegate
+            notificationCenterDelegate: notificationCenterDelegate,
+            alarmKitBackend: WarmAlarmAlarmKitBackendFactory.make(),
+            alarmKitUsageDescription: Bundle.main.object(
+                forInfoDictionaryKey: "NSAlarmKitUsageDescription"
+            ) as? String,
+            alarmKitLiveActivityEnabled: Bundle.main.object(
+                forInfoDictionaryKey: "WarmAlarmAlarmKitLiveActivityEnabled"
+            ) as? Bool ?? false
         )
 
         WarmAlarmDelegate.registerCategories()
@@ -648,40 +857,320 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                 WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
                 return
             }
-            let center = UNUserNotificationCenter.current()
-            center.getPendingNotificationRequests { [weak self] pending in
+            let backendChoice = Self.schedulingBackend(
+                alarmKitAvailable: self.alarmKitBackend != nil,
+                alarmKitUsageDescription: self.alarmKitUsageDescription,
+                authorizationState: self.alarmKitBackend?.authorizationState ?? .denied
+            )
+            guard backendChoice == .alarmKit, let alarmKitBackend = self.alarmKitBackend else {
+                let alarmKitManagedSchedules = storedSchedules.filter { $0.alarmKitManaged }
+                guard let alarmKitBackend = self.alarmKitBackend,
+                      !alarmKitManagedSchedules.isEmpty else {
+                    let notificationSchedules = storedSchedules.map { schedule in
+                        let updated = schedule.withAlarmKitManaged(false)
+                        if schedule.alarmKitManaged { WarmAlarmStore.shared.save(updated) }
+                        return updated
+                    }
+                    self.initializeNotificationState(
+                        schedules: notificationSchedules,
+                        alarmKitManaged: [],
+                        nowMillis: nowMillis,
+                        completion: completion,
+                        finish: finish
+                    )
+                    return
+                }
+                self.beginAlarmKitMutation(ids: alarmKitManagedSchedules.map {
+                    WarmAlarmAlarmKitPlan.id(for: $0.id)
+                })
+                WarmAlarmRecovery.recoverAll(
+                    alarmKitManagedSchedules.map { WarmAlarmAlarmKitPlan.id(for: $0.id) },
+                    recover: alarmKitBackend.cancel
+                ) { result in
+                    switch result {
+                    case let .failure(error):
+                        self.finishAlarmKitMutation(ids: alarmKitManagedSchedules.map {
+                            WarmAlarmAlarmKitPlan.id(for: $0.id)
+                        })
+                        WarmAlarmPlatformReply.complete(.failure(error), completion: completion, finish: finish)
+                    case .success:
+                        let notificationSchedules = storedSchedules.map { schedule in
+                            let updated = schedule.withAlarmKitManaged(false)
+                            if schedule.alarmKitManaged { WarmAlarmStore.shared.save(updated) }
+                            return updated
+                        }
+                        self.finishAlarmKitMutation(ids: alarmKitManagedSchedules.map {
+                            WarmAlarmAlarmKitPlan.id(for: $0.id)
+                        })
+                        self.initializeNotificationState(
+                            schedules: notificationSchedules,
+                            alarmKitManaged: [],
+                            nowMillis: nowMillis,
+                            completion: completion,
+                            finish: finish
+                        )
+                    }
+                }
+                return
+            }
+            alarmKitBackend.snapshot { [weak self] result in
                 guard let self else {
                     finish()
                     return
                 }
-                let recurringSchedules = Self.migrateRecurringWallTimes(
-                    storedSchedules,
-                    pendingRequests: pending,
-                    save: { WarmAlarmStore.shared.save($0) }
-                )
-                let migratedSchedules = Self.migrateOneShotFallbackAnchors(
-                    recurringSchedules,
-                    pendingRequests: pending,
-                    save: { WarmAlarmStore.shared.save($0) }
-                )
-                let recoverableAlarms = Self.sortedRecoverableSchedules(
-                    migratedSchedules,
-                    nowMillis: nowMillis
-                )
-                guard !recoverableAlarms.isEmpty else {
-                    WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
-                    return
-                }
-                self.recoverAlarms(
-                    recoverableAlarms,
-                    pendingRequests: pending,
-                    nowMillis: nowMillis,
-                    center: center
-                ) { result in
-                    WarmAlarmPlatformReply.complete(result, completion: completion, finish: finish)
+                switch result {
+                case let .failure(error):
+                    NSLog(
+                        "[warm_alarm_ios] backend=alarmKit initializationInventoryError=%@",
+                        error.localizedDescription
+                    )
+                    WarmAlarmPlatformReply.complete(.failure(error), completion: completion, finish: finish)
+                case let .success(snapshot):
+                    let incompatibleIDs = Self.incompatibleAlarmKitScheduleIDs(
+                        schedules: storedSchedules,
+                        snapshot: snapshot,
+                        liveActivityConfigured: self.alarmKitLiveActivityEnabled
+                    )
+                    self.beginAlarmKitMutation(ids: incompatibleIDs)
+                    WarmAlarmRecovery.recoverAll(
+                        incompatibleIDs,
+                        recover: alarmKitBackend.cancel
+                    ) { cancellationResult in
+                        if case let .failure(error) = cancellationResult {
+                            self.finishAlarmKitMutation(ids: incompatibleIDs)
+                            WarmAlarmPlatformReply.complete(
+                                .failure(error), completion: completion, finish: finish
+                            )
+                            return
+                        }
+                        let reconciledSnapshot = snapshot.removing(ids: Set(incompatibleIDs))
+                        self.replayUnobservedAlarmKitSnoozes(from: reconciledSnapshot)
+                        let currentSchedules = Array(WarmAlarmStore.shared.loadAll().values)
+                        switch Self.resolveAlarmKitInitializationWork(
+                            schedules: currentSchedules,
+                            alarmStatesResult: .success(reconciledSnapshot),
+                            nowMillis: nowMillis,
+                            save: { WarmAlarmStore.shared.save($0) }
+                        ) {
+                        case let .failure(error):
+                            self.finishAlarmKitMutation(ids: incompatibleIDs)
+                            WarmAlarmPlatformReply.complete(
+                                .failure(error), completion: completion, finish: finish
+                            )
+                        case let .success(work):
+                            for alarmId in work.expiredAlarmIDs {
+                                if let expiredAlarmKitSchedule = currentSchedules.first(where: {
+                                    $0.id == alarmId && $0.alarmKitManaged
+                                }) {
+                                    self.delegate.handleAlarmKitStop(schedule: expiredAlarmKitSchedule)
+                                } else {
+                                    WarmAlarmStore.shared.remove(id: alarmId)
+                                }
+                            }
+                            self.finishAlarmKitMutation(ids: incompatibleIDs)
+                            self.initializeNotificationState(
+                                schedules: work.notificationRecovery,
+                                alarmKitManaged: work.alarmKitManaged,
+                                nowMillis: nowMillis,
+                                completion: completion,
+                                finish: finish
+                            )
+                        }
+                    }
                 }
             }
         }
+    }
+
+    static func resolveAlarmKitInitializationWork(
+        schedules: [WarmAlarmScheduleData],
+        alarmStatesResult: Result<WarmAlarmAlarmKitSnapshot, Error>,
+        nowMillis: Int64,
+        save: @escaping (WarmAlarmScheduleData) -> Void = { _ in }
+    ) -> Result<WarmAlarmAlarmKitInitializationWork, Error> {
+        switch alarmStatesResult {
+        case let .failure(error):
+            return .failure(error)
+        case let .success(snapshot):
+            let ownedSchedules = synchronizeAlarmKitOwnership(
+                schedules: schedules,
+                snapshot: snapshot,
+                save: save
+            )
+            let synchronizedSchedules = synchronizeAlarmKitCountdowns(
+                schedules: ownedSchedules,
+                snapshot: snapshot,
+                save: save
+            )
+            return .success(selectAlarmKitInitializationWork(
+                schedules: synchronizedSchedules,
+                scheduledAlarmKitIDs: snapshot.scheduledAlarmIDs,
+                nowMillis: nowMillis
+            ))
+        }
+    }
+
+    static func synchronizeAlarmKitOwnership(
+        schedules: [WarmAlarmScheduleData],
+        snapshot: WarmAlarmAlarmKitSnapshot,
+        save: (WarmAlarmScheduleData) -> Void
+    ) -> [WarmAlarmScheduleData] {
+        schedules.map { schedule in
+            let managed = snapshot.scheduledAlarmIDs.contains(WarmAlarmAlarmKitPlan.id(for: schedule.id))
+            guard schedule.alarmKitManaged != managed else { return schedule }
+            let synchronized = schedule.withAlarmKitManaged(managed)
+            save(synchronized)
+            return synchronized
+        }
+    }
+
+    static func incompatibleAlarmKitScheduleIDs(
+        schedules: [WarmAlarmScheduleData],
+        snapshot: WarmAlarmAlarmKitSnapshot,
+        liveActivityConfigured: Bool
+    ) -> [UUID] {
+        schedules.compactMap { schedule in
+            let alarmKitID = WarmAlarmAlarmKitPlan.id(for: schedule.id)
+            guard snapshot.scheduledAlarmIDs.contains(alarmKitID),
+                  !canUseAlarmKit(
+                    for: WarmAlarmAlarmKitPlan(schedule: schedule),
+                    liveActivityConfigured: liveActivityConfigured
+                  )
+            else {
+                return nil
+            }
+            return alarmKitID
+        }
+    }
+
+    static func missingAlarmKitManagedScheduleIDs(
+        schedules: [WarmAlarmScheduleData],
+        snapshot: WarmAlarmAlarmKitSnapshot
+    ) -> [Int64] {
+        schedules.compactMap { schedule in
+            snapshot.scheduledAlarmIDs.contains(WarmAlarmAlarmKitPlan.id(for: schedule.id))
+                ? nil
+                : schedule.id
+        }
+    }
+
+    static func reconcileFallbackPreflightFailure(
+        alarmId: Int64,
+        previousSchedule: WarmAlarmScheduleData?,
+        attemptedAlarmKit: Bool,
+        removedPreviousAlarmKit: Bool,
+        save: (WarmAlarmScheduleData) -> Void,
+        remove: (Int64) -> Void
+    ) {
+        guard attemptedAlarmKit || removedPreviousAlarmKit else { return }
+        if let previousSchedule, !previousSchedule.alarmKitManaged, !removedPreviousAlarmKit {
+            save(previousSchedule)
+        } else {
+            remove(alarmId)
+        }
+    }
+
+    static func synchronizeAlarmKitCountdowns(
+        schedules: [WarmAlarmScheduleData],
+        snapshot: WarmAlarmAlarmKitSnapshot,
+        save: (WarmAlarmScheduleData) -> Void
+    ) -> [WarmAlarmScheduleData] {
+        schedules.map { schedule in
+            let alarmKitID = WarmAlarmAlarmKitPlan.id(for: schedule.id)
+            guard snapshot.states[alarmKitID] == .countdown,
+                  let nextTriggerDate = snapshot.nextTriggerDates[alarmKitID]
+            else {
+                return schedule
+            }
+            let nextTriggerMillis = Int64(nextTriggerDate.timeIntervalSince1970 * 1_000)
+            guard schedule.activeSnoozeUntilMillis != nextTriggerMillis else { return schedule }
+            let synchronized = schedule.withActiveSnooze(untilMillis: nextTriggerMillis)
+            save(synchronized)
+            return synchronized
+        }
+    }
+
+    private func initializeNotificationState(
+        schedules: [WarmAlarmScheduleData],
+        alarmKitManaged: [WarmAlarmScheduleData],
+        nowMillis: Int64,
+        completion: @escaping (Result<Void, Error>) -> Void,
+        finish: @escaping () -> Void
+    ) {
+        notificationCenter.getPendingNotificationRequests { [weak self] pending in
+            guard let self else {
+                finish()
+                return
+            }
+            let alarmKitManagedIdentifiers = Set(alarmKitManaged.flatMap { schedule in
+                Self.requestIdentifiers(
+                    for: schedule.id,
+                    recurrenceWeekdays: schedule.recurrenceWeekdays
+                )
+            })
+            if !alarmKitManagedIdentifiers.isEmpty {
+                self.notificationCenter.removePendingNotificationRequests(
+                    withIdentifiers: Array(alarmKitManagedIdentifiers)
+                )
+                self.notificationCenter.removeDeliveredNotifications(
+                    withIdentifiers: Array(alarmKitManagedIdentifiers)
+                )
+            }
+            let notificationPending = pending.filter {
+                !alarmKitManagedIdentifiers.contains($0.identifier)
+            }
+            let recurringSchedules = Self.migrateRecurringWallTimes(
+                schedules,
+                pendingRequests: notificationPending,
+                save: { WarmAlarmStore.shared.save($0) }
+            )
+            let migratedSchedules = Self.migrateOneShotFallbackAnchors(
+                recurringSchedules,
+                pendingRequests: notificationPending,
+                save: { WarmAlarmStore.shared.save($0) }
+            )
+            let recoverableAlarms = Self.sortedRecoverableSchedules(
+                migratedSchedules,
+                nowMillis: nowMillis
+            )
+            guard !recoverableAlarms.isEmpty else {
+                WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
+                return
+            }
+            self.recoverAlarms(
+                recoverableAlarms,
+                pendingRequests: notificationPending,
+                nowMillis: nowMillis,
+                center: self.notificationCenter
+            ) { result in
+                WarmAlarmPlatformReply.complete(result, completion: completion, finish: finish)
+            }
+        }
+    }
+
+    static func selectAlarmKitInitializationWork(
+        schedules: [WarmAlarmScheduleData],
+        scheduledAlarmKitIDs: Set<UUID>,
+        nowMillis: Int64
+    ) -> WarmAlarmAlarmKitInitializationWork {
+        var alarmKitManaged = [WarmAlarmScheduleData]()
+        var notificationRecovery = [WarmAlarmScheduleData]()
+        var expiredAlarmIDs = [Int64]()
+        for schedule in schedules {
+            if scheduledAlarmKitIDs.contains(WarmAlarmAlarmKitPlan.id(for: schedule.id)) {
+                alarmKitManaged.append(schedule)
+            } else if Self.shouldRecover(schedule: schedule, nowMillis: nowMillis)
+                || schedule.recurrenceWeekdays?.isEmpty == false {
+                notificationRecovery.append(schedule)
+            } else {
+                expiredAlarmIDs.append(schedule.id)
+            }
+        }
+        return WarmAlarmAlarmKitInitializationWork(
+            alarmKitManaged: alarmKitManaged,
+            notificationRecovery: notificationRecovery,
+            expiredAlarmIDs: expiredAlarmIDs
+        )
     }
 
     private func recoverAlarms(
@@ -1091,13 +1580,18 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
     }
 
     func getCapabilities(completion: @escaping (Result<WarmAlarmCapabilitiesWire, Error>) -> Void) {
+        let alarmKitConfigured = Self.schedulingBackend(
+            alarmKitAvailable: alarmKitBackend != nil,
+            alarmKitUsageDescription: alarmKitUsageDescription,
+            authorizationState: .authorized
+        ) == .alarmKit
         completion(.success(WarmAlarmCapabilitiesWire(
-            exactScheduling: .limited,
+            exactScheduling: alarmKitConfigured ? .supported : .limited,
             notificationScheduling: .supported,
             backgroundAudioPlayback: .limited,
             fullScreenPresentation: .unsupported,
             wakeCheck: .unsupported,
-            liveActivity: .unsupported
+            liveActivity: alarmKitConfigured && alarmKitLiveActivityEnabled ? .limited : .unsupported
         )))
     }
 
@@ -1129,13 +1623,13 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         reason: WarmAlarmReadinessReasonWire,
         completion: @escaping (Result<WarmAlarmRemediationResultWire, Error>) -> Void
     ) {
-        guard reason == .notificationPermissionDenied else {
+        guard reason == .notificationPermissionDenied || reason == .exactAlarmPermissionDenied else {
             completeRemediation(status: .unsupported, completion: completion)
             return
         }
 
         let settingsURLString: String
-        if #available(iOS 16.0, *) {
+        if reason == .notificationPermissionDenied, #available(iOS 16.0, *) {
             settingsURLString = UIApplication.openNotificationSettingsURLString
         } else {
             settingsURLString = UIApplication.openSettingsURLString
@@ -1166,17 +1660,57 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             let granted = settings.authorizationStatus == .authorized
                 || settings.authorizationStatus == .provisional
-            var reasons: [WarmAlarmReadinessReasonWire] = [.backgroundExecutionLimited]
-            if !granted { reasons.insert(.notificationPermissionDenied, at: 0) }
-            handler(
-                WarmAlarmPermissionStateWire(
-                    notificationsGranted: granted,
-                    exactAlarmGranted: false,
-                    fullScreenIntentGranted: false
-                ),
-                WarmAlarmReadinessWire(level: granted ? .limited : .blocked, reasons: reasons)
+            let alarmKitConfigured = Self.schedulingBackend(
+                alarmKitAvailable: self.alarmKitBackend != nil,
+                alarmKitUsageDescription: self.alarmKitUsageDescription,
+                authorizationState: .authorized
+            ) == .alarmKit
+            let snapshot = Self.permissionSnapshot(
+                notificationsGranted: granted,
+                alarmKitConfigured: alarmKitConfigured,
+                alarmKitAuthorization: self.alarmKitBackend?.authorizationState
+            )
+            handler(snapshot.permissionState, snapshot.readiness)
+        }
+    }
+
+    static func permissionSnapshot(
+        notificationsGranted: Bool,
+        alarmKitConfigured: Bool,
+        alarmKitAuthorization: WarmAlarmAlarmKitAuthorization?
+    ) -> WarmAlarmPermissionSnapshot {
+        let exactAlarmGranted = alarmKitConfigured && alarmKitAuthorization == .authorized
+        let permissionState = WarmAlarmPermissionStateWire(
+            notificationsGranted: notificationsGranted,
+            exactAlarmGranted: exactAlarmGranted,
+            fullScreenIntentGranted: false
+        )
+        if exactAlarmGranted {
+            return WarmAlarmPermissionSnapshot(
+                permissionState: permissionState,
+                readiness: WarmAlarmReadinessWire(level: .ready, reasons: [])
             )
         }
+        if alarmKitConfigured, alarmKitAuthorization == .notDetermined {
+            return WarmAlarmPermissionSnapshot(
+                permissionState: permissionState,
+                readiness: WarmAlarmReadinessWire(level: .limited, reasons: [.unknown])
+            )
+        }
+
+        var reasons = [WarmAlarmReadinessReasonWire]()
+        if !notificationsGranted { reasons.append(.notificationPermissionDenied) }
+        if alarmKitConfigured, alarmKitAuthorization == .denied {
+            reasons.append(.exactAlarmPermissionDenied)
+        }
+        reasons.append(.backgroundExecutionLimited)
+        return WarmAlarmPermissionSnapshot(
+            permissionState: permissionState,
+            readiness: WarmAlarmReadinessWire(
+                level: notificationsGranted ? .limited : .blocked,
+                reasons: reasons
+            )
+        )
     }
 
     private func completeRemediation(
@@ -1900,6 +2434,101 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         }
     }
 
+    private func scheduleNotificationFallback(
+        schedule: WarmAlarmScheduleWire,
+        storedSchedule: WarmAlarmScheduleData,
+        requests: [UNNotificationRequest],
+        staleIdentifiers: [String],
+        completion: @escaping (Result<WarmAlarmNotificationSchedulingOutcome, Error>) -> Void
+    ) {
+        let replacingIdentifiers = Set(staleIdentifiers)
+        notificationCenter.getPendingNotificationRequests { [weak self] pendingRequests in
+            guard let self else { return }
+            let pendingIdentifiers = Set(pendingRequests.map(\.identifier))
+            let reservedSlotCount = Self.killWarningReservedSlotCount(
+                isConfigured: Self.isKillWarningConfigured,
+                pendingIdentifiers: pendingIdentifiers
+            )
+            guard let selection = Self.selectRequestsWithinPendingLimit(
+                requests,
+                pendingIdentifiers: pendingIdentifiers,
+                replacingIdentifiers: replacingIdentifiers,
+                reservedSlotCount: reservedSlotCount,
+                limit: Self.pendingNotificationLimit
+            ) else {
+                completion(.failure(Self.pendingLimitError(
+                    requiredCoreCount: Self.coreRequestCount(in: requests),
+                    availableCount: Self.availableRequestSlotCount(
+                        pendingIdentifiers: pendingIdentifiers,
+                        replacingIdentifiers: replacingIdentifiers,
+                        reservedSlotCount: reservedSlotCount,
+                        limit: Self.pendingNotificationLimit
+                    )
+                )))
+                return
+            }
+
+            self.delegate.clearHandledForegroundOccurrence(alarmId: schedule.id)
+            self.notificationCenter.removePendingNotificationRequests(withIdentifiers: staleIdentifiers)
+            WarmAlarmStore.shared.save(storedSchedule)
+            let capacityWarning = Self.fallbackCapacityWarning(
+                omittedCount: selection.omittedFallbackCount
+            )
+            Self.addRequestsAtomically(
+                selection.requests,
+                center: self.notificationCenter
+            ) { [weak self] error in
+                guard let self else { return }
+                if let error {
+                    WarmAlarmStore.shared.remove(id: schedule.id)
+                    self.delegate.emitFailure(alarmId: schedule.id, message: error.localizedDescription)
+                    completion(.success(WarmAlarmNotificationSchedulingOutcome(
+                        didSchedule: false,
+                        warning: WarmAlarmWarningWire(
+                            message: "Scheduling failed: \(error.localizedDescription)"
+                        )
+                    )))
+                    return
+                }
+                completion(.success(WarmAlarmNotificationSchedulingOutcome(
+                    didSchedule: true,
+                    warning: capacityWarning
+                )))
+            }
+        }
+    }
+
+    func prepareSystemSound(
+        primaryFilePath: String,
+        backgroundAssetPath: String?,
+        completion: @escaping (Result<String?, Error>) -> Void
+    ) {
+        guard #available(iOS 26.0, *), Self.schedulingBackend(
+            alarmKitAvailable: alarmKitBackend != nil,
+            alarmKitUsageDescription: alarmKitUsageDescription,
+            authorizationState: alarmKitBackend?.authorizationState ?? .denied
+        ) == .alarmKit else {
+            completion(.success(nil))
+            return
+        }
+        do {
+            let background = try backgroundAssetPath.map { asset in
+                guard let url = delegate.flutterAssetURL(for: asset) else {
+                    throw NSError(domain: "WarmAlarmSoundRenderer", code: 4, userInfo: [
+                        NSLocalizedDescriptionKey: "The requested alarm sound asset does not exist."
+                    ])
+                }
+                return url
+            }
+            let output = try WarmAlarmSoundFiles.prepare(
+                primary: URL(fileURLWithPath: primaryFilePath), background: background
+            )
+            completion(.success(output.path))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
     func scheduleAlarm(
         schedule: WarmAlarmScheduleWire,
         completion: @escaping (Result<WarmAlarmScheduleResultWire, Error>) -> Void
@@ -1928,87 +2557,220 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                 occurrenceSeriesToken: occurrenceSeriesToken
             )
             let center = UNUserNotificationCenter.current()
+            let previousSchedule = WarmAlarmStore.shared.load(id: schedule.id)
             let staleIdentifiers = Self.requestIdentifiers(
                 for: schedule.id,
-                recurrenceWeekdays: WarmAlarmStore.shared.load(id: schedule.id)?.recurrenceWeekdays
+                recurrenceWeekdays: previousSchedule?.recurrenceWeekdays
             )
-            let replacingIdentifiers = Set(staleIdentifiers)
-            center.getPendingNotificationRequests { [weak self] pendingRequests in
-                guard let self else {
+            var plan = WarmAlarmAlarmKitPlan(schedule: storedSchedule)
+            if previousSchedule?.alarmKitManaged == true {
+                self.beginAlarmKitMutation(ids: [plan.id])
+            }
+            let backendChoice = Self.schedulingBackend(
+                alarmKitAvailable: self.alarmKitBackend != nil,
+                alarmKitUsageDescription: self.alarmKitUsageDescription,
+                authorizationState: self.alarmKitBackend?.authorizationState ?? .denied
+            )
+            let canUseAlarmKit = Self.canUseAlarmKit(
+                for: plan,
+                liveActivityConfigured: self.alarmKitLiveActivityEnabled
+            )
+            let selectedAlarmKitBackend = backendChoice == .alarmKit && canUseAlarmKit
+                ? self.alarmKitBackend
+                : nil
+            if selectedAlarmKitBackend != nil, #available(iOS 26.0, *) {
+                do {
+                    let source: URL?
+                    if let path = storedSchedule.systemSoundFilePath {
+                        guard !path.isEmpty else {
+                            throw NSError(domain: "WarmAlarmSoundRenderer", code: 4, userInfo: [
+                                NSLocalizedDescriptionKey: "The requested system sound path is empty."
+                            ])
+                        }
+                        source = URL(fileURLWithPath: path)
+                    } else if let path = plan.soundFilePath, !path.isEmpty {
+                        source = URL(fileURLWithPath: path)
+                    } else if let asset = plan.soundAssetPath, !asset.isEmpty {
+                        guard let url = self.delegate.flutterAssetURL(for: asset) else {
+                            throw NSError(domain: "WarmAlarmSoundRenderer", code: 4, userInfo: [
+                                NSLocalizedDescriptionKey: "The requested alarm sound asset does not exist."
+                            ])
+                        }
+                        source = url
+                    } else {
+                        source = nil
+                    }
+                    if let source {
+                        let output: URL
+                        if source.standardizedFileURL == WarmAlarmSoundFiles.ownedURL(named: source.lastPathComponent) {
+                            let file = try AVAudioFile(forReading: source)
+                            guard file.length > 0 else {
+                                throw NSError(domain: "WarmAlarmSoundRenderer", code: 1, userInfo: [
+                                    NSLocalizedDescriptionKey: "The alarm sound has no readable audio frames."
+                                ])
+                            }
+                            output = source
+                        } else {
+                            output = try WarmAlarmSoundFiles.prepare(primary: source, background: nil)
+                        }
+                        plan.preparedSoundName = output.lastPathComponent
+                    }
+                } catch {
+                    self.finishAlarmKitMutation(ids: [plan.id])
+                    completion(.failure(error))
                     finish()
                     return
                 }
-                let pendingIdentifiers = Set(pendingRequests.map(\.identifier))
-                let reservedSlotCount = Self.killWarningReservedSlotCount(
-                    isConfigured: Self.isKillWarningConfigured,
-                    pendingIdentifiers: pendingIdentifiers
+            }
+            let configurationWarning = backendChoice == .alarmKit && !canUseAlarmKit
+                ? WarmAlarmWarningWire(
+                    message: "AlarmKit snooze requires WarmAlarmAlarmKitLiveActivityEnabled; "
+                        + "using User Notifications."
                 )
-                guard let selection = Self.selectRequestsWithinPendingLimit(
-                    requests,
-                    pendingIdentifiers: pendingIdentifiers,
-                    replacingIdentifiers: replacingIdentifiers,
-                    reservedSlotCount: reservedSlotCount,
-                    limit: Self.pendingNotificationLimit
-                ) else {
-                    let error = Self.pendingLimitError(
-                        requiredCoreCount: Self.coreRequestCount(in: requests),
-                        availableCount: Self.availableRequestSlotCount(
-                            pendingIdentifiers: pendingIdentifiers,
-                            replacingIdentifiers: replacingIdentifiers,
-                            reservedSlotCount: reservedSlotCount,
-                            limit: Self.pendingNotificationLimit
-                        )
-                    )
-                    Self.completePendingLimitFailure(
-                        alarmId: schedule.id,
-                        error: error,
-                        emitFailure: self.delegate.emitFailure,
-                        completion: completion,
-                        finish: finish
-                    )
-                    return
-                }
+                : nil
+            var notificationOutcome: WarmAlarmNotificationSchedulingOutcome?
 
-                self.delegate.clearHandledForegroundOccurrence(alarmId: schedule.id)
-                center.removePendingNotificationRequests(withIdentifiers: staleIdentifiers)
-                WarmAlarmStore.shared.save(storedSchedule)
-                let capacityWarning = Self.fallbackCapacityWarning(
-                    omittedCount: selection.omittedFallbackCount
-                )
-                Self.addRequestsAtomically(
-                    selection.requests,
-                    center: center
-                ) { [weak self] error in
-                    guard let self else {
-                        finish()
-                        return
-                    }
-                    if let error {
-                        WarmAlarmStore.shared.remove(id: schedule.id)
-                        self.delegate.emitFailure(alarmId: schedule.id, message: error.localizedDescription)
-                        WarmAlarmPlatformReply.complete(.success(WarmAlarmScheduleResultWire(
-                            alarmId: schedule.id,
-                            readiness: WarmAlarmReadinessWire(
-                                level: .limited,
-                                reasons: [.backgroundExecutionLimited]
-                            ),
-                            warning: WarmAlarmWarningWire(
-                                message: "Scheduling failed: \(error.localizedDescription)"
+            func route(
+                alarmKitBackend: WarmAlarmAlarmKitScheduling?,
+                removedPreviousAlarmKit: Bool = false
+            ) {
+                let attemptedAlarmKit = alarmKitBackend != nil
+                WarmAlarmBackendRouting.schedule(
+                    plan: plan,
+                    alarmKitBackend: alarmKitBackend,
+                    fallback: { fallbackCompletion in
+                        self.scheduleNotificationFallback(
+                            schedule: schedule,
+                            storedSchedule: storedSchedule.withAlarmKitManaged(false),
+                            requests: requests,
+                            staleIdentifiers: staleIdentifiers
+                        ) { result in
+                            WarmAlarmStore.shared.removeSoundIfUnreferenced(plan.preparedSoundName)
+                            if let input = storedSchedule.systemSoundFilePath,
+                               URL(fileURLWithPath: input).standardizedFileURL == WarmAlarmSoundFiles.ownedURL(
+                                   named: URL(fileURLWithPath: input).lastPathComponent
+                               ) {
+                                WarmAlarmStore.shared.removeSoundIfUnreferenced(URL(fileURLWithPath: input).lastPathComponent)
+                            }
+                            switch result {
+                            case let .success(outcome):
+                                notificationOutcome = outcome
+                                fallbackCompletion(nil)
+                            case let .failure(error):
+                                Self.reconcileFallbackPreflightFailure(
+                                    alarmId: schedule.id,
+                                    previousSchedule: previousSchedule,
+                                    attemptedAlarmKit: attemptedAlarmKit,
+                                    removedPreviousAlarmKit: removedPreviousAlarmKit,
+                                    save: { WarmAlarmStore.shared.save($0) },
+                                    remove: { WarmAlarmStore.shared.remove(id: $0) }
+                                )
+                                fallbackCompletion(error)
+                            }
+                        }
+                    },
+                    completion: { result in
+                        switch result {
+                        case let .failure(error):
+                            self.finishAlarmKitMutation(ids: [plan.id])
+                            Self.completePendingLimitFailure(
+                                alarmId: schedule.id,
+                                error: error,
+                                emitFailure: self.delegate.emitFailure,
+                                completion: completion,
+                                finish: finish
                             )
-                        )), completion: completion, finish: finish)
-                        return
+                        case let .success(outcome):
+                            if outcome.backend == .alarmKit {
+                                self.delegate.clearHandledForegroundOccurrence(alarmId: schedule.id)
+                                center.removePendingNotificationRequests(withIdentifiers: staleIdentifiers)
+                                center.removeDeliveredNotifications(withIdentifiers: staleIdentifiers)
+                                WarmAlarmStore.shared.save(
+                                    storedSchedule.clearingFallbackAnchor().withAlarmKitManaged(true)
+                                        .withAlarmKitSound(named: plan.preparedSoundName)
+                                )
+                                self.finishAlarmKitSchedule(id: plan.id)
+                            } else {
+                                self.finishAlarmKitMutation(ids: [plan.id])
+                            }
+                            if let alarmKitError = outcome.alarmKitError {
+                                NSLog(
+                                    "[warm_alarm_ios] alarmId=%lld backend=userNotifications fallbackReason=%@",
+                                    schedule.id,
+                                    alarmKitError.localizedDescription
+                                )
+                            } else {
+                                NSLog(
+                                    "[warm_alarm_ios] alarmId=%lld backend=%@",
+                                    schedule.id,
+                                    outcome.backend == .alarmKit ? "alarmKit" : "userNotifications"
+                                )
+                            }
+                            let didSchedule = outcome.backend == .alarmKit
+                                || notificationOutcome?.didSchedule == true
+                            if didSchedule {
+                                self.delegate.emitScheduled(alarmId: schedule.id)
+                            }
+                            var warning = configurationWarning
+                            if let capacityMessage = notificationOutcome?.warning?.message {
+                                warning = WarmAlarmWarningWire(
+                                    message: [warning?.message, capacityMessage]
+                                        .compactMap { $0 }
+                                        .joined(separator: " ")
+                                )
+                            }
+                            if let alarmKitError = outcome.alarmKitError,
+                               notificationOutcome?.didSchedule == true {
+                                let message = "AlarmKit scheduling failed; using User Notifications: "
+                                    + alarmKitError.localizedDescription
+                                if let existingMessage = warning?.message {
+                                    warning = WarmAlarmWarningWire(message: "\(message) \(existingMessage)")
+                                } else {
+                                    warning = WarmAlarmWarningWire(message: message)
+                                }
+                            }
+                            self.getReadiness { readinessResult in
+                                let readiness = (try? readinessResult.get())
+                                    ?? WarmAlarmReadinessWire(
+                                        level: .limited,
+                                        reasons: [.backgroundExecutionLimited]
+                                    )
+                                WarmAlarmPlatformReply.complete(.success(WarmAlarmScheduleResultWire(
+                                    alarmId: schedule.id,
+                                    readiness: readiness,
+                                    warning: warning
+                                )), completion: completion, finish: finish)
+                            }
+                        }
                     }
-                    self.delegate.emitScheduled(alarmId: schedule.id)
-                    self.getReadiness { result in
-                        let readiness = (try? result.get())
-                            ?? WarmAlarmReadinessWire(level: .limited, reasons: [.backgroundExecutionLimited])
-                        WarmAlarmPlatformReply.complete(.success(WarmAlarmScheduleResultWire(
-                            alarmId: schedule.id,
-                            readiness: readiness,
-                            warning: capacityWarning
-                        )), completion: completion, finish: finish)
+                )
+            }
+
+            if previousSchedule?.alarmKitManaged == true,
+               selectedAlarmKitBackend == nil,
+               let alarmKitBackend = self.alarmKitBackend {
+                WarmAlarmNativeCancellation.perform(
+                    cancelNative: { nativeCompletion in
+                        alarmKitBackend.cancel(id: plan.id, completion: nativeCompletion)
+                    },
+                    cleanupLocalState: {},
+                    completion: { error in
+                        if let error {
+                            self.finishAlarmKitMutation(ids: [plan.id])
+                            Self.completePendingLimitFailure(
+                                alarmId: schedule.id,
+                                error: error,
+                                emitFailure: self.delegate.emitFailure,
+                                completion: completion,
+                                finish: finish
+                            )
+                        } else {
+                            route(alarmKitBackend: nil, removedPreviousAlarmKit: true)
+                        }
                     }
-                }
+                )
+            } else {
+                route(alarmKitBackend: selectedAlarmKitBackend)
             }
         }
     }
@@ -2021,15 +2783,41 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
             }
             self.delegate.stopIfPlaying(alarmId: id)
             // Cancelling removes the primary, recurrence, and fallback requests.
+            let storedSchedule = WarmAlarmStore.shared.load(id: id)
             let identifiers = Self.requestIdentifiers(
                 for: id,
-                recurrenceWeekdays: WarmAlarmStore.shared.load(id: id)?.recurrenceWeekdays
+                recurrenceWeekdays: storedSchedule?.recurrenceWeekdays
             )
-            WarmAlarmStore.shared.remove(id: id)
-            let center = UNUserNotificationCenter.current()
-            center.removePendingNotificationRequests(withIdentifiers: identifiers)
-            center.removeDeliveredNotifications(withIdentifiers: identifiers)
-            WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
+            let cleanupLocalState = {
+                WarmAlarmStore.shared.remove(id: id)
+                self.notificationCenter.removePendingNotificationRequests(withIdentifiers: identifiers)
+                self.notificationCenter.removeDeliveredNotifications(withIdentifiers: identifiers)
+            }
+            guard storedSchedule?.alarmKitManaged == true,
+                  let alarmKitBackend = self.alarmKitBackend else {
+                cleanupLocalState()
+                WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
+                return
+            }
+            let alarmKitID = WarmAlarmAlarmKitPlan.id(for: id)
+            self.beginAlarmKitMutation(ids: [alarmKitID])
+            WarmAlarmNativeCancellation.perform(
+                cancelNative: { nativeCompletion in
+                    alarmKitBackend.cancel(
+                        id: alarmKitID,
+                        completion: nativeCompletion
+                    )
+                },
+                cleanupLocalState: cleanupLocalState,
+                completion: { error in
+                    self.finishAlarmKitMutation(ids: [alarmKitID])
+                    if let error {
+                        WarmAlarmPlatformReply.complete(.failure(error), completion: completion, finish: finish)
+                    } else {
+                        WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
+                    }
+                }
+            )
         }
     }
 
@@ -2040,15 +2828,86 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                 return
             }
             self.delegate.stopAllIfPlaying()
-            WarmAlarmStore.shared.clear()
-            UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
-            WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
+            let cleanupLocalState = {
+                WarmAlarmStore.shared.clear()
+                self.notificationCenter.removeAllPendingNotificationRequests()
+            }
+            let hasAlarmKitManagedSchedule = WarmAlarmStore.shared.loadAll().values.contains {
+                $0.alarmKitManaged
+            }
+            guard hasAlarmKitManagedSchedule, let alarmKitBackend = self.alarmKitBackend else {
+                cleanupLocalState()
+                WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
+                return
+            }
+            let alarmKitIDs = WarmAlarmStore.shared.loadAll().values
+                .filter(\.alarmKitManaged)
+                .map { WarmAlarmAlarmKitPlan.id(for: $0.id) }
+            self.beginAlarmKitMutation(ids: alarmKitIDs)
+            WarmAlarmNativeCancellation.perform(
+                cancelNative: alarmKitBackend.cancelAll,
+                cleanupLocalState: cleanupLocalState,
+                completion: { error in
+                    self.finishAlarmKitMutation(ids: alarmKitIDs)
+                    if let error {
+                        WarmAlarmPlatformReply.complete(.failure(error), completion: completion, finish: finish)
+                    } else {
+                        WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
+                    }
+                }
+            )
         }
     }
 
     func getScheduledAlarms(completion: @escaping (Result<[WarmAlarmSnapshotWire], Error>) -> Void) {
-        let nowMillis = Int64(Date().timeIntervalSince1970 * 1000)
-        let snapshots = WarmAlarmStore.shared.loadAll().map { _, data in
+        notificationMutationQueue.enqueue { [weak self] finish in
+            guard let self else {
+                finish()
+                return
+            }
+            let nowMillis = Int64(Date().timeIntervalSince1970 * 1000)
+            let hasAlarmKitManagedSchedule = WarmAlarmStore.shared.loadAll().values.contains {
+                $0.alarmKitManaged
+            }
+            guard hasAlarmKitManagedSchedule, let alarmKitBackend = self.alarmKitBackend else {
+                WarmAlarmPlatformReply.complete(
+                    .success(Self.scheduledAlarmSnapshots(nowMillis: nowMillis)),
+                    completion: completion,
+                    finish: finish
+                )
+                return
+            }
+            alarmKitBackend.snapshot { result in
+                switch result {
+                case let .failure(error):
+                    WarmAlarmPlatformReply.complete(.failure(error), completion: completion, finish: finish)
+                case let .success(snapshot):
+                    let managedSchedules = WarmAlarmStore.shared.loadAll().values.filter {
+                        $0.alarmKitManaged
+                    }
+                    Self.missingAlarmKitManagedScheduleIDs(
+                        schedules: Array(managedSchedules),
+                        snapshot: snapshot
+                    ).forEach { WarmAlarmStore.shared.remove(id: $0) }
+                    _ = Self.synchronizeAlarmKitCountdowns(
+                        schedules: managedSchedules.filter {
+                            snapshot.scheduledAlarmIDs.contains(WarmAlarmAlarmKitPlan.id(for: $0.id))
+                        },
+                        snapshot: snapshot,
+                        save: { WarmAlarmStore.shared.save($0) }
+                    )
+                    WarmAlarmPlatformReply.complete(
+                        .success(Self.scheduledAlarmSnapshots(nowMillis: nowMillis)),
+                        completion: completion,
+                        finish: finish
+                    )
+                }
+            }
+        }
+    }
+
+    private static func scheduledAlarmSnapshots(nowMillis: Int64) -> [WarmAlarmSnapshotWire] {
+        WarmAlarmStore.shared.loadAll().map { _, data in
             WarmAlarmSnapshotWire(
                 id: data.id,
                 scheduledAtMillis: data.snapshotScheduledAtMillis(nowMillis: nowMillis),
@@ -2069,14 +2928,15 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                     volumeEnforced: data.volumeEnforced ?? false,
                     fadeSteps: data.fadeSteps?.map {
                         WarmAlarmVolumeFadeStepWire(timeMillis: $0.timeMillis, volume: $0.volume)
-                    }
+                    },
+                    systemSoundFilePath: data.systemSoundFilePath
                 ),
                 recurrence: data.recurrenceWeekdays.map { WarmAlarmRecurrenceWire(weekdays: $0) },
                 snooze: data.snoozeDurationMillis.map { WarmAlarmSnoozeWire(durationMillis: $0) },
-                payload: data.payload
+                payload: data.payload,
+                systemManagedAudio: data.systemManagedAudio
             )
         }
-        completion(.success(snapshots))
     }
 
     func setKillWarning(
@@ -2115,10 +2975,27 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
 
     func isRinging(alarmId: Int64?, completion: @escaping (Result<Bool, Error>) -> Void) {
         let playingId = delegate.currentlyPlayingAlarmId
-        if let id = alarmId {
-            completion(.success(playingId == id))
+        if alarmId.map({ playingId == $0 }) ?? (playingId != nil) {
+            completion(.success(true))
+            return
+        }
+        let managedSchedules = WarmAlarmStore.shared.loadAll().values.filter { $0.alarmKitManaged }
+        let shouldReadAlarmKit = if let alarmId {
+            managedSchedules.contains { $0.id == alarmId }
         } else {
-            completion(.success(playingId != nil))
+            !managedSchedules.isEmpty
+        }
+        guard shouldReadAlarmKit, let alarmKitBackend else {
+            completion(.success(false))
+            return
+        }
+        alarmKitBackend.snapshot { result in
+            switch result {
+            case let .failure(error):
+                completion(.failure(error))
+            case let .success(snapshot):
+                completion(.success(snapshot.isRinging(alarmId: alarmId)))
+            }
         }
     }
 

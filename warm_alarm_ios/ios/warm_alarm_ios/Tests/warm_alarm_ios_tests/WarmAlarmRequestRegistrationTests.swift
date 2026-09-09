@@ -1,5 +1,6 @@
 // cspell:words NSKeyedUnarchiver
 
+import AVFAudio
 import Flutter
 import XCTest
 import UserNotifications
@@ -7,6 +8,120 @@ import UserNotifications
 @testable import warm_alarm_ios
 
 final class WarmAlarmRequestRegistrationTests: XCTestCase {
+    func testAlarmKitPlanPreservesTheRequestedRecordingForSystemPlayback() {
+        let wire = WarmAlarmScheduleWire(
+            id: 42,
+            scheduledAtMillis: 1_900_000_000_000,
+            notification: WarmAlarmNotificationWire(title: "Wake up", body: "Voice", keepNotificationAfterAlarmEnds: false),
+            audio: WarmAlarmAudioWire(filePath: "/recordings/message.m4a", loop: false, vibrate: true, volumeEnforced: false)
+        )
+
+        let plan = WarmAlarmAlarmKitPlan(schedule: WarmAlarmScheduleData.from(wire: wire))
+
+        XCTAssertEqual(plan.soundFilePath, "/recordings/message.m4a")
+        XCTAssertNil(plan.soundAssetPath)
+    }
+
+    func testAlarmKitMetadataUsesAHostIndependentType() {
+        if #available(iOS 26.0, *) {
+            let _: Never.Type = WarmAlarmAlarmKitMetadata.self
+        }
+    }
+
+    func testAlarmKitBackendIsSelectedOnlyForConfiguredAvailableHosts() {
+        XCTAssertEqual(
+            WarmAlarmPlugin.schedulingBackend(
+                alarmKitAvailable: true,
+                alarmKitUsageDescription: "Wake up with your recorded message.",
+                authorizationState: .authorized
+            ),
+            .alarmKit
+        )
+        XCTAssertEqual(
+            WarmAlarmPlugin.schedulingBackend(
+                alarmKitAvailable: true,
+                alarmKitUsageDescription: "Wake up with your recorded message.",
+                authorizationState: .notDetermined
+            ),
+            .alarmKit
+        )
+        XCTAssertEqual(
+            WarmAlarmPlugin.schedulingBackend(
+                alarmKitAvailable: true,
+                alarmKitUsageDescription: "Wake up with your recorded message.",
+                authorizationState: .denied
+            ),
+            .userNotifications
+        )
+        XCTAssertEqual(
+            WarmAlarmPlugin.schedulingBackend(
+                alarmKitAvailable: false,
+                alarmKitUsageDescription: "Wake up with your recorded message.",
+                authorizationState: .authorized
+            ),
+            .userNotifications
+        )
+        XCTAssertEqual(
+            WarmAlarmPlugin.schedulingBackend(
+                alarmKitAvailable: true,
+                alarmKitUsageDescription: "   ",
+                authorizationState: .authorized
+            ),
+            .userNotifications
+        )
+        XCTAssertEqual(
+            WarmAlarmPlugin.schedulingBackend(
+                alarmKitAvailable: true,
+                alarmKitUsageDescription: nil,
+                authorizationState: .authorized
+            ),
+            .userNotifications
+        )
+    }
+
+    func testAuthorizedAlarmKitReportsExactReadyWithoutNotificationPermission() {
+        let snapshot = WarmAlarmPlugin.permissionSnapshot(
+            notificationsGranted: false,
+            alarmKitConfigured: true,
+            alarmKitAuthorization: .authorized
+        )
+
+        XCTAssertTrue(snapshot.permissionState.exactAlarmGranted)
+        XCTAssertFalse(snapshot.permissionState.notificationsGranted)
+        XCTAssertEqual(snapshot.readiness.level, .ready)
+        XCTAssertEqual(snapshot.readiness.reasons, [])
+    }
+
+    func testDeniedAlarmKitFallsBackToLimitedNotifications() {
+        let snapshot = WarmAlarmPlugin.permissionSnapshot(
+            notificationsGranted: true,
+            alarmKitConfigured: true,
+            alarmKitAuthorization: .denied
+        )
+
+        XCTAssertFalse(snapshot.permissionState.exactAlarmGranted)
+        XCTAssertEqual(snapshot.readiness.level, .limited)
+        XCTAssertEqual(
+            snapshot.readiness.reasons,
+            [.exactAlarmPermissionDenied, .backgroundExecutionLimited]
+        )
+    }
+
+    func testUnconfiguredHostKeepsLegacyNotificationReadiness() {
+        let snapshot = WarmAlarmPlugin.permissionSnapshot(
+            notificationsGranted: false,
+            alarmKitConfigured: false,
+            alarmKitAuthorization: nil
+        )
+
+        XCTAssertFalse(snapshot.permissionState.exactAlarmGranted)
+        XCTAssertEqual(snapshot.readiness.level, .blocked)
+        XCTAssertEqual(
+            snapshot.readiness.reasons,
+            [.notificationPermissionDenied, .backgroundExecutionLimited]
+        )
+    }
+
     func testPluginRegistrationInstallsForwardingNotificationCenterDelegate() {
         let engine = FlutterEngine(name: "warm_alarm_registration_test")
         XCTAssertTrue(engine.run())
@@ -483,6 +598,1135 @@ final class WarmAlarmSnoozeRegistrationTests: XCTestCase {
 }
 
 final class WarmAlarmRequestTests: XCTestCase {
+    func testAlarmKitObservationStateConsumesLocalTerminalTransitionAtomically() {
+        let alarmKitID = WarmAlarmAlarmKitPlan.id(for: 4_242_424_261)
+        let state = WarmAlarmAlarmKitObservationState()
+        _ = state.update(WarmAlarmAlarmKitSnapshot(states: [alarmKitID: .alerting]))
+        state.beginMutation(ids: [alarmKitID])
+
+        let update = state.update(WarmAlarmAlarmKitSnapshot(states: [:]))
+
+        XCTAssertEqual(update.previous.states[alarmKitID], .alerting)
+        XCTAssertEqual(update.suppressedTerminalIDs, [alarmKitID])
+        XCTAssertTrue(state.update(WarmAlarmAlarmKitSnapshot(states: [:])).suppressedTerminalIDs.isEmpty)
+    }
+
+    func testAlarmKitAlertingUpdateEmitsFiredEventForStoredAlarm() {
+        let alarmId = Int64(4_242_424_250)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(id: alarmId, scheduledAtMillis: 1_900_000_000_000)
+        ).withAlarmKitManaged(true)
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(schedule)
+
+        let eventsApi = RecordingWarmAlarmEventsApi()
+        let mutationQueue = WarmAlarmMutationQueue(label: "warm_alarm_tests.alarmkit_observation")
+        let delegate = WarmAlarmDelegate(eventsApi: eventsApi, notificationMutationQueue: mutationQueue)
+        let notificationCenter = UNUserNotificationCenter.current()
+        let notificationCenterDelegate = WarmAlarmNotificationCenterDelegate(
+            warmAlarmDelegate: delegate,
+            forwardingDelegate: nil
+        )
+        let backend = RecordingAlarmKitBackend(
+            scheduleError: nil,
+            authorizationState: .denied
+        )
+        let plugin = WarmAlarmPlugin(
+            delegate: delegate,
+            notificationMutationQueue: mutationQueue,
+            notificationCenter: notificationCenter,
+            notificationCenterDelegate: notificationCenterDelegate,
+            alarmKitBackend: backend,
+            alarmKitUsageDescription: "Wake up",
+            alarmKitLiveActivityEnabled: true
+        )
+        backend.authorizationState = .authorized
+        defer {
+            delegate.stopIfPlaying(alarmId: alarmId)
+            WarmAlarmStore.shared.remove(id: alarmId)
+            withExtendedLifetime(plugin) {}
+        }
+
+        backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(
+            states: [WarmAlarmAlarmKitPlan.id(for: alarmId): .alerting]
+        ))
+
+        XCTAssertEqual(eventsApi.events.map(\.type), [.fired])
+        XCTAssertEqual(eventsApi.events.map(\.alarmId), [alarmId])
+    }
+
+    func testAlarmKitCountdownUpdateStopsAudioAndEmitsSnoozedEvent() {
+        let alarmId = Int64(4_242_424_251)
+        let fireAtMillis = Int64(1_900_000_300_000)
+        let wire = WarmAlarmScheduleWire(
+            id: alarmId,
+            scheduledAtMillis: 1_900_000_000_000,
+            notification: WarmAlarmNotificationWire(
+                title: "Wake up",
+                body: "Alarm",
+                keepNotificationAfterAlarmEnds: false
+            ),
+            audio: WarmAlarmAudioWire(loop: true, vibrate: true, volumeEnforced: false),
+            snooze: WarmAlarmSnoozeWire(durationMillis: 300_000)
+        )
+        let schedule = WarmAlarmScheduleData.from(wire: wire).withAlarmKitManaged(true)
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(schedule)
+
+        let eventsApi = RecordingWarmAlarmEventsApi()
+        let mutationQueue = WarmAlarmMutationQueue(label: "warm_alarm_tests.alarmkit_countdown")
+        let delegate = WarmAlarmDelegate(
+            eventsApi: eventsApi,
+            notificationMutationQueue: mutationQueue,
+            currentlyPlayingAlarmId: alarmId,
+            currentlyPlayingOccurrenceToken: "alarmkit#1"
+        )
+        let notificationCenter = UNUserNotificationCenter.current()
+        let notificationCenterDelegate = WarmAlarmNotificationCenterDelegate(
+            warmAlarmDelegate: delegate,
+            forwardingDelegate: nil
+        )
+        let backend = RecordingAlarmKitBackend(scheduleError: nil)
+        let plugin = WarmAlarmPlugin(
+            delegate: delegate,
+            notificationMutationQueue: mutationQueue,
+            notificationCenter: notificationCenter,
+            notificationCenterDelegate: notificationCenterDelegate,
+            alarmKitBackend: backend,
+            alarmKitUsageDescription: "Wake up",
+            alarmKitLiveActivityEnabled: true
+        )
+        defer {
+            delegate.stopIfPlaying(alarmId: alarmId)
+            WarmAlarmStore.shared.remove(id: alarmId)
+            withExtendedLifetime(plugin) {}
+        }
+        let alarmKitID = WarmAlarmAlarmKitPlan.id(for: alarmId)
+        backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(states: [alarmKitID: .alerting]))
+
+        backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(
+            states: [alarmKitID: .countdown],
+            nextTriggerDates: [alarmKitID: Date(timeIntervalSince1970: Double(fireAtMillis) / 1_000)]
+        ))
+
+        XCTAssertEqual(eventsApi.events.map(\.type), [.fired, .snoozed])
+        XCTAssertEqual(eventsApi.events.last?.snoozeDurationMillis, 300_000)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.activeSnoozeUntilMillis, fireAtMillis)
+        XCTAssertNil(delegate.currentlyPlayingAlarmId)
+    }
+
+    func testAlarmKitPausedThenCountdownUpdateWaitsForAuthoritativeSnoozeDeadline() {
+        let alarmId = Int64(4_242_424_253)
+        let fireAtMillis = Int64(1_900_000_300_000)
+        let wire = WarmAlarmScheduleWire(
+            id: alarmId,
+            scheduledAtMillis: 1_900_000_000_000,
+            notification: WarmAlarmNotificationWire(
+                title: "Wake up",
+                body: "Alarm",
+                keepNotificationAfterAlarmEnds: false
+            ),
+            audio: WarmAlarmAudioWire(loop: true, vibrate: true, volumeEnforced: false),
+            snooze: WarmAlarmSnoozeWire(durationMillis: 300_000)
+        )
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(WarmAlarmScheduleData.from(wire: wire).withAlarmKitManaged(true))
+
+        let eventsApi = RecordingWarmAlarmEventsApi()
+        let mutationQueue = WarmAlarmMutationQueue(label: "warm_alarm_tests.alarmkit_paused")
+        let delegate = WarmAlarmDelegate(
+            eventsApi: eventsApi,
+            notificationMutationQueue: mutationQueue,
+            currentlyPlayingAlarmId: alarmId,
+            currentlyPlayingOccurrenceToken: "alarmkit#1"
+        )
+        let notificationCenter = UNUserNotificationCenter.current()
+        let notificationCenterDelegate = WarmAlarmNotificationCenterDelegate(
+            warmAlarmDelegate: delegate,
+            forwardingDelegate: nil
+        )
+        let backend = RecordingAlarmKitBackend(scheduleError: nil)
+        let plugin = WarmAlarmPlugin(
+            delegate: delegate,
+            notificationMutationQueue: mutationQueue,
+            notificationCenter: notificationCenter,
+            notificationCenterDelegate: notificationCenterDelegate,
+            alarmKitBackend: backend,
+            alarmKitUsageDescription: "Wake up",
+            alarmKitLiveActivityEnabled: true
+        )
+        defer {
+            delegate.stopIfPlaying(alarmId: alarmId)
+            WarmAlarmStore.shared.remove(id: alarmId)
+            withExtendedLifetime(plugin) {}
+        }
+        let alarmKitID = WarmAlarmAlarmKitPlan.id(for: alarmId)
+        backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(states: [alarmKitID: .alerting]))
+
+        backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(states: [alarmKitID: .paused]))
+
+        XCTAssertEqual(eventsApi.events.map(\.type), [.fired, .snoozed])
+        XCTAssertNil(WarmAlarmStore.shared.load(id: alarmId)?.activeSnoozeUntilMillis)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.alarmKitSnoozeObserved, true)
+        XCTAssertNil(delegate.currentlyPlayingAlarmId)
+
+        backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(
+            states: [alarmKitID: .countdown],
+            nextTriggerDates: [alarmKitID: Date(timeIntervalSince1970: Double(fireAtMillis) / 1_000)]
+        ))
+
+        XCTAssertEqual(eventsApi.events.map(\.type), [.fired, .snoozed])
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.activeSnoozeUntilMillis, fireAtMillis)
+    }
+
+    func testAlarmKitInitialCountdownUpdateSynchronizesAuthoritativeSnoozeDeadline() {
+        let alarmId = Int64(4_242_424_254)
+        let fireAtMillis = Int64(1_900_000_300_000)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(id: alarmId, scheduledAtMillis: 1_900_000_000_000)
+        ).withAlarmKitManaged(true)
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(schedule)
+
+        let eventsApi = RecordingWarmAlarmEventsApi()
+        let mutationQueue = WarmAlarmMutationQueue(label: "warm_alarm_tests.alarmkit_initial_countdown")
+        let delegate = WarmAlarmDelegate(eventsApi: eventsApi, notificationMutationQueue: mutationQueue)
+        let notificationCenter = UNUserNotificationCenter.current()
+        let notificationCenterDelegate = WarmAlarmNotificationCenterDelegate(
+            warmAlarmDelegate: delegate,
+            forwardingDelegate: nil
+        )
+        let backend = RecordingAlarmKitBackend(scheduleError: nil)
+        let plugin = WarmAlarmPlugin(
+            delegate: delegate,
+            notificationMutationQueue: mutationQueue,
+            notificationCenter: notificationCenter,
+            notificationCenterDelegate: notificationCenterDelegate,
+            alarmKitBackend: backend,
+            alarmKitUsageDescription: "Wake up",
+            alarmKitLiveActivityEnabled: true
+        )
+        defer {
+            WarmAlarmStore.shared.remove(id: alarmId)
+            withExtendedLifetime(plugin) {}
+        }
+        let alarmKitID = WarmAlarmAlarmKitPlan.id(for: alarmId)
+
+        backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(
+            states: [alarmKitID: .countdown],
+            nextTriggerDates: [alarmKitID: Date(timeIntervalSince1970: Double(fireAtMillis) / 1_000)]
+        ))
+
+        XCTAssertEqual(eventsApi.events.map(\.type), [.snoozed])
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.activeSnoozeUntilMillis, fireAtMillis)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.alarmKitSnoozeObserved, true)
+    }
+
+    func testAlarmKitInitializationEmitsSnoozedOnceForCountdownSnapshot() {
+        let alarmId = Int64(4_242_424_259)
+        let fireAtMillis = Int64(Date().addingTimeInterval(300).timeIntervalSince1970 * 1_000)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(id: alarmId, scheduledAtMillis: fireAtMillis)
+        ).withAlarmKitManaged(true).withActiveSnooze(untilMillis: fireAtMillis)
+        let encodedSchedule = try! JSONEncoder().encode(schedule)
+        var legacyScheduleObject = try! JSONSerialization.jsonObject(with: encodedSchedule) as! [String: Any]
+        legacyScheduleObject.removeValue(forKey: "alarmKitSnoozeObserved")
+        let legacySchedule = try! JSONDecoder().decode(
+            WarmAlarmScheduleData.self,
+            from: JSONSerialization.data(withJSONObject: legacyScheduleObject)
+        )
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(legacySchedule)
+
+        let eventsApi = RecordingWarmAlarmEventsApi()
+        let mutationQueue = WarmAlarmMutationQueue(label: "warm_alarm_tests.alarmkit_initial_countdown_replay")
+        let delegate = WarmAlarmDelegate(eventsApi: eventsApi, notificationMutationQueue: mutationQueue)
+        let notificationCenter = UNUserNotificationCenter.current()
+        let notificationCenterDelegate = WarmAlarmNotificationCenterDelegate(
+            warmAlarmDelegate: delegate,
+            forwardingDelegate: nil
+        )
+        let alarmKitID = WarmAlarmAlarmKitPlan.id(for: alarmId)
+        let countdownSnapshot = WarmAlarmAlarmKitSnapshot(
+            states: [alarmKitID: .countdown],
+            nextTriggerDates: [alarmKitID: Date(timeIntervalSince1970: Double(fireAtMillis) / 1_000)]
+        )
+        let backend = RecordingAlarmKitBackend(
+            scheduleError: nil,
+            snapshot: countdownSnapshot
+        )
+        let plugin = WarmAlarmPlugin(
+            delegate: delegate,
+            notificationMutationQueue: mutationQueue,
+            notificationCenter: notificationCenter,
+            notificationCenterDelegate: notificationCenterDelegate,
+            alarmKitBackend: backend,
+            alarmKitUsageDescription: "Wake up",
+            alarmKitLiveActivityEnabled: true
+        )
+        defer {
+            WarmAlarmStore.shared.remove(id: alarmId)
+            withExtendedLifetime(plugin) {}
+        }
+        let completed = expectation(description: "initialization completes")
+
+        plugin.initialize { result in
+            if case let .failure(error) = result {
+                XCTFail("Initialization failed: \(error)")
+            }
+            completed.fulfill()
+        }
+
+        wait(for: [completed], timeout: 2)
+        XCTAssertEqual(eventsApi.events.map(\.type), [.snoozed])
+        XCTAssertEqual(
+            eventsApi.events.first.map { $0.occurredAtMillis + ($0.snoozeDurationMillis ?? 0) },
+            fireAtMillis
+        )
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.activeSnoozeUntilMillis, fireAtMillis)
+
+        backend.emitSnapshot(countdownSnapshot)
+
+        XCTAssertEqual(eventsApi.events.map(\.type), [.snoozed])
+    }
+
+    func testAlarmKitStoppedUpdateStopsAudioAndRemovesOneShotSchedule() {
+        let alarmId = Int64(4_242_424_252)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(id: alarmId, scheduledAtMillis: 1_900_000_000_000)
+        ).withAlarmKitManaged(true)
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(schedule)
+
+        let eventsApi = RecordingWarmAlarmEventsApi()
+        let mutationQueue = WarmAlarmMutationQueue(label: "warm_alarm_tests.alarmkit_stop")
+        let delegate = WarmAlarmDelegate(
+            eventsApi: eventsApi,
+            notificationMutationQueue: mutationQueue,
+            currentlyPlayingAlarmId: alarmId,
+            currentlyPlayingOccurrenceToken: "alarmkit#1"
+        )
+        let notificationCenter = UNUserNotificationCenter.current()
+        let notificationCenterDelegate = WarmAlarmNotificationCenterDelegate(
+            warmAlarmDelegate: delegate,
+            forwardingDelegate: nil
+        )
+        let backend = RecordingAlarmKitBackend(scheduleError: nil)
+        let plugin = WarmAlarmPlugin(
+            delegate: delegate,
+            notificationMutationQueue: mutationQueue,
+            notificationCenter: notificationCenter,
+            notificationCenterDelegate: notificationCenterDelegate,
+            alarmKitBackend: backend,
+            alarmKitUsageDescription: "Wake up",
+            alarmKitLiveActivityEnabled: true
+        )
+        defer {
+            delegate.stopIfPlaying(alarmId: alarmId)
+            WarmAlarmStore.shared.remove(id: alarmId)
+            withExtendedLifetime(plugin) {}
+        }
+        let alarmKitID = WarmAlarmAlarmKitPlan.id(for: alarmId)
+        backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(states: [alarmKitID: .alerting]))
+
+        backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(states: [:]))
+
+        XCTAssertEqual(eventsApi.events.map(\.type), [.fired, .stopped])
+        XCTAssertNil(WarmAlarmStore.shared.load(id: alarmId))
+        XCTAssertNil(delegate.currentlyPlayingAlarmId)
+    }
+
+    func testAlarmKitStoppedUpdateAfterPauseRemovesOneShotSchedule() {
+        let alarmId = Int64(4_242_424_260)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(id: alarmId, scheduledAtMillis: 1_900_000_000_000)
+        ).withAlarmKitManaged(true)
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(schedule)
+
+        let eventsApi = RecordingWarmAlarmEventsApi()
+        let mutationQueue = WarmAlarmMutationQueue(label: "warm_alarm_tests.alarmkit_paused_stop")
+        let delegate = WarmAlarmDelegate(eventsApi: eventsApi, notificationMutationQueue: mutationQueue)
+        let notificationCenter = UNUserNotificationCenter.current()
+        let notificationCenterDelegate = WarmAlarmNotificationCenterDelegate(
+            warmAlarmDelegate: delegate,
+            forwardingDelegate: nil
+        )
+        let backend = RecordingAlarmKitBackend(scheduleError: nil)
+        let plugin = WarmAlarmPlugin(
+            delegate: delegate,
+            notificationMutationQueue: mutationQueue,
+            notificationCenter: notificationCenter,
+            notificationCenterDelegate: notificationCenterDelegate,
+            alarmKitBackend: backend,
+            alarmKitUsageDescription: "Wake up",
+            alarmKitLiveActivityEnabled: true
+        )
+        defer {
+            WarmAlarmStore.shared.remove(id: alarmId)
+            withExtendedLifetime(plugin) {}
+        }
+        let alarmKitID = WarmAlarmAlarmKitPlan.id(for: alarmId)
+
+        backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(states: [alarmKitID: .paused]))
+        backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(states: [:]))
+
+        XCTAssertEqual(eventsApi.events.map(\.type), [.snoozed, .stopped])
+        XCTAssertNil(WarmAlarmStore.shared.load(id: alarmId))
+    }
+
+    func testAlarmKitInitializationEmitsStoppedForMissingExpiredOneShot() {
+        let alarmId = Int64(4_242_424_258)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(
+                id: alarmId,
+                scheduledAtMillis: Int64(Date().addingTimeInterval(-60).timeIntervalSince1970 * 1_000)
+            )
+        ).withAlarmKitManaged(true)
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(schedule)
+
+        let eventsApi = RecordingWarmAlarmEventsApi()
+        let mutationQueue = WarmAlarmMutationQueue(label: "warm_alarm_tests.alarmkit_expired_stop")
+        let delegate = WarmAlarmDelegate(eventsApi: eventsApi, notificationMutationQueue: mutationQueue)
+        let notificationCenter = UNUserNotificationCenter.current()
+        let notificationCenterDelegate = WarmAlarmNotificationCenterDelegate(
+            warmAlarmDelegate: delegate,
+            forwardingDelegate: nil
+        )
+        let backend = RecordingAlarmKitBackend(scheduleError: nil)
+        let plugin = WarmAlarmPlugin(
+            delegate: delegate,
+            notificationMutationQueue: mutationQueue,
+            notificationCenter: notificationCenter,
+            notificationCenterDelegate: notificationCenterDelegate,
+            alarmKitBackend: backend,
+            alarmKitUsageDescription: "Wake up",
+            alarmKitLiveActivityEnabled: true
+        )
+        defer {
+            WarmAlarmStore.shared.remove(id: alarmId)
+            withExtendedLifetime(plugin) {}
+        }
+        let completed = expectation(description: "initialization completes")
+
+        plugin.initialize { result in
+            if case let .failure(error) = result {
+                XCTFail("Initialization failed: \(error)")
+            }
+            completed.fulfill()
+        }
+
+        wait(for: [completed], timeout: 2)
+        XCTAssertEqual(eventsApi.events.map(\.type), [.stopped])
+        XCTAssertEqual(eventsApi.events.map(\.alarmId), [alarmId])
+        XCTAssertNil(WarmAlarmStore.shared.load(id: alarmId))
+    }
+
+    func testCancelAlarmDoesNotEchoNativeRemovalAsStoppedEvent() {
+        let alarmId = Int64(4_242_424_255)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(id: alarmId, scheduledAtMillis: 1_900_000_000_000)
+        ).withAlarmKitManaged(true)
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(schedule)
+
+        let eventsApi = RecordingWarmAlarmEventsApi()
+        let mutationQueue = WarmAlarmMutationQueue(label: "warm_alarm_tests.alarmkit_cancel_observation")
+        let delegate = WarmAlarmDelegate(eventsApi: eventsApi, notificationMutationQueue: mutationQueue)
+        let notificationCenter = UNUserNotificationCenter.current()
+        let notificationCenterDelegate = WarmAlarmNotificationCenterDelegate(
+            warmAlarmDelegate: delegate,
+            forwardingDelegate: nil
+        )
+        let backend = RecordingAlarmKitBackend(scheduleError: nil)
+        let plugin = WarmAlarmPlugin(
+            delegate: delegate,
+            notificationMutationQueue: mutationQueue,
+            notificationCenter: notificationCenter,
+            notificationCenterDelegate: notificationCenterDelegate,
+            alarmKitBackend: backend,
+            alarmKitUsageDescription: "Wake up",
+            alarmKitLiveActivityEnabled: true
+        )
+        defer {
+            WarmAlarmStore.shared.remove(id: alarmId)
+            withExtendedLifetime(plugin) {}
+        }
+        let alarmKitID = WarmAlarmAlarmKitPlan.id(for: alarmId)
+        backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(states: [alarmKitID: .alerting]))
+        backend.onCancel = { _ in
+            backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(states: [:]))
+        }
+        let completed = expectation(description: "cancel alarm completes")
+
+        plugin.cancelAlarm(id: alarmId) { result in
+            if case let .failure(error) = result {
+                XCTFail("Cancel alarm failed: \(error)")
+            }
+            completed.fulfill()
+        }
+
+        wait(for: [completed], timeout: 1)
+        XCTAssertEqual(eventsApi.events.map(\.type), [.fired])
+        XCTAssertNil(WarmAlarmStore.shared.load(id: alarmId))
+    }
+
+    func testCancelAllAlarmsDoesNotEchoNativeRemovalAsStoppedEvent() {
+        let alarmId = Int64(4_242_424_256)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(id: alarmId, scheduledAtMillis: 1_900_000_000_000)
+        ).withAlarmKitManaged(true)
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(schedule)
+
+        let eventsApi = RecordingWarmAlarmEventsApi()
+        let mutationQueue = WarmAlarmMutationQueue(label: "warm_alarm_tests.alarmkit_cancel_all_observation")
+        let delegate = WarmAlarmDelegate(eventsApi: eventsApi, notificationMutationQueue: mutationQueue)
+        let notificationCenter = UNUserNotificationCenter.current()
+        let notificationCenterDelegate = WarmAlarmNotificationCenterDelegate(
+            warmAlarmDelegate: delegate,
+            forwardingDelegate: nil
+        )
+        let backend = RecordingAlarmKitBackend(scheduleError: nil)
+        let plugin = WarmAlarmPlugin(
+            delegate: delegate,
+            notificationMutationQueue: mutationQueue,
+            notificationCenter: notificationCenter,
+            notificationCenterDelegate: notificationCenterDelegate,
+            alarmKitBackend: backend,
+            alarmKitUsageDescription: "Wake up",
+            alarmKitLiveActivityEnabled: true
+        )
+        defer {
+            WarmAlarmStore.shared.remove(id: alarmId)
+            withExtendedLifetime(plugin) {}
+        }
+        let alarmKitID = WarmAlarmAlarmKitPlan.id(for: alarmId)
+        backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(states: [alarmKitID: .alerting]))
+        backend.onCancelAll = {
+            backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(states: [:]))
+        }
+        let completed = expectation(description: "cancel all alarms completes")
+
+        plugin.cancelAllAlarms { result in
+            if case let .failure(error) = result {
+                XCTFail("Cancel all alarms failed: \(error)")
+            }
+            completed.fulfill()
+        }
+
+        wait(for: [completed], timeout: 1)
+        XCTAssertEqual(eventsApi.events.map(\.type), [.fired])
+        XCTAssertNil(WarmAlarmStore.shared.load(id: alarmId))
+    }
+
+    func testAlarmKitToNotificationReplacementDoesNotEchoNativeRemovalAsStoppedEvent() {
+        let alarmId = Int64(4_242_424_257)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(id: alarmId, scheduledAtMillis: 1_900_000_000_000)
+        ).withAlarmKitManaged(true)
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(schedule)
+
+        let eventsApi = RecordingWarmAlarmEventsApi()
+        let mutationQueue = WarmAlarmMutationQueue(label: "warm_alarm_tests.alarmkit_replacement_observation")
+        let delegate = WarmAlarmDelegate(eventsApi: eventsApi, notificationMutationQueue: mutationQueue)
+        let notificationCenter = UNUserNotificationCenter.current()
+        let notificationCenterDelegate = WarmAlarmNotificationCenterDelegate(
+            warmAlarmDelegate: delegate,
+            forwardingDelegate: nil
+        )
+        let backend = RecordingAlarmKitBackend(scheduleError: nil)
+        let plugin = WarmAlarmPlugin(
+            delegate: delegate,
+            notificationMutationQueue: mutationQueue,
+            notificationCenter: notificationCenter,
+            notificationCenterDelegate: notificationCenterDelegate,
+            alarmKitBackend: backend,
+            alarmKitUsageDescription: "Wake up",
+            alarmKitLiveActivityEnabled: true
+        )
+        defer {
+            WarmAlarmStore.shared.remove(id: alarmId)
+            notificationCenter.removePendingNotificationRequests(
+                withIdentifiers: WarmAlarmPlugin.requestIdentifiers(for: alarmId, recurrenceWeekdays: nil)
+            )
+            withExtendedLifetime(plugin) {}
+        }
+        let alarmKitID = WarmAlarmAlarmKitPlan.id(for: alarmId)
+        backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(states: [alarmKitID: .alerting]))
+        backend.authorizationState = .denied
+        backend.onCancel = { _ in
+            backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(states: [:]))
+        }
+        let completed = expectation(description: "replacement completes")
+
+        plugin.scheduleAlarm(
+            schedule: makeWireSchedule(id: alarmId, scheduledAtMillis: 1_900_000_600_000)
+        ) { result in
+            if case let .failure(error) = result {
+                XCTFail("Replacement failed: \(error)")
+            }
+            completed.fulfill()
+        }
+
+        wait(for: [completed], timeout: 2)
+        XCTAssertFalse(eventsApi.events.map(\.type).contains(.stopped))
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.alarmKitManaged, false)
+    }
+
+    func testPreparedSoundIsAdoptedReplacedAndRemovedThroughPlugin() throws {
+        guard #available(iOS 26.0, *) else { throw XCTSkip("AlarmKit requires iOS 26") }
+        let alarmId: Int64 = 918_412
+        let plugin = makeSoundLifecyclePlugin(backend: RecordingAlarmKitBackend(scheduleError: nil))
+        let input = try makeSoundLifecycleRecording()
+        defer {
+            WarmAlarmStore.shared.remove(id: alarmId)
+            try? FileManager.default.removeItem(at: input)
+            withExtendedLifetime(plugin) {}
+        }
+        func prepare() throws -> String {
+            var prepared: Result<String?, Error>?
+            plugin.prepareSystemSound(primaryFilePath: input.path, backgroundAssetPath: nil) { prepared = $0 }
+            return try XCTUnwrap(try prepared?.get())
+        }
+        func schedule(_ sound: String) {
+            var wire = makeWireSchedule(id: alarmId, scheduledAtMillis: 1_900_000_000_000)
+            wire.audio.systemSoundFilePath = sound
+            let completed = expectation(description: "prepared sound is scheduled")
+            plugin.scheduleAlarm(schedule: wire) { result in
+                if case let .failure(error) = result { XCTFail("Scheduling failed: \(error)") }
+                completed.fulfill()
+            }
+            wait(for: [completed], timeout: 10)
+        }
+        let first = try prepare()
+        schedule(first)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.systemSoundFilePath, first)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.systemManagedAudio, true)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: first))
+        let second = try prepare()
+        schedule(second)
+        XCTAssertNotEqual(first, second)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: first))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: second))
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.systemSoundFilePath, second)
+        let cancelled = expectation(description: "prepared sound is cancelled")
+        plugin.cancelAlarm(id: alarmId) { result in
+            if case let .failure(error) = result { XCTFail("Cancellation failed: \(error)") }
+            cancelled.fulfill()
+        }
+        wait(for: [cancelled], timeout: 10)
+        XCTAssertNil(WarmAlarmStore.shared.load(id: alarmId))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: second))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: input.path))
+    }
+
+    func testEmptyExplicitSoundFailsBeforeReplacingExistingAlarm() throws {
+        guard #available(iOS 26.0, *) else { throw XCTSkip("AlarmKit requires iOS 26") }
+        let alarmId: Int64 = 918_413
+        let backend = RecordingAlarmKitBackend(scheduleError: nil)
+        let plugin = makeSoundLifecyclePlugin(backend: backend)
+        let existing = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(id: alarmId, scheduledAtMillis: 1_900_000_000_000)
+        ).withAlarmKitManaged(true)
+        WarmAlarmStore.shared.save(existing)
+        defer {
+            WarmAlarmStore.shared.remove(id: alarmId)
+            withExtendedLifetime(plugin) {}
+        }
+        var replacement = makeWireSchedule(id: alarmId, scheduledAtMillis: 1_900_000_600_000)
+        replacement.audio.systemSoundFilePath = ""
+        let completed = expectation(description: "invalid sound is rejected")
+        plugin.scheduleAlarm(schedule: replacement) { result in
+            if case .success = result { XCTFail("An explicit empty sound must fail before replacement") }
+            completed.fulfill()
+        }
+        wait(for: [completed], timeout: 10)
+        XCTAssertTrue(backend.scheduledPlans.isEmpty)
+        XCTAssertTrue(backend.cancelledIDs.isEmpty)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.scheduledAtMillis, existing.scheduledAtMillis)
+    }
+
+    func testPreparedSoundIsReleasedWhenPluginFallsBackToNotifications() throws {
+        guard #available(iOS 26.0, *) else { throw XCTSkip("AlarmKit requires iOS 26") }
+        let alarmId: Int64 = 918_414
+        let plugin = makeSoundLifecyclePlugin(backend: RecordingAlarmKitBackend(
+            scheduleError: NSError(domain: "AlarmKitTests", code: 1)
+        ))
+        let input = try makeSoundLifecycleRecording()
+        var prepared: Result<String?, Error>?
+        plugin.prepareSystemSound(primaryFilePath: input.path, backgroundAssetPath: nil) { prepared = $0 }
+        let output = try XCTUnwrap(try prepared?.get())
+        defer {
+            WarmAlarmStore.shared.remove(id: alarmId)
+            UNUserNotificationCenter.current().removePendingNotificationRequests(
+                withIdentifiers: WarmAlarmPlugin.requestIdentifiers(for: alarmId, recurrenceWeekdays: nil)
+            )
+            try? FileManager.default.removeItem(at: input)
+            WarmAlarmSoundFiles.remove(named: URL(fileURLWithPath: output).lastPathComponent)
+            withExtendedLifetime(plugin) {}
+        }
+        var wire = makeWireSchedule(id: alarmId, scheduledAtMillis: 1_900_000_000_000)
+        wire.audio.filePath = input.path
+        wire.audio.systemSoundFilePath = output
+        let completed = expectation(description: "prepared sound falls back")
+        plugin.scheduleAlarm(schedule: wire) { result in
+            if case let .failure(error) = result { XCTFail("Fallback failed: \(error)") }
+            completed.fulfill()
+        }
+        wait(for: [completed], timeout: 10)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.systemManagedAudio, false)
+        XCTAssertNil(WarmAlarmStore.shared.load(id: alarmId)?.systemSoundFilePath)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.filePath, input.path)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: input.path))
+    }
+
+    private func makeSoundLifecyclePlugin(backend: RecordingAlarmKitBackend) -> WarmAlarmPlugin {
+        let queue = WarmAlarmMutationQueue(label: "warm_alarm_tests.sound_lifecycle")
+        let delegate = WarmAlarmDelegate(eventsApi: RecordingWarmAlarmEventsApi(), notificationMutationQueue: queue)
+        return WarmAlarmPlugin(
+            delegate: delegate,
+            notificationMutationQueue: queue,
+            notificationCenter: UNUserNotificationCenter.current(),
+            notificationCenterDelegate: WarmAlarmNotificationCenterDelegate(warmAlarmDelegate: delegate, forwardingDelegate: nil),
+            alarmKitBackend: backend,
+            alarmKitUsageDescription: "Wake up",
+            alarmKitLiveActivityEnabled: true
+        )
+    }
+
+    private func makeSoundLifecycleRecording() throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".caf")
+        let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)!
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4_410)!
+        buffer.frameLength = buffer.frameCapacity
+        for frame in 0..<Int(buffer.frameLength) { buffer.floatChannelData![0][frame] = 0.2 }
+        let file = try AVAudioFile(forWriting: url, settings: format.settings)
+        try file.write(from: buffer)
+        return url
+    }
+
+    func testAlarmKitSuccessDoesNotScheduleNotificationFallback() {
+        let completed = expectation(description: "AlarmKit routing completes")
+        let backend = RecordingAlarmKitBackend(scheduleError: nil)
+        let plan = makeAlarmKitPlan()
+        var fallbackCallCount = 0
+
+        WarmAlarmBackendRouting.schedule(
+            plan: plan,
+            alarmKitBackend: backend,
+            fallback: { completion in
+                fallbackCallCount += 1
+                completion(nil)
+            },
+            completion: { result in
+                XCTAssertEqual(try? result.get().backend, .alarmKit)
+                XCTAssertNil(try? result.get().alarmKitError)
+                completed.fulfill()
+            }
+        )
+
+        wait(for: [completed], timeout: 1)
+        XCTAssertEqual(backend.scheduledPlans, [plan])
+        XCTAssertEqual(fallbackCallCount, 0)
+    }
+
+    func testAlarmKitFailureSchedulesNotificationFallback() {
+        let completed = expectation(description: "fallback routing completes")
+        let alarmKitError = NSError(domain: "AlarmKitTests", code: 1)
+        let backend = RecordingAlarmKitBackend(scheduleError: alarmKitError)
+        let plan = makeAlarmKitPlan()
+        var fallbackCallCount = 0
+
+        WarmAlarmBackendRouting.schedule(
+            plan: plan,
+            alarmKitBackend: backend,
+            fallback: { completion in
+                fallbackCallCount += 1
+                completion(nil)
+            },
+            completion: { result in
+                XCTAssertEqual(try? result.get().backend, .userNotifications)
+                XCTAssertEqual((try? result.get().alarmKitError as NSError?)?.domain, alarmKitError.domain)
+                completed.fulfill()
+            }
+        )
+
+        wait(for: [completed], timeout: 1)
+        XCTAssertEqual(backend.scheduledPlans, [plan])
+        XCTAssertEqual(backend.cancelledIDs, [plan.id])
+        XCTAssertEqual(fallbackCallCount, 1)
+    }
+
+    func testAlarmKitRollbackFailureDoesNotScheduleNotificationFallback() {
+        let completed = expectation(description: "failed AlarmKit rollback completes")
+        let scheduleError = NSError(domain: "AlarmKitScheduleTests", code: 1)
+        let rollbackError = NSError(domain: "AlarmKitRollbackTests", code: 2)
+        let backend = RecordingAlarmKitBackend(
+            scheduleError: scheduleError,
+            cancelError: rollbackError
+        )
+        let plan = makeAlarmKitPlan()
+        var fallbackCallCount = 0
+
+        WarmAlarmBackendRouting.schedule(
+            plan: plan,
+            alarmKitBackend: backend,
+            fallback: { completion in
+                fallbackCallCount += 1
+                completion(nil)
+            },
+            completion: { result in
+                switch result {
+                case .success:
+                    XCTFail("A failed AlarmKit rollback must not install a second backend")
+                case let .failure(error):
+                    XCTAssertEqual((error as NSError).domain, rollbackError.domain)
+                }
+                completed.fulfill()
+            }
+        )
+
+        wait(for: [completed], timeout: 1)
+        XCTAssertEqual(backend.cancelledIDs, [plan.id])
+        XCTAssertEqual(fallbackCallCount, 0)
+    }
+
+    func testNotificationFallbackFailureIsReturned() {
+        let completed = expectation(description: "failed fallback routing completes")
+        let backend = RecordingAlarmKitBackend(
+            scheduleError: NSError(domain: "AlarmKitTests", code: 1)
+        )
+        let fallbackError = NSError(domain: "NotificationTests", code: 2)
+
+        WarmAlarmBackendRouting.schedule(
+            plan: makeAlarmKitPlan(),
+            alarmKitBackend: backend,
+            fallback: { completion in completion(fallbackError) },
+            completion: { result in
+                switch result {
+                case .success:
+                    XCTFail("Both failed backends must not report success")
+                case let .failure(error):
+                    XCTAssertEqual((error as NSError).domain, fallbackError.domain)
+                }
+                completed.fulfill()
+            }
+        )
+
+        wait(for: [completed], timeout: 1)
+    }
+
+    func testAlarmKitPlanMapsOneShotIdentityAndSnoozeDuration() {
+        let fireAtMillis = Int64(1_900_000_000_000)
+        let wire = WarmAlarmScheduleWire(
+            id: 42,
+            scheduledAtMillis: fireAtMillis,
+            notification: WarmAlarmNotificationWire(
+                title: "Wake up",
+                body: "Alarm",
+                stopActionTitle: "Dismiss",
+                snoozeActionTitle: "Snooze",
+                keepNotificationAfterAlarmEnds: false
+            ),
+            audio: WarmAlarmAudioWire(loop: true, vibrate: true, volumeEnforced: false),
+            snooze: WarmAlarmSnoozeWire(durationMillis: 300_000)
+        )
+
+        let plan = WarmAlarmAlarmKitPlan(
+            schedule: WarmAlarmScheduleData.from(wire: wire),
+            calendar: utcCalendar()
+        )
+
+        XCTAssertEqual(plan.id.uuidString, "5741524D-414C-4152-0000-00000000002A")
+        XCTAssertEqual(plan.schedule, .fixed(Date(timeIntervalSince1970: 1_900_000_000)))
+        XCTAssertEqual(plan.snoozeDuration, 300)
+        XCTAssertEqual(plan.title, "Wake up")
+        XCTAssertEqual(plan.stopTitle, "Dismiss")
+        XCTAssertEqual(plan.snoozeTitle, "Snooze")
+    }
+
+    func testAlarmKitIdentityOwnershipDoesNotMatchUnrelatedAlarms() {
+        XCTAssertTrue(WarmAlarmAlarmKitPlan.owns(WarmAlarmAlarmKitPlan.id(for: 42)))
+        XCTAssertFalse(WarmAlarmAlarmKitPlan.owns(UUID(uuidString: "00000000-0000-0000-0000-00000000002A")!))
+    }
+
+    func testAlarmKitPlanMapsIsoWeekdaysToLocalWeeklySchedule() {
+        let calendar = utcCalendar()
+        let fireAtMillis = millis(2026, 1, 5, 7, 30, calendar: calendar)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(
+                scheduledAtMillis: fireAtMillis,
+                recurrenceWeekdays: [1, 3, 5]
+            ),
+            calendar: calendar
+        )
+
+        let plan = WarmAlarmAlarmKitPlan(schedule: schedule, calendar: calendar)
+
+        XCTAssertEqual(
+            plan.schedule,
+            .weekly(hour: 7, minute: 30, weekdays: [.monday, .wednesday, .friday])
+        )
+    }
+
+    func testAlarmKitInitializationDoesNotDuplicateSystemManagedAlarm() {
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: 1_900_000_000_000)
+        )
+
+        let selection = WarmAlarmPlugin.selectAlarmKitInitializationWork(
+            schedules: [schedule],
+            scheduledAlarmKitIDs: [WarmAlarmAlarmKitPlan.id(for: schedule.id)],
+            nowMillis: 1_899_999_000_000
+        )
+
+        XCTAssertEqual(selection.alarmKitManaged.map(\.id), [schedule.id])
+        XCTAssertEqual(selection.notificationRecovery.map(\.id), [])
+        XCTAssertEqual(selection.expiredAlarmIDs, [])
+    }
+
+    func testAlarmKitInitializationFallsBackForMissingFutureAlarm() {
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: 1_900_000_000_000)
+        )
+
+        let selection = WarmAlarmPlugin.selectAlarmKitInitializationWork(
+            schedules: [schedule],
+            scheduledAlarmKitIDs: [],
+            nowMillis: 1_899_999_000_000
+        )
+
+        XCTAssertEqual(selection.alarmKitManaged.map(\.id), [])
+        XCTAssertEqual(selection.notificationRecovery.map(\.id), [schedule.id])
+        XCTAssertEqual(selection.expiredAlarmIDs, [])
+    }
+
+    func testAlarmKitInitializationRemovesMissingExpiredOneShot() {
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: 1_900_000_000_000)
+        )
+
+        let selection = WarmAlarmPlugin.selectAlarmKitInitializationWork(
+            schedules: [schedule],
+            scheduledAlarmKitIDs: [],
+            nowMillis: 1_900_000_000_001
+        )
+
+        XCTAssertEqual(selection.alarmKitManaged.map(\.id), [])
+        XCTAssertEqual(selection.notificationRecovery.map(\.id), [])
+        XCTAssertEqual(selection.expiredAlarmIDs, [schedule.id])
+    }
+
+    func testAlarmKitInitializationInventoryFailureDoesNotRecoverNotifications() {
+        let inventoryError = NSError(domain: "AlarmKitInventoryTests", code: 3)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: 1_900_000_000_000)
+        )
+
+        let result = WarmAlarmPlugin.resolveAlarmKitInitializationWork(
+            schedules: [schedule],
+            alarmStatesResult: .failure(inventoryError),
+            nowMillis: 1_899_999_000_000
+        )
+
+        switch result {
+        case .success:
+            XCTFail("Unknown AlarmKit state must not be treated as an empty inventory")
+        case let .failure(error):
+            XCTAssertEqual((error as NSError).domain, inventoryError.domain)
+        }
+    }
+
+    func testNativeCancellationFailurePreservesLocalState() {
+        let completed = expectation(description: "failed native cancellation completes")
+        let cancellationError = NSError(domain: "AlarmKitCancellationTests", code: 4)
+        var cleanupCallCount = 0
+
+        WarmAlarmNativeCancellation.perform(
+            cancelNative: { completion in completion(cancellationError) },
+            cleanupLocalState: { cleanupCallCount += 1 },
+            completion: { error in
+                XCTAssertEqual((error as NSError?)?.domain, cancellationError.domain)
+                completed.fulfill()
+            }
+        )
+
+        wait(for: [completed], timeout: 1)
+        XCTAssertEqual(cleanupCallCount, 0)
+    }
+
+    func testNativeCancellationSuccessCleansLocalStateAfterNativeState() {
+        let completed = expectation(description: "successful native cancellation completes")
+        var operations = [String]()
+
+        WarmAlarmNativeCancellation.perform(
+            cancelNative: { completion in
+                operations.append("native")
+                completion(nil)
+            },
+            cleanupLocalState: { operations.append("local") },
+            completion: { error in
+                XCTAssertNil(error)
+                completed.fulfill()
+            }
+        )
+
+        wait(for: [completed], timeout: 1)
+        XCTAssertEqual(operations, ["native", "local"])
+    }
+
+    func testAlarmKitSnapshotReportsOnlyAlertingAlarmAsRinging() {
+        let alertingID = WarmAlarmAlarmKitPlan.id(for: 42)
+        let countdownID = WarmAlarmAlarmKitPlan.id(for: 43)
+        let snapshot = WarmAlarmAlarmKitSnapshot(states: [
+            alertingID: .alerting,
+            countdownID: .countdown,
+        ])
+
+        XCTAssertTrue(snapshot.isRinging(alarmId: nil))
+        XCTAssertTrue(snapshot.isRinging(alarmId: 42))
+        XCTAssertFalse(snapshot.isRinging(alarmId: 43))
+        XCTAssertFalse(snapshot.isRinging(alarmId: 44))
+    }
+
+    func testAlarmKitCancellationStopsAlertingAlarmsAndCancelsOtherStates() {
+        XCTAssertEqual(WarmAlarmAlarmKitCancellationAction.forState(.alerting), .stopThenCancel)
+        XCTAssertEqual(WarmAlarmAlarmKitCancellationAction.forState(.scheduled), .cancel)
+        XCTAssertEqual(WarmAlarmAlarmKitCancellationAction.forState(.countdown), .cancel)
+        XCTAssertEqual(WarmAlarmAlarmKitCancellationAction.forState(.paused), .cancel)
+    }
+
+    func testAlarmKitCountdownSynchronizesItsNativeFireDateIntoStoredSnapshot() {
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: 1_900_000_000_000)
+        )
+        let fireDate = Date(timeIntervalSince1970: 1_900_000_300)
+        let snapshot = WarmAlarmAlarmKitSnapshot(
+            states: [WarmAlarmAlarmKitPlan.id(for: schedule.id): .countdown],
+            nextTriggerDates: [WarmAlarmAlarmKitPlan.id(for: schedule.id): fireDate]
+        )
+
+        var saved = [WarmAlarmScheduleData]()
+        let synchronized = WarmAlarmPlugin.synchronizeAlarmKitCountdowns(
+            schedules: [schedule],
+            snapshot: snapshot,
+            save: { saved.append($0) }
+        )
+
+        XCTAssertEqual(synchronized.first?.activeSnoozeUntilMillis, 1_900_000_300_000)
+        XCTAssertEqual(saved.first?.activeSnoozeUntilMillis, 1_900_000_300_000)
+        XCTAssertEqual(
+            synchronized.first?.snapshotScheduledAtMillis(nowMillis: 1_900_000_200_000),
+            1_900_000_300_000
+        )
+    }
+
+    func testAlarmKitSnoozeRequiresLiveActivityHostOptIn() {
+        let snoozingPlan = WarmAlarmAlarmKitPlan(
+            schedule: WarmAlarmScheduleData.from(wire: WarmAlarmScheduleWire(
+                id: 42,
+                scheduledAtMillis: 1_900_000_000_000,
+                notification: WarmAlarmNotificationWire(
+                    title: "Wake up",
+                    body: "Alarm",
+                    keepNotificationAfterAlarmEnds: false
+                ),
+                audio: WarmAlarmAudioWire(loop: true, vibrate: true, volumeEnforced: false),
+                snooze: WarmAlarmSnoozeWire(durationMillis: 300_000)
+            ))
+        )
+        let plainPlan = WarmAlarmAlarmKitPlan(
+            schedule: WarmAlarmScheduleData.from(
+                wire: makeWireSchedule(scheduledAtMillis: 1_900_000_000_000)
+            )
+        )
+
+        XCTAssertFalse(WarmAlarmPlugin.canUseAlarmKit(
+            for: snoozingPlan,
+            liveActivityConfigured: false
+        ))
+        XCTAssertTrue(WarmAlarmPlugin.canUseAlarmKit(
+            for: snoozingPlan,
+            liveActivityConfigured: true
+        ))
+        XCTAssertTrue(WarmAlarmPlugin.canUseAlarmKit(
+            for: plainPlan,
+            liveActivityConfigured: false
+        ))
+    }
+
+    func testInitializationSelectsManagedSnoozeAlarmForCleanupWhenHostOptInIsRemoved() {
+        let schedule = WarmAlarmScheduleData.from(wire: WarmAlarmScheduleWire(
+            id: 42,
+            scheduledAtMillis: 1_900_000_000_000,
+            notification: WarmAlarmNotificationWire(
+                title: "Wake up",
+                body: "Alarm",
+                keepNotificationAfterAlarmEnds: false
+            ),
+            audio: WarmAlarmAudioWire(loop: true, vibrate: true, volumeEnforced: false),
+            snooze: WarmAlarmSnoozeWire(durationMillis: 300_000)
+        )).withAlarmKitManaged(true)
+        let alarmKitID = WarmAlarmAlarmKitPlan.id(for: schedule.id)
+        let snapshot = WarmAlarmAlarmKitSnapshot(states: [alarmKitID: .scheduled])
+
+        XCTAssertEqual(
+            WarmAlarmPlugin.incompatibleAlarmKitScheduleIDs(
+                schedules: [schedule],
+                snapshot: snapshot,
+                liveActivityConfigured: false
+            ),
+            [alarmKitID]
+        )
+    }
+
+    func testMissingAlarmKitManagedScheduleIsNoLongerReportedAsScheduled() {
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: 1_900_000_000_000)
+        ).withAlarmKitManaged(true)
+
+        XCTAssertEqual(
+            WarmAlarmPlugin.missingAlarmKitManagedScheduleIDs(
+                schedules: [schedule],
+                snapshot: WarmAlarmAlarmKitSnapshot(states: [:])
+            ),
+            [schedule.id]
+        )
+    }
+
+    func testNativeToNotificationPreflightFailureRemovesStaleManagedRecord() {
+        let previousSchedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(scheduledAtMillis: 1_900_000_000_000)
+        ).withAlarmKitManaged(true)
+        var saved = [WarmAlarmScheduleData]()
+        var removedIDs = [Int64]()
+
+        WarmAlarmPlugin.reconcileFallbackPreflightFailure(
+            alarmId: previousSchedule.id,
+            previousSchedule: previousSchedule,
+            attemptedAlarmKit: false,
+            removedPreviousAlarmKit: true,
+            save: { saved.append($0) },
+            remove: { removedIDs.append($0) }
+        )
+
+        XCTAssertTrue(saved.isEmpty)
+        XCTAssertEqual(removedIDs, [previousSchedule.id])
+    }
+
+    private func makeAlarmKitPlan() -> WarmAlarmAlarmKitPlan {
+        WarmAlarmAlarmKitPlan(
+            schedule: WarmAlarmScheduleData.from(
+                wire: makeWireSchedule(scheduledAtMillis: 1_900_000_000_000)
+            ),
+            calendar: utcCalendar()
+        )
+    }
+
     func testListsEveryFallbackIdentifierForCancellation() {
         XCTAssertEqual(
             WarmAlarmPlugin.fallbackIdentifiers(for: 42),
@@ -3365,6 +4609,58 @@ final class WarmAlarmRequestTests: XCTestCase {
             minute: minute
         ))!
         return Int64(date.timeIntervalSince1970 * 1_000)
+    }
+}
+
+private final class RecordingAlarmKitBackend: WarmAlarmAlarmKitScheduling {
+    private let scheduleError: Error?
+    private let cancelError: Error?
+    private let currentSnapshot: WarmAlarmAlarmKitSnapshot
+    private(set) var scheduledPlans = [WarmAlarmAlarmKitPlan]()
+    private(set) var cancelledIDs = [UUID]()
+    private var snapshotObserver: ((WarmAlarmAlarmKitSnapshot) -> Void)?
+    var onCancel: ((UUID) -> Void)?
+    var onCancelAll: (() -> Void)?
+    var authorizationState: WarmAlarmAlarmKitAuthorization
+
+    init(
+        scheduleError: Error?,
+        cancelError: Error? = nil,
+        authorizationState: WarmAlarmAlarmKitAuthorization = .authorized,
+        snapshot: WarmAlarmAlarmKitSnapshot = WarmAlarmAlarmKitSnapshot(states: [:])
+    ) {
+        self.scheduleError = scheduleError
+        self.cancelError = cancelError
+        self.authorizationState = authorizationState
+        currentSnapshot = snapshot
+    }
+
+    func schedule(_ plan: WarmAlarmAlarmKitPlan, completion: @escaping (Error?) -> Void) {
+        scheduledPlans.append(plan)
+        completion(scheduleError)
+    }
+
+    func cancel(id: UUID, completion: @escaping (Error?) -> Void) {
+        cancelledIDs.append(id)
+        onCancel?(id)
+        completion(cancelError)
+    }
+
+    func cancelAll(completion: @escaping (Error?) -> Void) {
+        onCancelAll?()
+        completion(nil)
+    }
+
+    func snapshot(completion: @escaping (Result<WarmAlarmAlarmKitSnapshot, Error>) -> Void) {
+        completion(.success(currentSnapshot))
+    }
+
+    func observe(_ observer: @escaping (WarmAlarmAlarmKitSnapshot) -> Void) {
+        snapshotObserver = observer
+    }
+
+    func emitSnapshot(_ snapshot: WarmAlarmAlarmKitSnapshot) {
+        snapshotObserver?(snapshot)
     }
 }
 

@@ -452,6 +452,63 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
     // MARK: - Called by WarmAlarmPlugin
 
+    func handleAlarmKitAlert(schedule: WarmAlarmScheduleData) {
+        let ringingSchedule = schedule.clearingActiveSnooze()
+        WarmAlarmStore.shared.save(ringingSchedule)
+        let firedAtMillis = nowMillis()
+        let occurrenceToken = "alarmkit#\(firedAtMillis)"
+        _ = foregroundOccurrenceTracker.handleIfAllowed(
+            alarmId: schedule.id,
+            occurrenceToken: occurrenceToken,
+            perform: {
+                emitEvent(WarmAlarmEventWire(
+                    alarmId: schedule.id,
+                    type: .fired,
+                    occurredAtMillis: firedAtMillis,
+                    payload: ringingSchedule.payload
+                ))
+            }
+        )
+    }
+
+    func handleAlarmKitSnooze(schedule: WarmAlarmScheduleData, fireAtMillis: Int64?) {
+        stopIfPlaying(alarmId: schedule.id)
+        let snoozeDurationMillis = schedule.snoozeDurationMillis ?? (5 * 60 * 1_000)
+        let occurredAtMillis = fireAtMillis.map { $0 - snoozeDurationMillis } ?? nowMillis()
+        if let fireAtMillis {
+            synchronizeAlarmKitSnooze(schedule: schedule, fireAtMillis: fireAtMillis)
+        } else {
+            WarmAlarmStore.shared.save(schedule.withAlarmKitSnoozeObserved())
+        }
+        emitEvent(WarmAlarmEventWire(
+            alarmId: schedule.id,
+            type: .snoozed,
+            occurredAtMillis: occurredAtMillis,
+            snoozeDurationMillis: snoozeDurationMillis,
+            payload: schedule.payload
+        ))
+    }
+
+    func synchronizeAlarmKitSnooze(schedule: WarmAlarmScheduleData, fireAtMillis: Int64) {
+        guard schedule.activeSnoozeUntilMillis != fireAtMillis || !schedule.alarmKitSnoozeObserved else { return }
+        WarmAlarmStore.shared.save(schedule.withActiveSnooze(untilMillis: fireAtMillis))
+    }
+
+    func handleAlarmKitStop(schedule: WarmAlarmScheduleData) {
+        stopIfPlaying(alarmId: schedule.id)
+        if schedule.recurrenceWeekdays?.isEmpty == false {
+            WarmAlarmStore.shared.save(schedule.clearingActiveSnooze())
+        } else {
+            WarmAlarmStore.shared.remove(id: schedule.id)
+        }
+        emitEvent(WarmAlarmEventWire(
+            alarmId: schedule.id,
+            type: .stopped,
+            occurredAtMillis: nowMillis(),
+            payload: schedule.payload
+        ))
+    }
+
     func clearHandledForegroundOccurrence(alarmId: Int64) {
         foregroundOccurrenceTracker.clear(alarmId: alarmId)
     }
@@ -542,7 +599,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     // MARK: - Audio
 
     // Flutter assets live in App.framework (not Runner.app directly) in both debug and release builds.
-    private func flutterAssetURL(for asset: String) -> URL? {
+    func flutterAssetURL(for asset: String) -> URL? {
         let appFramework = Bundle.main.bundleURL
             .appendingPathComponent("Frameworks/App.framework/flutter_assets")
             .appendingPathComponent(asset)
