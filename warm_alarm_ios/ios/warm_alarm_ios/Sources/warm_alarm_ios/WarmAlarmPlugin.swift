@@ -552,50 +552,74 @@ struct WarmAlarmAlarmKitInitializationWork {
 
 struct WarmAlarmAlarmKitObservationUpdate {
     let previous: WarmAlarmAlarmKitSnapshot
-    let suppressedTerminalIDs: Set<UUID>
+    let terminalMutations: [UUID: WarmAlarmAlarmKitMutation]
+
+    var suppressedTerminalIDs: Set<UUID> {
+        Set(terminalMutations.compactMap { $0.value.suppressesTerminalUpdates ? $0.key : nil })
+    }
+}
+
+final class WarmAlarmAlarmKitMutation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var suppressionEnabled = true
+
+    var suppressesTerminalUpdates: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return suppressionEnabled
+    }
+
+    func cancelSuppression() {
+        lock.lock()
+        suppressionEnabled = false
+        lock.unlock()
+    }
 }
 
 final class WarmAlarmAlarmKitObservationState: @unchecked Sendable {
     private let lock = NSLock()
     private var snapshot = WarmAlarmAlarmKitSnapshot(states: [:])
-    private var locallyMutatingIDs = Set<UUID>()
+    private var localMutations = [UUID: WarmAlarmAlarmKitMutation]()
 
     func update(_ next: WarmAlarmAlarmKitSnapshot) -> WarmAlarmAlarmKitObservationUpdate {
         lock.lock()
         defer { lock.unlock() }
         let previous = snapshot
         snapshot = next
-        var suppressedTerminalIDs = Set<UUID>()
-        for id in locallyMutatingIDs {
+        var terminalMutations = [UUID: WarmAlarmAlarmKitMutation]()
+        for (id, mutation) in localMutations {
             let previousState = previous.states[id]
             let currentState = next.states[id]
             if previousState == .alerting || previousState == .countdown || previousState == .paused,
                currentState == nil || currentState == .scheduled {
-                suppressedTerminalIDs.insert(id)
+                terminalMutations[id] = mutation
             }
         }
-        locallyMutatingIDs.subtract(suppressedTerminalIDs)
+        for id in terminalMutations.keys { localMutations.removeValue(forKey: id) }
         return WarmAlarmAlarmKitObservationUpdate(
             previous: previous,
-            suppressedTerminalIDs: suppressedTerminalIDs
+            terminalMutations: terminalMutations
         )
     }
 
-    func beginMutation(ids: some Sequence<UUID>) {
+    @discardableResult
+    func beginMutation(ids: some Sequence<UUID>) -> WarmAlarmAlarmKitMutation {
+        let mutation = WarmAlarmAlarmKitMutation()
         lock.lock()
-        locallyMutatingIDs.formUnion(ids)
+        for id in ids { localMutations[id] = mutation }
         lock.unlock()
+        return mutation
     }
 
     func finishMutation(ids: some Sequence<UUID>) {
         lock.lock()
-        locallyMutatingIDs.subtract(ids)
+        for id in ids { localMutations.removeValue(forKey: id) }
         lock.unlock()
     }
 
     func finishSchedule(id: UUID) {
         lock.lock()
-        locallyMutatingIDs.remove(id)
+        localMutations.removeValue(forKey: id)
         var states = snapshot.states
         states[id] = .scheduled
         var nextTriggerDates = snapshot.nextTriggerDates
@@ -614,6 +638,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
     private let notificationMutationQueue: WarmAlarmMutationQueue
     private let notificationCenter: UNUserNotificationCenter
     private let pendingNotificationReader: PendingNotificationReader
+    private let scheduleSoundPreparer: ((URL) throws -> URL)?
     private let notificationCenterDelegate: WarmAlarmNotificationCenterDelegate
     private let alarmKitBackend: WarmAlarmAlarmKitScheduling?
     private let alarmKitUsageDescription: String?
@@ -654,6 +679,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         notificationCenter: UNUserNotificationCenter,
         notificationCenterDelegate: WarmAlarmNotificationCenterDelegate,
         pendingNotificationReader: PendingNotificationReader? = nil,
+        scheduleSoundPreparer: ((URL) throws -> URL)? = nil,
         alarmKitBackend: WarmAlarmAlarmKitScheduling? = WarmAlarmAlarmKitBackendFactory.make(),
         alarmKitUsageDescription: String? = Bundle.main.object(
             forInfoDictionaryKey: "NSAlarmKitUsageDescription"
@@ -669,6 +695,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
             notificationCenter.getPendingNotificationRequests(completionHandler: completion)
         }
         self.notificationCenterDelegate = notificationCenterDelegate
+        self.scheduleSoundPreparer = scheduleSoundPreparer
         self.alarmKitBackend = alarmKitBackend
         self.alarmKitUsageDescription = alarmKitUsageDescription
         self.alarmKitLiveActivityEnabled = alarmKitLiveActivityEnabled
@@ -708,12 +735,13 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         observationUpdate: WarmAlarmAlarmKitObservationUpdate
     ) {
         let previous = observationUpdate.previous
+        let suppressedTerminalIDs = observationUpdate.suppressedTerminalIDs
         let schedules = WarmAlarmStore.shared.loadAll().values
         for schedule in schedules where schedule.alarmKitManaged {
             let alarmKitID = WarmAlarmAlarmKitPlan.id(for: schedule.id)
             let previousState = previous.states[alarmKitID]
             let currentState = snapshot.states[alarmKitID]
-            if observationUpdate.suppressedTerminalIDs.contains(alarmKitID) {
+            if suppressedTerminalIDs.contains(alarmKitID) {
                 continue
             }
             if previousState == .alerting,
@@ -765,7 +793,8 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         }
     }
 
-    private func beginAlarmKitMutation(ids: some Sequence<UUID>) {
+    @discardableResult
+    private func beginAlarmKitMutation(ids: some Sequence<UUID>) -> WarmAlarmAlarmKitMutation {
         alarmKitObservationState.beginMutation(ids: ids)
     }
 
@@ -2629,9 +2658,9 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
             let selectedAlarmKitBackend = backendChoice == .alarmKit && canUseAlarmKit
                 ? self.alarmKitBackend
                 : nil
-            if previousSchedule?.alarmKitManaged == true, selectedAlarmKitBackend != nil {
-                self.beginAlarmKitMutation(ids: [plan.id])
-            }
+            let preparationMutation = previousSchedule?.alarmKitManaged == true && selectedAlarmKitBackend != nil
+                ? self.beginAlarmKitMutation(ids: [plan.id])
+                : nil
             if selectedAlarmKitBackend != nil, #available(iOS 26.0, *) {
                 do {
                     let source: URL?
@@ -2665,14 +2694,19 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                             }
                             output = source
                         } else {
-                            output = try WarmAlarmSoundFiles.prepare(primary: source, background: nil)
+                            if let prepare = self.scheduleSoundPreparer {
+                                output = try prepare(source)
+                            } else {
+                                output = try WarmAlarmSoundFiles.prepare(primary: source, background: nil)
+                            }
                         }
                         plan.preparedSoundName = output.lastPathComponent
                     }
                 } catch {
+                    // Preparation did not replace the alarm, so queued native actions still apply.
+                    preparationMutation?.cancelSuppression()
                     self.finishAlarmKitMutation(ids: [plan.id])
-                    completion(.failure(error))
-                    finish()
+                    WarmAlarmPlatformReply.complete(.failure(error), completion: completion, finish: finish)
                     return
                 }
             }

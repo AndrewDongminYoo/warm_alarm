@@ -1652,6 +1652,7 @@ final class WarmAlarmRequestTests: XCTestCase {
         replacement.audio.systemSoundFilePath = ""
         let completed = expectation(description: "invalid sound is rejected")
         plugin.scheduleAlarm(schedule: replacement) { result in
+            XCTAssertTrue(Thread.isMainThread, "Sound preparation errors must reply on the platform thread")
             if case .success = result { XCTFail("An explicit empty sound must fail before replacement") }
             completed.fulfill()
         }
@@ -1659,6 +1660,83 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertTrue(backend.scheduledPlans.isEmpty)
         XCTAssertTrue(backend.cancelledIDs.isEmpty)
         XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.scheduledAtMillis, existing.scheduledAtMillis)
+    }
+
+    func testUserStopDuringSoundPreparationPreservesTheCorrectScheduleGeneration() throws {
+        guard #available(iOS 26.0, *) else { throw XCTSkip("AlarmKit requires iOS 26") }
+        let previousRecords = Array(WarmAlarmStore.shared.loadAll().values)
+        let input = try makeSoundLifecycleRecording()
+        defer {
+            try? FileManager.default.removeItem(at: input)
+            WarmAlarmStore.shared.clear()
+            previousRecords.forEach { WarmAlarmStore.shared.save($0) }
+        }
+        let alarmId: Int64 = 4_242_424_277
+        let alarmKitID = WarmAlarmAlarmKitPlan.id(for: alarmId)
+        for preparationFails in [true, false] {
+            WarmAlarmStore.shared.clear()
+            let original = WarmAlarmScheduleData.from(
+                wire: makeWireSchedule(id: alarmId, scheduledAtMillis: 1_900_000_000_000)
+            ).withAlarmKitManaged(true)
+            WarmAlarmStore.shared.save(original)
+            let output = try WarmAlarmSoundFiles.prepare(primary: input, background: nil)
+            defer { WarmAlarmSoundFiles.remove(named: output.lastPathComponent) }
+            let backend = RecordingAlarmKitBackend(scheduleError: nil)
+            let events = RecordingWarmAlarmEventsApi()
+            let queue = WarmAlarmMutationQueue(label: "warm_alarm_tests.preparation_user_stop")
+            let delegate = WarmAlarmDelegate(eventsApi: events, notificationMutationQueue: queue)
+            let preparationError = NSError(domain: "PreparationUserStop", code: 1)
+            var preparationCalls = 0
+            let plugin = WarmAlarmPlugin(
+                delegate: delegate,
+                notificationMutationQueue: queue,
+                notificationCenter: UNUserNotificationCenter.current(),
+                notificationCenterDelegate: WarmAlarmNotificationCenterDelegate(
+                    warmAlarmDelegate: delegate, forwardingDelegate: nil
+                ),
+                scheduleSoundPreparer: { source in
+                    XCTAssertFalse(Thread.isMainThread)
+                    XCTAssertEqual(source, input)
+                    preparationCalls += 1
+                    backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(states: [:]))
+                    if preparationFails { throw preparationError }
+                    return output
+                },
+                alarmKitBackend: backend,
+                alarmKitUsageDescription: "Wake up",
+                alarmKitLiveActivityEnabled: true
+            )
+            backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(states: [alarmKitID: .alerting]))
+            drainMutationQueue(queue)
+            var replacement = makeWireSchedule(id: alarmId, scheduledAtMillis: 1_900_000_600_000)
+            replacement.audio.filePath = input.path
+            let completed = expectation(description: "preparation handles native Stop")
+            plugin.scheduleAlarm(schedule: replacement) { result in
+                XCTAssertTrue(Thread.isMainThread, "Sound preparation must reply on the platform thread")
+                switch result {
+                case .success: XCTAssertFalse(preparationFails)
+                case let .failure(error):
+                    XCTAssertTrue(preparationFails)
+                    XCTAssertEqual((error as NSError).domain, preparationError.domain)
+                }
+                completed.fulfill()
+            }
+            wait(for: [completed], timeout: 10)
+            drainMutationQueue(queue)
+            XCTAssertEqual(preparationCalls, 1)
+            XCTAssertTrue(backend.cancelledIDs.isEmpty)
+            if preparationFails {
+                XCTAssertTrue(backend.scheduledPlans.isEmpty)
+                XCTAssertEqual(events.events.map(\.type), [.fired, .stopped])
+                XCTAssertNil(WarmAlarmStore.shared.load(id: alarmId))
+            } else {
+                XCTAssertEqual(backend.scheduledPlans.count, 1)
+                XCTAssertEqual(events.events.map(\.type), [.fired, .scheduled])
+                XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.scheduledAtMillis, replacement.scheduledAtMillis)
+                XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.alarmKitManaged, true)
+            }
+            withExtendedLifetime(plugin) {}
+        }
     }
 
     func testPreparedSoundIsReleasedWhenPluginFallsBackToNotifications() throws {
