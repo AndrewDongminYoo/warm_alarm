@@ -39,6 +39,38 @@ void main() {
       warmAlarm = WarmAlarmIOS(api: api);
     });
 
+    test('prepareSystemSound forwards both sources and returns the prepared path', () async {
+      when(() => api.prepareSystemSound('/recording.m4a', 'assets/tone.mp3')).thenAnswer(
+        (_) async => '/Library/Sounds/prepared.caf',
+      );
+
+      expect(
+        await warmAlarm.prepareSystemSound(
+          primaryFilePath: '/recording.m4a',
+          backgroundAssetPath: 'assets/tone.mp3',
+        ),
+        '/Library/Sounds/prepared.caf',
+      );
+      verify(() => api.prepareSystemSound('/recording.m4a', 'assets/tone.mp3')).called(1);
+    });
+
+    test('prepareSystemSound preserves an unsupported result without a background', () async {
+      when(() => api.prepareSystemSound('/recording.m4a', null)).thenAnswer((_) async => null);
+
+      expect(await warmAlarm.prepareSystemSound(primaryFilePath: '/recording.m4a'), isNull);
+      verify(() => api.prepareSystemSound('/recording.m4a', null)).called(1);
+    });
+
+    test('prepareSystemSound propagates native preparation failures', () async {
+      final failure = StateError('Audio preparation failed.');
+      when(() => api.prepareSystemSound('/missing.m4a', null)).thenAnswer((_) async => throw failure);
+
+      await expectLater(
+        warmAlarm.prepareSystemSound(primaryFilePath: '/missing.m4a'),
+        throwsA(same(failure)),
+      );
+    });
+
     test('remediation maps every wire status and readiness reason', () async {
       const statuses = <WarmAlarmRemediationStatusWire, WarmAlarmRemediationStatus>{
         WarmAlarmRemediationStatusWire.completed: WarmAlarmRemediationStatus.completed,
