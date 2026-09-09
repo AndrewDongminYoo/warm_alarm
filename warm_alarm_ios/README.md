@@ -61,6 +61,10 @@ After the extension is ready, enable Live Activities and the plugin opt-in in th
 
 Without the extension and this opt-in, schedules with Snooze use the User Notifications fallback and return a warning.
 
+The AlarmKit Pause and Resume buttons use the `Pause` and `Resume` localization keys in the host app's `Localizable` table.
+Add translations for those keys to the host app's strings catalog or localized `Localizable.strings` files.
+The English keys remain the fallback labels.
+
 ### Schedule mapping
 
 | `WarmAlarmSchedule` value                  | AlarmKit mapping                                                                     |
@@ -105,8 +109,10 @@ It writes a unique PCM CAF under `Library/Sounds` with protection that permits a
 Pass the returned path as `WarmAlarmAudio.systemSoundFilePath` and retain the normal audio inputs for User Notifications fallback.
 Unsupported hosts return null.
 Preparation errors fail the request instead of substituting a default sound.
-Preparation runs on the existing serial mutation queue, away from the platform thread, and replies on the platform thread.
+The preparation API runs on a dedicated serial queue so it does not delay alarm mutations, and replies on the platform thread.
+Legacy sound conversion during scheduling remains part of the serial schedule transaction.
 Prepared sounds are staging files and should be scheduled promptly.
+A failed fallback preserves caller-provided sound files for retry and removes only unused internal conversions.
 Initialization removes unreferenced owned files last modified more than 24 hours ago after native state is reconciled or before the first AlarmKit authorization request.
 Recent staging files and sounds referenced by stored alarms are retained.
 
