@@ -621,7 +621,7 @@ final class WarmAlarmSnoozeRegistrationTests: XCTestCase {
 }
 
 final class WarmAlarmRequestTests: XCTestCase {
-    func testSoundPreparationWaitsForTheBackgroundMutationQueueAndRepliesOnMain() throws {
+    func testSoundPreparationDoesNotWaitForNotificationMutationsAndRepliesOnMain() throws {
         guard #available(iOS 26.0, *) else { throw XCTSkip("AlarmKit requires iOS 26") }
         let input = try makeSoundLifecycleRecording()
         defer { try? FileManager.default.removeItem(at: input) }
@@ -655,9 +655,12 @@ final class WarmAlarmRequestTests: XCTestCase {
             completed.fulfill()
         }
 
-        XCTAssertFalse(didComplete)
+        let waitResult = XCTWaiter.wait(for: [completed], timeout: 2)
+        let completedBeforeRelease = didComplete
         release?()
-        wait(for: [completed], timeout: 10)
+        drainMutationQueue(queue)
+        XCTAssertEqual(waitResult, .completed)
+        XCTAssertTrue(completedBeforeRelease)
         XCTAssertTrue(FileManager.default.fileExists(atPath: expired.path))
     }
 
@@ -1222,6 +1225,61 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.alarmKitSnoozeObserved, true)
     }
 
+    func testAlarmKitCountdownWithoutFireDateEmitsOnceThenSynchronizesDeadline() {
+        let alarmId = Int64(4_242_424_280)
+        let fireAtMillis = Int64(1_900_000_300_000)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(id: alarmId, scheduledAtMillis: 1_900_000_000_000)
+        ).withAlarmKitManaged(true)
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(schedule)
+
+        let eventsApi = RecordingWarmAlarmEventsApi()
+        let mutationQueue = WarmAlarmMutationQueue(label: "warm_alarm_tests.alarmkit_initial_countdown")
+        let delegate = WarmAlarmDelegate(eventsApi: eventsApi, notificationMutationQueue: mutationQueue)
+        let notificationCenter = UNUserNotificationCenter.current()
+        let notificationCenterDelegate = WarmAlarmNotificationCenterDelegate(
+            warmAlarmDelegate: delegate,
+            forwardingDelegate: nil
+        )
+        let backend = RecordingAlarmKitBackend(scheduleError: nil)
+        let plugin = WarmAlarmPlugin(
+            delegate: delegate,
+            notificationMutationQueue: mutationQueue,
+            notificationCenter: notificationCenter,
+            notificationCenterDelegate: notificationCenterDelegate,
+            alarmKitBackend: backend,
+            alarmKitUsageDescription: "Wake up",
+            alarmKitLiveActivityEnabled: true
+        )
+        defer {
+            WarmAlarmStore.shared.remove(id: alarmId)
+            withExtendedLifetime(plugin) {}
+        }
+        let alarmKitID = WarmAlarmAlarmKitPlan.id(for: alarmId)
+
+        backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(states: [alarmKitID: .scheduled]))
+        backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(states: [alarmKitID: .countdown]))
+        drainMutationQueue(mutationQueue)
+        XCTAssertEqual(eventsApi.events.map(\.type), [.snoozed])
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.alarmKitSnoozeObserved, true)
+        XCTAssertNil(WarmAlarmStore.shared.load(id: alarmId)?.activeSnoozeUntilMillis)
+
+        backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(states: [alarmKitID: .countdown]))
+        drainMutationQueue(mutationQueue)
+        XCTAssertEqual(eventsApi.events.map(\.type), [.snoozed])
+
+        backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(
+            states: [alarmKitID: .countdown],
+            nextTriggerDates: [alarmKitID: Date(timeIntervalSince1970: Double(fireAtMillis) / 1_000)]
+        ))
+
+        drainMutationQueue(mutationQueue)
+        XCTAssertEqual(eventsApi.events.map(\.type), [.snoozed])
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.activeSnoozeUntilMillis, fireAtMillis)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.alarmKitSnoozeObserved, true)
+    }
+
     func testAlarmKitInitializationEmitsSnoozedOnceForCountdownSnapshot() {
         let alarmId = Int64(4_242_424_259)
         let fireAtMillis = Int64(Date().addingTimeInterval(300).timeIntervalSince1970 * 1_000)
@@ -1425,6 +1483,61 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertEqual(eventsApi.events.map(\.type), [.stopped])
         XCTAssertEqual(eventsApi.events.map(\.alarmId), [alarmId])
         XCTAssertNil(WarmAlarmStore.shared.load(id: alarmId))
+    }
+
+    func testAlarmKitQueryEmitsStoppedOnceForMissingExpiredOneShot() {
+        let alarmId = Int64(4_242_424_281)
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(
+                id: alarmId,
+                scheduledAtMillis: Int64(Date().addingTimeInterval(-60).timeIntervalSince1970 * 1_000)
+            )
+        ).withAlarmKitManaged(true)
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(schedule)
+
+        let eventsApi = RecordingWarmAlarmEventsApi()
+        let mutationQueue = WarmAlarmMutationQueue(label: "warm_alarm_tests.alarmkit_expired_stop")
+        let delegate = WarmAlarmDelegate(eventsApi: eventsApi, notificationMutationQueue: mutationQueue)
+        let notificationCenter = UNUserNotificationCenter.current()
+        let notificationCenterDelegate = WarmAlarmNotificationCenterDelegate(
+            warmAlarmDelegate: delegate,
+            forwardingDelegate: nil
+        )
+        let backend = RecordingAlarmKitBackend(scheduleError: nil)
+        let plugin = WarmAlarmPlugin(
+            delegate: delegate,
+            notificationMutationQueue: mutationQueue,
+            notificationCenter: notificationCenter,
+            notificationCenterDelegate: notificationCenterDelegate,
+            alarmKitBackend: backend,
+            alarmKitUsageDescription: "Wake up",
+            alarmKitLiveActivityEnabled: true
+        )
+        defer {
+            WarmAlarmStore.shared.remove(id: alarmId)
+            withExtendedLifetime(plugin) {}
+        }
+        let completed = expectation(description: "query completes")
+
+        plugin.getScheduledAlarms { result in
+            if case let .failure(error) = result {
+                XCTFail("Query failed: \(error)")
+            }
+            completed.fulfill()
+        }
+
+        wait(for: [completed], timeout: 2)
+        XCTAssertEqual(eventsApi.events.map(\.type), [.stopped])
+        XCTAssertEqual(eventsApi.events.map(\.alarmId), [alarmId])
+        XCTAssertNil(WarmAlarmStore.shared.load(id: alarmId))
+        let repeated = expectation(description: "repeated query completes")
+        plugin.getScheduledAlarms { result in
+            if case let .failure(error) = result { XCTFail("Query failed: \(error)") }
+            repeated.fulfill()
+        }
+        wait(for: [repeated], timeout: 2)
+        XCTAssertEqual(eventsApi.events.map(\.type), [.stopped])
     }
 
     func testCancelAlarmDoesNotEchoNativeRemovalAsStoppedEvent() {
@@ -1952,6 +2065,42 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertFalse(WarmAlarmAlarmKitPlan.owns(UUID(uuidString: "00000000-0000-0000-0000-00000000002A")!))
     }
 
+    func testInvalidNativeWeekdaysDoNotReplaceAnExistingAlarm() {
+        let previousRecords = Array(WarmAlarmStore.shared.loadAll().values)
+        WarmAlarmStore.shared.clear()
+        defer {
+            WarmAlarmStore.shared.clear()
+            previousRecords.forEach { WarmAlarmStore.shared.save($0) }
+        }
+        let alarmId: Int64 = 4_242_424_279
+        let original = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(id: alarmId, scheduledAtMillis: 1_900_000_000_000, recurrenceWeekdays: [1, 3])
+        ).withAlarmKitManaged(true)
+        let invalidWeekdays: [[Int64]] = [[], [0], [8], [1, 8]]
+        for weekdays in invalidWeekdays {
+            WarmAlarmStore.shared.save(original)
+            let backend = RecordingAlarmKitBackend(scheduleError: nil)
+            let plugin = makeSoundLifecyclePlugin(backend: backend)
+            let completed = expectation(description: "invalid native recurrence is rejected")
+            plugin.scheduleAlarm(schedule: makeWireSchedule(
+                id: alarmId, scheduledAtMillis: 1_900_000_600_000, recurrenceWeekdays: weekdays
+            )) { result in
+                XCTAssertTrue(Thread.isMainThread)
+                switch result {
+                case .success: XCTFail("Invalid recurrence must not become a successful native schedule")
+                case let .failure(error): XCTAssertEqual((error as? PigeonError)?.code, "invalid-recurrence")
+                }
+                completed.fulfill()
+            }
+            wait(for: [completed], timeout: 10)
+            XCTAssertTrue(backend.scheduledPlans.isEmpty)
+            XCTAssertTrue(backend.cancelledIDs.isEmpty)
+            XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.scheduledAtMillis, original.scheduledAtMillis)
+            XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.recurrenceWeekdays, [1, 3])
+            withExtendedLifetime(plugin) {}
+        }
+    }
+
     func testAlarmKitPlanMapsIsoWeekdaysToLocalWeeklySchedule() {
         let calendar = utcCalendar()
         let fireAtMillis = millis(2026, 1, 5, 7, 30, calendar: calendar)
@@ -2194,6 +2343,102 @@ final class WarmAlarmRequestTests: XCTestCase {
             ),
             [schedule.id]
         )
+    }
+
+    func testFallbackCapacityFailurePreservesCallerSoundAndCleansInternalConversion() throws {
+        guard #available(iOS 26.0, *) else { throw XCTSkip("AlarmKit requires iOS 26") }
+        let previous = Array(WarmAlarmStore.shared.loadAll().values)
+        let input = try makeSoundLifecycleRecording()
+        defer {
+            try? FileManager.default.removeItem(at: input)
+            WarmAlarmStore.shared.clear()
+            previous.forEach { WarmAlarmStore.shared.save($0) }
+        }
+        let pending = (0..<64).map { index in
+            UNNotificationRequest(identifier: "unrelated-\(index)", content: UNMutableNotificationContent(), trigger: nil)
+        }
+        for inputKind in ["explicit", "legacyExternal", "legacyOwned"] {
+            WarmAlarmStore.shared.clear()
+            let staged = try WarmAlarmSoundFiles.prepare(primary: input, background: nil)
+            defer { WarmAlarmSoundFiles.remove(named: staged.lastPathComponent) }
+            let backend = RecordingAlarmKitBackend(scheduleError: NSError(domain: "NativeScheduleFailure", code: 1))
+            let queue = WarmAlarmMutationQueue(label: "warm_alarm_tests.fallback_sound_failure")
+            let delegate = WarmAlarmDelegate(eventsApi: RecordingWarmAlarmEventsApi(), notificationMutationQueue: queue)
+            var inventoryReads = 0
+            let plugin = WarmAlarmPlugin(
+                delegate: delegate,
+                notificationMutationQueue: queue,
+                notificationCenter: UNUserNotificationCenter.current(),
+                notificationCenterDelegate: WarmAlarmNotificationCenterDelegate(
+                    warmAlarmDelegate: delegate, forwardingDelegate: nil
+                ),
+                pendingNotificationReader: { completion in
+                    inventoryReads += 1
+                    completion(pending)
+                },
+                alarmKitBackend: backend,
+                alarmKitUsageDescription: "Wake up",
+                alarmKitLiveActivityEnabled: true
+            )
+            var wire = makeWireSchedule(id: 4_242_424_282, scheduledAtMillis: 1_900_000_000_000)
+            wire.audio.filePath = inputKind == "legacyOwned" ? staged.path : input.path
+            wire.audio.systemSoundFilePath = inputKind == "explicit" ? staged.path : nil
+            for attempt in 1...2 {
+                let completed = expectation(description: "failed fallback keeps caller input for retry")
+                plugin.scheduleAlarm(schedule: wire) { result in
+                    switch result {
+                    case .success: XCTFail("Full notification capacity must reject fallback")
+                    case let .failure(error):
+                        XCTAssertEqual((error as? PigeonError)?.code, "pending-notification-limit")
+                    }
+                    completed.fulfill()
+                }
+                wait(for: [completed], timeout: 10)
+                XCTAssertEqual(inventoryReads, attempt)
+                XCTAssertEqual(backend.scheduledPlans.count, attempt)
+                XCTAssertTrue(FileManager.default.fileExists(atPath: input.path))
+                XCTAssertTrue(FileManager.default.fileExists(atPath: staged.path))
+                if inputKind == "legacyExternal", let generated = backend.scheduledPlans.last?.preparedSoundName {
+                    XCTAssertNotEqual(generated, staged.lastPathComponent)
+                    let generatedURL = try XCTUnwrap(WarmAlarmSoundFiles.ownedURL(named: generated))
+                    XCTAssertFalse(FileManager.default.fileExists(atPath: generatedURL.path))
+                }
+                XCTAssertNil(WarmAlarmStore.shared.load(id: wire.id))
+            }
+            withExtendedLifetime(plugin) {}
+        }
+    }
+
+    func testAlarmKitQueryRemovesMissingRecurrenceAndKeepsNativeScheduledRecurrence() {
+        let previous = Array(WarmAlarmStore.shared.loadAll().values)
+        defer {
+            WarmAlarmStore.shared.clear()
+            previous.forEach { WarmAlarmStore.shared.save($0) }
+        }
+        for nativeScheduleExists in [false, true] {
+            WarmAlarmStore.shared.clear()
+            var wire = makeWireSchedule(id: 4_242_424_283, scheduledAtMillis: 1_900_000_000_000)
+            wire.recurrence = WarmAlarmRecurrenceWire(weekdays: [1, 3])
+            WarmAlarmStore.shared.save(WarmAlarmScheduleData.from(wire: wire).withAlarmKitManaged(true))
+            let alarmKitID = WarmAlarmAlarmKitPlan.id(for: wire.id)
+            let backend = RecordingAlarmKitBackend(
+                scheduleError: nil,
+                snapshot: WarmAlarmAlarmKitSnapshot(states: nativeScheduleExists ? [alarmKitID: .scheduled] : [:])
+            )
+            let plugin = makeSoundLifecyclePlugin(backend: backend)
+            let completed = expectation(description: "query distinguishes missing and scheduled recurrence")
+            plugin.getScheduledAlarms { result in
+                switch result {
+                case let .success(schedules):
+                    XCTAssertEqual(schedules.map(\.id), nativeScheduleExists ? [wire.id] : [])
+                case let .failure(error): XCTFail("Query failed: \(error)")
+                }
+                completed.fulfill()
+            }
+            wait(for: [completed], timeout: 10)
+            XCTAssertEqual(WarmAlarmStore.shared.load(id: wire.id) != nil, nativeScheduleExists)
+            withExtendedLifetime(plugin) {}
+        }
     }
 
     func testFallbackCapacityFailurePreservesExistingNativeAlarmBeforeCancellation() {

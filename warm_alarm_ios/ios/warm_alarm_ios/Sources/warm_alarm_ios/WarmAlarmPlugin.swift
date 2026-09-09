@@ -636,6 +636,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
     typealias PendingNotificationReader = (@escaping ([UNNotificationRequest]) -> Void) -> Void
     private let delegate: WarmAlarmDelegate
     private let notificationMutationQueue: WarmAlarmMutationQueue
+    private let soundPreparationQueue = WarmAlarmMutationQueue(label: "warm_alarm.sound_preparation")
     private let notificationCenter: UNUserNotificationCenter
     private let pendingNotificationReader: PendingNotificationReader
     private let scheduleSoundPreparer: ((URL) throws -> URL)?
@@ -752,15 +753,17 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                         Int64($0.timeIntervalSince1970 * 1_000)
                     }
                 )
-            } else if currentState == .countdown,
-                      let fireAtMillis = snapshot.nextTriggerDates[alarmKitID].map({
-                          Int64($0.timeIntervalSince1970 * 1_000)
-                      }) {
+            } else if currentState == .countdown {
+                let fireAtMillis = snapshot.nextTriggerDates[alarmKitID].map {
+                    Int64($0.timeIntervalSince1970 * 1_000)
+                }
                 if schedule.alarmKitSnoozeObserved {
-                    delegate.synchronizeAlarmKitSnooze(
-                        schedule: schedule,
-                        fireAtMillis: fireAtMillis
-                    )
+                    if let fireAtMillis {
+                        delegate.synchronizeAlarmKitSnooze(
+                            schedule: schedule,
+                            fireAtMillis: fireAtMillis
+                        )
+                    }
                 } else {
                     delegate.handleAlarmKitSnooze(
                         schedule: schedule,
@@ -2583,7 +2586,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                 }
                 return url
             }
-            notificationMutationQueue.enqueue { finish in
+            soundPreparationQueue.enqueue { finish in
                 do {
                     let output = try WarmAlarmSoundFiles.prepare(
                         primary: URL(fileURLWithPath: primaryFilePath), background: background
@@ -2619,6 +2622,19 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         notificationMutationQueue.enqueue { [weak self] finish in
             guard let self else {
                 finish()
+                return
+            }
+            if let weekdays = schedule.recurrence?.weekdays,
+               weekdays.isEmpty || !weekdays.allSatisfy({ (1...7).contains($0) }) {
+                WarmAlarmPlatformReply.complete(
+                    .failure(PigeonError(
+                        code: "invalid-recurrence",
+                        message: "Recurrence weekdays must contain ISO values from 1 to 7.",
+                        details: nil
+                    )),
+                    completion: completion,
+                    finish: finish
+                )
                 return
             }
             let nowMillis = Int64(Date().timeIntervalSince1970 * 1000)
@@ -2744,12 +2760,30 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                                 }
                             }
                         ) { result in
-                            WarmAlarmStore.shared.removeSoundIfUnreferenced(plan.preparedSoundName)
-                            if let input = storedSchedule.systemSoundFilePath,
-                               URL(fileURLWithPath: input).standardizedFileURL == WarmAlarmSoundFiles.ownedURL(
-                                   named: URL(fileURLWithPath: input).lastPathComponent
-                               ) {
-                                WarmAlarmStore.shared.removeSoundIfUnreferenced(URL(fileURLWithPath: input).lastPathComponent)
+                            let didSchedule: Bool
+                            if case let .success(outcome) = result {
+                                didSchedule = outcome.didSchedule
+                            } else {
+                                didSchedule = false
+                            }
+                            let retainedInputs = didSchedule
+                                ? [storedSchedule.filePath]
+                                : [storedSchedule.filePath, storedSchedule.systemSoundFilePath]
+                            let retainedNames = Set(retainedInputs.compactMap { input -> String? in
+                                guard let input else { return nil }
+                                let url = URL(fileURLWithPath: input).standardizedFileURL
+                                return url == WarmAlarmSoundFiles.ownedURL(named: url.lastPathComponent)
+                                    ? url.lastPathComponent : nil
+                            })
+                            if let preparedName = plan.preparedSoundName, !retainedNames.contains(preparedName) {
+                                WarmAlarmStore.shared.removeSoundIfUnreferenced(preparedName)
+                            }
+                            if didSchedule, let input = storedSchedule.systemSoundFilePath {
+                                let url = URL(fileURLWithPath: input).standardizedFileURL
+                                if url == WarmAlarmSoundFiles.ownedURL(named: url.lastPathComponent),
+                                   !retainedNames.contains(url.lastPathComponent) {
+                                    WarmAlarmStore.shared.removeSoundIfUnreferenced(url.lastPathComponent)
+                                }
                             }
                             switch result {
                             case let .success(outcome):
@@ -2955,10 +2989,18 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                     let managedSchedules = WarmAlarmStore.shared.loadAll().values.filter {
                         $0.alarmKitManaged
                     }
-                    Self.missingAlarmKitManagedScheduleIDs(
+                    let missingIDs = Set(Self.missingAlarmKitManagedScheduleIDs(
                         schedules: Array(managedSchedules),
                         snapshot: snapshot
-                    ).forEach { WarmAlarmStore.shared.remove(id: $0) }
+                    ))
+                    for schedule in managedSchedules where missingIDs.contains(schedule.id) {
+                        if schedule.recurrenceWeekdays?.isEmpty != false,
+                           !Self.shouldRecover(schedule: schedule, nowMillis: nowMillis) {
+                            self.delegate.handleAlarmKitStop(schedule: schedule)
+                        } else {
+                            WarmAlarmStore.shared.remove(id: schedule.id)
+                        }
+                    }
                     _ = Self.synchronizeAlarmKitCountdowns(
                         schedules: managedSchedules.filter {
                             snapshot.scheduledAlarmIDs.contains(WarmAlarmAlarmKitPlan.id(for: $0.id))
