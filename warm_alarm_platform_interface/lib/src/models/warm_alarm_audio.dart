@@ -4,6 +4,7 @@ final class WarmAlarmAudio {
   const WarmAlarmAudio({
     this.filePath,
     this.assetPath,
+    this.systemSoundFilePath,
     this.loop = true,
     this.volume,
     this.fadeInDuration,
@@ -14,6 +15,10 @@ final class WarmAlarmAudio {
 
   final String? filePath;
   final String? assetPath;
+
+  /// Complete sound for iOS AlarmKit, prepared before scheduling.
+  /// Other backends keep using [filePath] and [assetPath].
+  final String? systemSoundFilePath;
   final bool loop;
   final double? volume;
   final Duration? fadeInDuration;

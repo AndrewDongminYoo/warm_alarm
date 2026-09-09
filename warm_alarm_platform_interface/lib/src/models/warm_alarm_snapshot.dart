@@ -14,6 +14,7 @@ final class WarmAlarmSnapshot {
     this.wakeCheck,
     this.payload,
     this.androidFullScreenIntent = true,
+    this.systemManagedAudio = false,
   });
 
   final int id;
@@ -27,4 +28,8 @@ final class WarmAlarmSnapshot {
 
   /// Android only — whether full-screen intent was used for this alarm.
   final bool androidFullScreenIntent;
+
+  /// Whether the system owns playback of the complete requested system sound.
+  /// This describes the registered backend, not the requested configuration.
+  final bool systemManagedAudio;
 }
