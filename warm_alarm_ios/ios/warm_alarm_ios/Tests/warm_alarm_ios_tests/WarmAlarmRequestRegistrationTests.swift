@@ -2082,6 +2082,130 @@ final class WarmAlarmRequestTests: XCTestCase {
         )
     }
 
+    func testFallbackCapacityFailurePreservesExistingNativeAlarmBeforeCancellation() {
+        let previousRecords = Array(WarmAlarmStore.shared.loadAll().values)
+        defer {
+            WarmAlarmStore.shared.clear()
+            previousRecords.forEach { WarmAlarmStore.shared.save($0) }
+        }
+        let alarmId: Int64 = 4_242_424_275
+        let previous = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(id: alarmId, scheduledAtMillis: 1_900_000_000_000)
+        ).withAlarmKitManaged(true)
+        var replacement = makeWireSchedule(id: alarmId, scheduledAtMillis: 1_900_000_100_000)
+        replacement.snooze = WarmAlarmSnoozeWire(durationMillis: 60_000)
+        let pending = (0..<64).map { index in
+            UNNotificationRequest(identifier: "unrelated-\(index)", content: UNMutableNotificationContent(), trigger: nil)
+        }
+        for capacityIsFull in [true, false] {
+            WarmAlarmStore.shared.clear()
+            WarmAlarmStore.shared.save(previous)
+            let cancellationError = NSError(domain: "FallbackCancellation", code: 1)
+            let backend = RecordingAlarmKitBackend(
+                scheduleError: nil, cancelError: capacityIsFull ? nil : cancellationError
+            )
+            let events = RecordingWarmAlarmEventsApi()
+            let queue = WarmAlarmMutationQueue(label: "warm_alarm_tests.fallback_preflight")
+            let delegate = WarmAlarmDelegate(eventsApi: events, notificationMutationQueue: queue)
+            var inventoryReads = 0
+            let plugin = WarmAlarmPlugin(
+                delegate: delegate,
+                notificationMutationQueue: queue,
+                notificationCenter: UNUserNotificationCenter.current(),
+                notificationCenterDelegate: WarmAlarmNotificationCenterDelegate(
+                    warmAlarmDelegate: delegate, forwardingDelegate: nil
+                ),
+                pendingNotificationReader: { completion in
+                    inventoryReads += 1
+                    XCTAssertTrue(backend.cancelledIDs.isEmpty)
+                    completion(capacityIsFull ? pending : [])
+                },
+                alarmKitBackend: backend,
+                alarmKitUsageDescription: "Wake up",
+                alarmKitLiveActivityEnabled: false
+            )
+            let completed = expectation(description: "fallback preflight preserves the working native alarm")
+
+            plugin.scheduleAlarm(schedule: replacement) { result in
+                switch result {
+                case .success: XCTFail("Capacity or cancellation failure must reject replacement")
+                case let .failure(error):
+                    if capacityIsFull {
+                        XCTAssertEqual((error as? PigeonError)?.code, "pending-notification-limit")
+                    } else {
+                        XCTAssertEqual((error as NSError).domain, cancellationError.domain)
+                    }
+                }
+                completed.fulfill()
+            }
+
+            wait(for: [completed], timeout: 10)
+            XCTAssertEqual(inventoryReads, 1)
+            XCTAssertEqual(backend.cancelledIDs, capacityIsFull ? [] : [WarmAlarmAlarmKitPlan.id(for: alarmId)])
+            XCTAssertTrue(backend.scheduledPlans.isEmpty)
+            XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.alarmKitManaged, true)
+            XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.scheduledAtMillis, previous.scheduledAtMillis)
+            withExtendedLifetime(plugin) {}
+        }
+    }
+
+    func testFallbackPreflightDoesNotSuppressUserStopWhileInventoryIsPending() {
+        let previousRecords = Array(WarmAlarmStore.shared.loadAll().values)
+        WarmAlarmStore.shared.clear()
+        defer {
+            WarmAlarmStore.shared.clear()
+            previousRecords.forEach { WarmAlarmStore.shared.save($0) }
+        }
+        let alarmId: Int64 = 4_242_424_276
+        let schedule = WarmAlarmScheduleData.from(
+            wire: makeWireSchedule(id: alarmId, scheduledAtMillis: 1_900_000_000_000)
+        ).withAlarmKitManaged(true)
+        WarmAlarmStore.shared.save(schedule)
+        let backend = RecordingAlarmKitBackend(scheduleError: nil)
+        let events = RecordingWarmAlarmEventsApi()
+        let queue = WarmAlarmMutationQueue(label: "warm_alarm_tests.preflight_user_stop")
+        let delegate = WarmAlarmDelegate(eventsApi: events, notificationMutationQueue: queue)
+        let inventoryRequested = expectation(description: "fallback waits for notification inventory")
+        var finishInventory: (([UNNotificationRequest]) -> Void)?
+        let plugin = WarmAlarmPlugin(
+            delegate: delegate,
+            notificationMutationQueue: queue,
+            notificationCenter: UNUserNotificationCenter.current(),
+            notificationCenterDelegate: WarmAlarmNotificationCenterDelegate(
+                warmAlarmDelegate: delegate, forwardingDelegate: nil
+            ),
+            pendingNotificationReader: { completion in
+                finishInventory = completion
+                inventoryRequested.fulfill()
+            },
+            alarmKitBackend: backend,
+            alarmKitUsageDescription: "Wake up",
+            alarmKitLiveActivityEnabled: false
+        )
+        backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(states: [WarmAlarmAlarmKitPlan.id(for: alarmId): .alerting]))
+        drainMutationQueue(queue)
+        var replacement = makeWireSchedule(id: alarmId, scheduledAtMillis: 1_900_000_100_000)
+        replacement.snooze = WarmAlarmSnoozeWire(durationMillis: 60_000)
+        let completed = expectation(description: "full inventory rejects replacement")
+        plugin.scheduleAlarm(schedule: replacement) { result in
+            if case .success = result { XCTFail("Full inventory must reject replacement") }
+            completed.fulfill()
+        }
+        wait(for: [inventoryRequested], timeout: 10)
+
+        backend.emitSnapshot(WarmAlarmAlarmKitSnapshot(states: [:]))
+        finishInventory?((0..<64).map {
+            UNNotificationRequest(identifier: "unrelated-\($0)", content: UNMutableNotificationContent(), trigger: nil)
+        })
+
+        wait(for: [completed], timeout: 10)
+        drainMutationQueue(queue)
+        XCTAssertTrue(backend.cancelledIDs.isEmpty)
+        XCTAssertEqual(events.events.map(\.type), [.fired, .failed, .stopped])
+        XCTAssertNil(WarmAlarmStore.shared.load(id: alarmId))
+        withExtendedLifetime(plugin) {}
+    }
+
     func testNativeToNotificationPreflightFailureRemovesStaleManagedRecord() {
         let previousSchedule = WarmAlarmScheduleData.from(
             wire: makeWireSchedule(scheduledAtMillis: 1_900_000_000_000)
