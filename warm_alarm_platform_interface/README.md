@@ -21,6 +21,11 @@ platform implementation.
 
 **Contract methods:**
 
+`prepareSystemSound(primaryFilePath: ..., backgroundAssetPath: ...)` returns a complete system sound path on supported implementations, or null on existing backends.
+Pass that path through `WarmAlarmAudio.systemSoundFilePath` while retaining the normal `filePath` and `assetPath` for fallback.
+Only `WarmAlarmSnapshot.systemManagedAudio` identifies actual system playback ownership; its default is false.
+Apps must wait for the snapshot before starting a second player.
+
 | Method                            | Returns                      | Description                                                 |
 | --------------------------------- | ---------------------------- | ----------------------------------------------------------- |
 | `init()`                          | `Future<void>`               | Rehydrate native alarm state after a process restart        |

@@ -67,6 +67,15 @@ abstract class WarmAlarmPlatform extends PlatformInterface {
 
   Future<WarmAlarmScheduleResult> scheduleAlarm(WarmAlarmSchedule schedule);
 
+  /// Prepares a complete iOS AlarmKit sound from a recording and optional tone.
+  /// The tone repeats to the recording length, with both sources at half gain.
+  /// Pass the returned path to [WarmAlarmAudio.systemSoundFilePath].
+  /// Unsupported backends return null and keep their existing audio behavior.
+  Future<String?> prepareSystemSound({
+    required String primaryFilePath,
+    String? backgroundAssetPath,
+  }) async => null;
+
   Future<void> cancelAlarm(int id);
 
   Future<void> cancelAllAlarms();

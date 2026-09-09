@@ -75,6 +75,32 @@ class WarmAlarmMock extends WarmAlarmPlatform {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('platforms without system sound preparation keep the legacy path', () async {
+    expect(await WarmAlarmMock().prepareSystemSound(primaryFilePath: '/voice.aac'), isNull);
+  });
+
+  test('system audio override leaves legacy inputs unchanged', () {
+    const audio = WarmAlarmAudio(
+      filePath: '/voice.aac',
+      assetPath: 'assets/tone.mp3',
+      systemSoundFilePath: '/mixed.caf',
+    );
+    expect(audio.filePath, '/voice.aac');
+    expect(audio.assetPath, 'assets/tone.mp3');
+    expect(audio.systemSoundFilePath, '/mixed.caf');
+    expect(const WarmAlarmAudio().systemSoundFilePath, isNull);
+  });
+
+  test('legacy snapshots do not claim system audio ownership', () {
+    final snapshot = WarmAlarmSnapshot(
+      id: 1,
+      scheduledAt: DateTime(2026),
+      notification: const WarmAlarmNotification(title: 'Alarm', body: ''),
+      audio: const WarmAlarmAudio(),
+    );
+    expect(snapshot.systemManagedAudio, isFalse);
+  });
+
   group('WarmAlarmWakeCheck', () {
     test('constructs with required checkDelay and defaults', () {
       const check = WarmAlarmWakeCheck(checkDelay: Duration(minutes: 5));
