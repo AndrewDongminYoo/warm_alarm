@@ -745,6 +745,42 @@ final class WarmAlarmRequestTests: XCTestCase {
         withExtendedLifetime(plugin) {}
     }
 
+    func testDeniedInitializationPreservesOldSoundWhenTheStoreHasLostANativeAlarm() throws {
+        guard #available(iOS 26.0, *) else { throw XCTSkip("AlarmKit requires iOS 26") }
+        let previousRecords = Array(WarmAlarmStore.shared.loadAll().values)
+        WarmAlarmStore.shared.clear()
+        let input = try makeSoundLifecycleRecording()
+        let output = try WarmAlarmSoundFiles.prepare(primary: input, background: nil)
+        defer {
+            try? FileManager.default.removeItem(at: input)
+            WarmAlarmSoundFiles.remove(named: output.lastPathComponent)
+            WarmAlarmStore.shared.clear()
+            previousRecords.forEach { WarmAlarmStore.shared.save($0) }
+        }
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date().addingTimeInterval(-25 * 60 * 60)], ofItemAtPath: output.path
+        )
+        let orphanID = WarmAlarmAlarmKitPlan.id(for: 4_242_424_278)
+        let backend = RecordingAlarmKitBackend(
+            scheduleError: nil, authorizationState: .denied,
+            snapshot: WarmAlarmAlarmKitSnapshot(states: [orphanID: .scheduled])
+        )
+        let plugin = makeSoundLifecyclePlugin(backend: backend)
+        let completed = expectation(description: "denied initialization preserves an unverified native sound")
+        plugin.initialize { result in
+            if case let .failure(error) = result { XCTFail("Initialization failed: \(error)") }
+            completed.fulfill()
+        }
+        wait(for: [completed], timeout: 10)
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: output.path),
+            "Denied authorization does not prove that native references are gone"
+        )
+        XCTAssertTrue(backend.cancelledIDs.isEmpty)
+        XCTAssertEqual(backend.cancelAllCount, 0)
+        withExtendedLifetime(plugin) {}
+    }
+
     func testInitializationCancelsOnlyOwnedOrphansWithEmptyOrMixedStore() {
         let previous = Array(WarmAlarmStore.shared.loadAll().values)
         defer {
