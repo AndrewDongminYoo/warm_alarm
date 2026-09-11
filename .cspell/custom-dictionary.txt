@@ -2,14 +2,5 @@
 393JTTV68D
 Autoresizing
 dedupe
-dists
-FMWK
-jvmargs
 ktlint
-oxipng
 podhelper
-Wconditional
-Wmissing
-Wnullable
-Woverlength
-xcprivacy

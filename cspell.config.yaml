@@ -1,10 +1,11 @@
 version: "0.2"
 $schema: https://raw.githubusercontent.com/streetsidesoftware/cspell/main/cspell.schema.json
+import:
+  - https://raw.githubusercontent.com/AndrewDongminYoo/quality-configs/v0.8.0/configs/cspell.config.yaml
+  - https://raw.githubusercontent.com/AndrewDongminYoo/quality-configs/v0.8.0/configs/cspell/vgv.config.yaml
 dictionaries:
   - en-gb
   - custom-dictionary
-  - vgv_allowed
-  - vgv_forbidden
   - flutter
   - dart
   - cpp
@@ -14,12 +15,6 @@ dictionaryDefinitions:
   - name: custom-dictionary
     path: ./.cspell/custom-dictionary.txt
     addWords: true
-  - name: vgv_allowed
-    path: https://raw.githubusercontent.com/verygoodopensource/very_good_dictionaries/main/allowed.txt
-    description: Allowed VGV Spellings
-  - name: vgv_forbidden
-    path: https://raw.githubusercontent.com/verygoodopensource/very_good_dictionaries/main/forbidden.txt
-    description: Forbidden VGV Spellings
 useGitignore: true
 ignorePaths:
   - .github/workflows/**
@@ -28,10 +23,8 @@ ignorePaths:
   - "**/Runner.xcscheme"
   - "**/MainMenu.xib"
 ignoreWords:
-  - meta-data
   - datatype
   - plaintext
-  - pbxproj
 words:
   - Dongmin
   - fluttium
