@@ -133,6 +133,56 @@ final class WarmAlarmRequestRegistrationTests: XCTestCase {
         withExtendedLifetime(plugin) {}
     }
 
+    func testSchedulingBackendExcludesExpiredOneShotNotificationFallbacks() {
+        let nowMillis: Int64 = 2_000_000
+        let expired = WarmAlarmScheduleData.from(wire: WarmAlarmScheduleWire(
+            id: 1,
+            scheduledAtMillis: nowMillis - 1,
+            notification: WarmAlarmNotificationWire(
+                title: "Expired",
+                body: "Fallback",
+                keepNotificationAfterAlarmEnds: false
+            ),
+            audio: WarmAlarmAudioWire(loop: true, vibrate: true, volumeEnforced: false)
+        ))
+        let future = WarmAlarmScheduleData.from(wire: WarmAlarmScheduleWire(
+            id: 2,
+            scheduledAtMillis: nowMillis + 1,
+            notification: WarmAlarmNotificationWire(
+                title: "Future",
+                body: "Fallback",
+                keepNotificationAfterAlarmEnds: false
+            ),
+            audio: WarmAlarmAudioWire(loop: true, vibrate: true, volumeEnforced: false)
+        ))
+        let recurring = WarmAlarmScheduleData.from(wire: WarmAlarmScheduleWire(
+            id: 3,
+            scheduledAtMillis: nowMillis - 1,
+            notification: WarmAlarmNotificationWire(
+                title: "Recurring",
+                body: "Fallback",
+                keepNotificationAfterAlarmEnds: false
+            ),
+            audio: WarmAlarmAudioWire(loop: true, vibrate: true, volumeEnforced: false),
+            recurrence: WarmAlarmRecurrenceWire(weekdays: [1])
+        ))
+        let snoozed = expired.withActiveSnooze(untilMillis: nowMillis + 1)
+
+        XCTAssertNil(WarmAlarmPlugin.schedulingBackend(storedSchedules: [expired], nowMillis: nowMillis))
+        XCTAssertEqual(
+            WarmAlarmPlugin.schedulingBackend(storedSchedules: [expired, future], nowMillis: nowMillis),
+            .userNotifications
+        )
+        XCTAssertEqual(
+            WarmAlarmPlugin.schedulingBackend(storedSchedules: [expired, recurring], nowMillis: nowMillis),
+            .userNotifications
+        )
+        XCTAssertEqual(
+            WarmAlarmPlugin.schedulingBackend(storedSchedules: [expired, snoozed], nowMillis: nowMillis),
+            .userNotifications
+        )
+    }
+
     func testNotificationFallbackReadinessUsesNotificationPermission() {
         for authorization in [WarmAlarmAlarmKitAuthorization.authorized, .notDetermined] {
             let blocked = WarmAlarmPlugin.permissionSnapshot(
