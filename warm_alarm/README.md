@@ -110,6 +110,22 @@ await WarmAlarm.cancelAlarm(1);
 Call `getReadiness()` at runtime and surface the `reasons` list to your users so they can take
 corrective action (grant permissions, disable battery optimization, etc.).
 
+### iOS User Notifications setup
+
+Every consuming iOS target must enable the Time Sensitive Notifications capability and include the following entitlement before it relies on Focus delivery for User Notifications alarms:
+
+```xml
+<key>com.apple.developer.usernotifications.time-sensitive</key>
+<true/>
+```
+
+On iOS, inspect `WarmAlarmReadiness.notificationSettings` before selecting a remediation reason.
+Full authorization with alerts, sounds, and Time Sensitive Notifications enabled needs no notification-settings guidance.
+Provisional authorization or a disabled alert, sound, or Time Sensitive setting needs notification-settings guidance through `openReadinessSettings(WarmAlarmReadinessReason.backgroundExecutionLimited)`.
+Prioritize that reason over an earlier exact-alarm reason when both issues exist.
+When these notification settings are healthy, skip `backgroundExecutionLimited` and select the first other supported reason, if any.
+A `null` notification-settings snapshot means that the current platform implementation does not report granular settings.
+
 ### iOS 26 AlarmKit setup
 
 Add a non-empty `NSAlarmKitUsageDescription` to the host app's `Info.plist` to opt in to AlarmKit on iOS 26 or later.
@@ -167,7 +183,7 @@ user's answer.
 | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `WarmAlarmSchedule`          | Full alarm configuration: timing, notification, audio, snooze, recurrence, payload, wake-check                                   |
 | `WarmAlarmCapabilities`      | `WarmAlarmSupportStatus` per feature: notification & exact scheduling, background audio, full-screen, wake-check, Live Activity  |
-| `WarmAlarmReadiness`         | `level` (`ready \| limited \| blocked \| unsupported`) + `List<WarmAlarmReadinessReason>`                                        |
+| `WarmAlarmReadiness`         | Readiness level, reason list, and optional granular notification settings                                                        |
 | `WarmAlarmPermissionState`   | Boolean flags: `notificationsGranted`, `exactAlarmGranted`, `fullScreenIntentGranted`                                            |
 | `WarmAlarmRemediationResult` | Action status plus permission and readiness state when the action returns                                                        |
 | `WarmAlarmScheduleResult`    | `alarmId`, `readiness`, optional `WarmAlarmWarning`                                                                              |

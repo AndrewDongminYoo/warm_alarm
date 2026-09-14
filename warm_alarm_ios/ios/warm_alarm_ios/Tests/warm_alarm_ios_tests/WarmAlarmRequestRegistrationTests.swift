@@ -145,6 +145,199 @@ final class WarmAlarmRequestRegistrationTests: XCTestCase {
         )
     }
 
+    @available(iOS 15.0, *)
+    func testRequestNotificationPermissionUsesAvailabilitySpecificOptions() {
+        let cases = [(available: true, expectsTimeSensitive: true), (available: false, expectsTimeSensitive: false)]
+        for testCase in cases {
+            let expectedError = NSError(domain: "WarmAlarmAuthorizationTest", code: testCase.available ? 1 : 2)
+            let requested = expectation(description: "authorization requested")
+            let completed = expectation(description: "authorization result returned")
+            let plugin = makePermissionPlugin(
+                notificationAuthorizationRequester: { options, completion in
+                    XCTAssertTrue(options.contains(.alert))
+                    XCTAssertTrue(options.contains(.sound))
+                    XCTAssertEqual(options.contains(.timeSensitive), testCase.expectsTimeSensitive)
+                    completion(false, expectedError)
+                    requested.fulfill()
+                },
+                timeSensitiveAuthorizationAvailable: { testCase.available }
+            )
+
+            plugin.requestNotificationPermission { result in
+                if case let .failure(error) = result {
+                    XCTAssertEqual((error as NSError).domain, expectedError.domain)
+                } else {
+                    XCTFail("Expected the injected authorization error")
+                }
+                completed.fulfill()
+            }
+
+            wait(for: [requested, completed], timeout: 1)
+            withExtendedLifetime(plugin) {}
+        }
+    }
+
+    @available(iOS 15.0, *)
+    func testRequestNotificationPermissionReturnsGranularSettingsAfterAuthorization() {
+        let settings = WarmAlarmNotificationSettingsSnapshot(
+            authorizationStatus: .authorized,
+            alertsEnabled: true,
+            soundsEnabled: true,
+            timeSensitiveEnabled: true
+        )
+        let completed = expectation(description: "authorization result returned")
+        let plugin = makeReadinessPlugin(
+            settings: settings,
+            notificationAuthorizationRequester: { options, completion in
+                XCTAssertTrue(options.contains(.timeSensitive))
+                completion(true, nil)
+            }
+        )
+
+        plugin.requestNotificationPermission { result in
+            guard case let .success(remediation) = result else {
+                XCTFail("Expected successful remediation")
+                completed.fulfill()
+                return
+            }
+            XCTAssertEqual(remediation.status, .completed)
+            XCTAssertEqual(remediation.readiness.notificationSettings?.authorizationStatus, .authorized)
+            XCTAssertEqual(remediation.readiness.notificationSettings?.timeSensitiveEnabled, true)
+            completed.fulfill()
+        }
+
+        wait(for: [completed], timeout: 1)
+        withExtendedLifetime(plugin) {}
+    }
+
+    func testAlarmContentUsesTimeSensitiveInterruptionLevel() throws {
+        guard #available(iOS 15.0, *) else { throw XCTSkip("Time Sensitive Notifications require iOS 15") }
+        let delegate = makeWarmAlarmDelegate(label: "time_sensitive_content")
+        let content = delegate.makeContent(from: WarmAlarmScheduleData.from(
+            wire: WarmAlarmScheduleWire(
+                id: 42,
+                scheduledAtMillis: 1_900_000_000_000,
+                notification: WarmAlarmNotificationWire(
+                    title: "Wake up",
+                    body: "Alarm",
+                    keepNotificationAfterAlarmEnds: false
+                ),
+                audio: WarmAlarmAudioWire(loop: true, vibrate: true, volumeEnforced: false)
+            )
+        ))
+
+        XCTAssertEqual(content.interruptionLevel, .timeSensitive)
+    }
+
+    func testKillWarningContentDoesNotUseTimeSensitiveInterruptionLevel() throws {
+        guard #available(iOS 15.0, *) else { throw XCTSkip("Interruption levels require iOS 15") }
+
+        XCTAssertEqual(
+            WarmAlarmPlugin.killWarningContent(title: "Warning", body: "Keep the app running").interruptionLevel,
+            .active
+        )
+    }
+
+    func testReadinessSettingsURLUsesGranularNotificationRoute() {
+        let appSettings = "app-settings"
+        let notificationSettings = "notification-settings"
+
+        XCTAssertEqual(
+            WarmAlarmPlugin.settingsURLString(
+                for: .backgroundExecutionLimited,
+                notificationSettingsURLString: notificationSettings,
+                appSettingsURLString: appSettings
+            ),
+            notificationSettings
+        )
+        XCTAssertEqual(
+            WarmAlarmPlugin.settingsURLString(
+                for: .notificationPermissionDenied,
+                notificationSettingsURLString: nil,
+                appSettingsURLString: appSettings
+            ),
+            appSettings
+        )
+        XCTAssertEqual(
+            WarmAlarmPlugin.settingsURLString(
+                for: .exactAlarmPermissionDenied,
+                notificationSettingsURLString: notificationSettings,
+                appSettingsURLString: appSettings
+            ),
+            appSettings
+        )
+        XCTAssertNil(WarmAlarmPlugin.settingsURLString(
+            for: .backgroundAudioLimited,
+            notificationSettingsURLString: notificationSettings,
+            appSettingsURLString: appSettings
+        ))
+    }
+
+    func testReadinessIncludesFullNotificationSettingsMatrix() {
+        for (index, settings) in notificationSettingsMatrix().enumerated() {
+            let permissionCompleted = expectation(description: "permission \(index)")
+            let readinessCompleted = expectation(description: "readiness \(index)")
+            let plugin = makeReadinessPlugin(settings: settings)
+
+            plugin.getPermissionState { result in
+                guard case let .success(permissionState) = result else {
+                    XCTFail("Expected permission state for case \(index)")
+                    permissionCompleted.fulfill()
+                    return
+                }
+                XCTAssertEqual(permissionState.notificationsGranted, settings.notificationsGranted)
+                permissionCompleted.fulfill()
+            }
+            plugin.getReadiness { result in
+                guard case let .success(readiness) = result else {
+                    XCTFail("Expected readiness for case \(index)")
+                    readinessCompleted.fulfill()
+                    return
+                }
+                XCTAssertEqual(readiness.level, settings.notificationsGranted ? .limited : .blocked)
+                XCTAssertEqual(
+                    readiness.reasons,
+                    settings.notificationsGranted
+                        ? [.exactAlarmPermissionDenied, .backgroundExecutionLimited]
+                        : [.notificationPermissionDenied, .exactAlarmPermissionDenied, .backgroundExecutionLimited]
+                )
+                XCTAssertEqual(readiness.notificationSettings?.authorizationStatus, settings.authorizationStatus)
+                XCTAssertEqual(readiness.notificationSettings?.alertsEnabled, settings.alertsEnabled)
+                XCTAssertEqual(readiness.notificationSettings?.soundsEnabled, settings.soundsEnabled)
+                XCTAssertEqual(readiness.notificationSettings?.timeSensitiveEnabled, settings.timeSensitiveEnabled)
+                readinessCompleted.fulfill()
+            }
+
+            wait(for: [permissionCompleted, readinessCompleted], timeout: 1)
+            withExtendedLifetime(plugin) {}
+        }
+    }
+
+    func testAuthorizedAlarmKitStaysReadyForEveryNotificationSettingsCombination() {
+        for (index, settings) in notificationSettingsMatrix().enumerated() {
+            let completed = expectation(description: "AlarmKit readiness \(index)")
+            let plugin = makeReadinessPlugin(
+                settings: settings,
+                backend: RecordingAlarmKitBackend(scheduleError: nil, authorizationState: .authorized)
+            )
+
+            plugin.getReadiness { result in
+                guard case let .success(readiness) = result else {
+                    XCTFail("Expected AlarmKit readiness for case \(index)")
+                    completed.fulfill()
+                    return
+                }
+                XCTAssertEqual(readiness.level, .ready)
+                XCTAssertEqual(readiness.reasons, [])
+                XCTAssertEqual(readiness.notificationSettings?.authorizationStatus, settings.authorizationStatus)
+                completed.fulfill()
+            }
+
+            wait(for: [completed], timeout: 1)
+            withExtendedLifetime(plugin) {}
+        }
+    }
+
     func testPluginRegistrationInstallsForwardingNotificationCenterDelegate() {
         let engine = FlutterEngine(name: "warm_alarm_registration_test")
         XCTAssertTrue(engine.run())
@@ -402,6 +595,78 @@ final class WarmAlarmRequestRegistrationTests: XCTestCase {
             eventsApi: RecordingWarmAlarmEventsApi(),
             notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.\(label)")
         )
+    }
+
+    private func makePermissionPlugin(
+        notificationAuthorizationRequester: @escaping (
+            UNAuthorizationOptions,
+            @escaping (Bool, Error?) -> Void
+        ) -> Void,
+        timeSensitiveAuthorizationAvailable: @escaping () -> Bool
+    ) -> WarmAlarmPlugin {
+        let queue = WarmAlarmMutationQueue(label: "warm_alarm_tests.permission")
+        let delegate = WarmAlarmDelegate(eventsApi: RecordingWarmAlarmEventsApi(), notificationMutationQueue: queue)
+        return WarmAlarmPlugin(
+            delegate: delegate,
+            notificationMutationQueue: queue,
+            notificationCenter: UNUserNotificationCenter.current(),
+            notificationCenterDelegate: WarmAlarmNotificationCenterDelegate(
+                warmAlarmDelegate: delegate,
+                forwardingDelegate: nil
+            ),
+            notificationAuthorizationRequester: notificationAuthorizationRequester,
+            timeSensitiveAuthorizationAvailable: timeSensitiveAuthorizationAvailable,
+            alarmKitBackend: RecordingAlarmKitBackend(scheduleError: nil, authorizationState: .denied)
+        )
+    }
+
+    private func makeReadinessPlugin(
+        settings: WarmAlarmNotificationSettingsSnapshot,
+        notificationAuthorizationRequester: WarmAlarmPlugin.NotificationAuthorizationRequester? = nil,
+        backend: WarmAlarmAlarmKitScheduling = RecordingAlarmKitBackend(
+            scheduleError: nil,
+            authorizationState: .denied
+        )
+    ) -> WarmAlarmPlugin {
+        let queue = WarmAlarmMutationQueue(label: "warm_alarm_tests.readiness")
+        let delegate = WarmAlarmDelegate(eventsApi: RecordingWarmAlarmEventsApi(), notificationMutationQueue: queue)
+        return WarmAlarmPlugin(
+            delegate: delegate,
+            notificationMutationQueue: queue,
+            notificationCenter: UNUserNotificationCenter.current(),
+            notificationCenterDelegate: WarmAlarmNotificationCenterDelegate(
+                warmAlarmDelegate: delegate,
+                forwardingDelegate: nil
+            ),
+            notificationSettingsReader: { completion in completion(settings) },
+            notificationAuthorizationRequester: notificationAuthorizationRequester,
+            alarmKitBackend: backend,
+            alarmKitUsageDescription: "Wake up"
+        )
+    }
+
+    private func notificationSettingsMatrix() -> [WarmAlarmNotificationSettingsSnapshot] {
+        let healthy = (alerts: true, sounds: true, timeSensitive: Optional(true))
+        return [
+            .init(authorizationStatus: .authorized, alertsEnabled: healthy.alerts, soundsEnabled: healthy.sounds,
+                  timeSensitiveEnabled: healthy.timeSensitive),
+            .init(authorizationStatus: .provisional, alertsEnabled: healthy.alerts, soundsEnabled: healthy.sounds,
+                  timeSensitiveEnabled: healthy.timeSensitive),
+            .init(authorizationStatus: .ephemeral, alertsEnabled: healthy.alerts, soundsEnabled: healthy.sounds,
+                  timeSensitiveEnabled: healthy.timeSensitive),
+            .init(authorizationStatus: .denied, alertsEnabled: healthy.alerts, soundsEnabled: healthy.sounds,
+                  timeSensitiveEnabled: healthy.timeSensitive),
+            .init(authorizationStatus: .notDetermined, alertsEnabled: healthy.alerts, soundsEnabled: healthy.sounds,
+                  timeSensitiveEnabled: healthy.timeSensitive),
+            .init(authorizationStatus: .unknown, alertsEnabled: healthy.alerts, soundsEnabled: healthy.sounds,
+                  timeSensitiveEnabled: healthy.timeSensitive),
+            .init(authorizationStatus: .authorized, alertsEnabled: false, soundsEnabled: true,
+                  timeSensitiveEnabled: true),
+            .init(authorizationStatus: .authorized, alertsEnabled: true, soundsEnabled: false,
+                  timeSensitiveEnabled: true),
+            .init(authorizationStatus: .authorized, alertsEnabled: true, soundsEnabled: true,
+                  timeSensitiveEnabled: false),
+        ]
     }
 
     private func makeNotificationCenterDelegate(

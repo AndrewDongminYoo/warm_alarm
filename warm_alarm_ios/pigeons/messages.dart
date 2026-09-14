@@ -34,6 +34,15 @@ enum WarmAlarmReadinessReasonWire {
   unknown,
 }
 
+enum WarmAlarmNotificationAuthorizationStatusWire {
+  notDetermined,
+  denied,
+  authorized,
+  provisional,
+  ephemeral,
+  unknown,
+}
+
 enum WarmAlarmRemediationStatusWire {
   completed,
   unavailable,
@@ -90,14 +99,30 @@ class WarmAlarmPermissionStateWire {
   final bool fullScreenIntentGranted;
 }
 
+class WarmAlarmNotificationSettingsWire {
+  const WarmAlarmNotificationSettingsWire({
+    required this.authorizationStatus,
+    required this.alertsEnabled,
+    required this.soundsEnabled,
+    required this.timeSensitiveEnabled,
+  });
+
+  final WarmAlarmNotificationAuthorizationStatusWire authorizationStatus;
+  final bool alertsEnabled;
+  final bool soundsEnabled;
+  final bool? timeSensitiveEnabled;
+}
+
 class WarmAlarmReadinessWire {
   const WarmAlarmReadinessWire({
     required this.level,
     required this.reasons,
+    this.notificationSettings,
   });
 
   final WarmAlarmReadinessLevelWire level;
   final List<WarmAlarmReadinessReasonWire> reasons;
+  final WarmAlarmNotificationSettingsWire? notificationSettings;
 }
 
 class WarmAlarmRemediationResultWire {

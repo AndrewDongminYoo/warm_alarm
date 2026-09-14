@@ -389,10 +389,16 @@ void main() {
             reasons: <WarmAlarmReadinessReasonWire>[
               WarmAlarmReadinessReasonWire.backgroundExecutionLimited,
             ],
+            notificationSettings: WarmAlarmNotificationSettingsWire(
+              authorizationStatus: WarmAlarmNotificationAuthorizationStatusWire.authorized,
+              alertsEnabled: true,
+              soundsEnabled: true,
+              timeSensitiveEnabled: false,
+            ),
           ),
         );
       });
-      await platform.scheduleAlarm(
+      final result = await platform.scheduleAlarm(
         WarmAlarmSchedule(
           id: 20,
           scheduledAt: DateTime(2026, 5, 1, 8),
@@ -402,6 +408,7 @@ void main() {
         ),
       );
       expect(captured.single.payload, 'ios-sched-payload');
+      expect(result.readiness.notificationSettings?.timeSensitiveEnabled, isFalse);
     });
 
     test('system sound override crosses the wire without replacing legacy audio', () async {
@@ -600,6 +607,12 @@ void main() {
             reasons: <WarmAlarmReadinessReasonWire>[
               WarmAlarmReadinessReasonWire.backgroundExecutionLimited,
             ],
+            notificationSettings: WarmAlarmNotificationSettingsWire(
+              authorizationStatus: WarmAlarmNotificationAuthorizationStatusWire.provisional,
+              alertsEnabled: false,
+              soundsEnabled: true,
+              timeSensitiveEnabled: false,
+            ),
           ),
         ),
       );
@@ -608,6 +621,10 @@ void main() {
 
       expect(result.status, WarmAlarmRemediationStatus.completed);
       expect(result.permissionState.notificationsGranted, isTrue);
+      expect(
+        result.readiness.notificationSettings?.authorizationStatus,
+        WarmAlarmNotificationAuthorizationStatus.provisional,
+      );
     });
 
     test('openReadinessSettings maps the iOS notification-settings result', () async {
@@ -657,6 +674,42 @@ void main() {
       );
       final readiness = await platform.getReadiness();
       expect(readiness.level, WarmAlarmReadinessLevel.ready);
+    });
+
+    test('getReadiness maps granular notification settings', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmIOS(api: api);
+      const statuses = <WarmAlarmNotificationAuthorizationStatusWire, WarmAlarmNotificationAuthorizationStatus>{
+        WarmAlarmNotificationAuthorizationStatusWire.notDetermined:
+            WarmAlarmNotificationAuthorizationStatus.notDetermined,
+        WarmAlarmNotificationAuthorizationStatusWire.denied: WarmAlarmNotificationAuthorizationStatus.denied,
+        WarmAlarmNotificationAuthorizationStatusWire.authorized: WarmAlarmNotificationAuthorizationStatus.authorized,
+        WarmAlarmNotificationAuthorizationStatusWire.provisional: WarmAlarmNotificationAuthorizationStatus.provisional,
+        WarmAlarmNotificationAuthorizationStatusWire.ephemeral: WarmAlarmNotificationAuthorizationStatus.ephemeral,
+        WarmAlarmNotificationAuthorizationStatusWire.unknown: WarmAlarmNotificationAuthorizationStatus.unknown,
+      };
+
+      for (final entry in statuses.entries) {
+        when(api.getReadiness).thenAnswer(
+          (_) async => WarmAlarmReadinessWire(
+            level: WarmAlarmReadinessLevelWire.limited,
+            reasons: <WarmAlarmReadinessReasonWire>[WarmAlarmReadinessReasonWire.backgroundExecutionLimited],
+            notificationSettings: WarmAlarmNotificationSettingsWire(
+              authorizationStatus: entry.key,
+              alertsEnabled: false,
+              soundsEnabled: true,
+              timeSensitiveEnabled: false,
+            ),
+          ),
+        );
+
+        final readiness = await platform.getReadiness();
+
+        expect(readiness.notificationSettings?.authorizationStatus, entry.value);
+        expect(readiness.notificationSettings?.alertsEnabled, isFalse);
+        expect(readiness.notificationSettings?.soundsEnabled, isTrue);
+        expect(readiness.notificationSettings?.timeSensitiveEnabled, isFalse);
+      }
     });
 
     test('getReadiness maps blocked level with all reasons', () async {

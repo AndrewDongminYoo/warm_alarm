@@ -544,6 +544,31 @@ struct WarmAlarmPermissionSnapshot {
     let readiness: WarmAlarmReadinessWire
 }
 
+struct WarmAlarmNotificationSettingsSnapshot {
+    let authorizationStatus: WarmAlarmNotificationAuthorizationStatusWire
+    let alertsEnabled: Bool
+    let soundsEnabled: Bool
+    let timeSensitiveEnabled: Bool?
+
+    var notificationsGranted: Bool {
+        switch authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            true
+        case .notDetermined, .denied, .unknown:
+            false
+        }
+    }
+
+    var wire: WarmAlarmNotificationSettingsWire {
+        WarmAlarmNotificationSettingsWire(
+            authorizationStatus: authorizationStatus,
+            alertsEnabled: alertsEnabled,
+            soundsEnabled: soundsEnabled,
+            timeSensitiveEnabled: timeSensitiveEnabled
+        )
+    }
+}
+
 struct WarmAlarmAlarmKitInitializationWork {
     let alarmKitManaged: [WarmAlarmScheduleData]
     let notificationRecovery: [WarmAlarmScheduleData]
@@ -634,11 +659,20 @@ final class WarmAlarmAlarmKitObservationState: @unchecked Sendable {
 
 public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate, WarmAlarmApi {
     typealias PendingNotificationReader = (@escaping ([UNNotificationRequest]) -> Void) -> Void
+    typealias NotificationSettingsReader = (@escaping (WarmAlarmNotificationSettingsSnapshot) -> Void) -> Void
+    typealias NotificationAuthorizationRequester = (
+        UNAuthorizationOptions,
+        @escaping (Bool, Error?) -> Void
+    ) -> Void
+    typealias TimeSensitiveAuthorizationAvailability = () -> Bool
     private let delegate: WarmAlarmDelegate
     private let notificationMutationQueue: WarmAlarmMutationQueue
     private let soundPreparationQueue = WarmAlarmMutationQueue(label: "warm_alarm.sound_preparation")
     private let notificationCenter: UNUserNotificationCenter
     private let pendingNotificationReader: PendingNotificationReader
+    private let notificationSettingsReader: NotificationSettingsReader
+    private let notificationAuthorizationRequester: NotificationAuthorizationRequester
+    private let timeSensitiveAuthorizationAvailable: TimeSensitiveAuthorizationAvailability
     private let scheduleSoundPreparer: ((URL) throws -> URL)?
     private let notificationCenterDelegate: WarmAlarmNotificationCenterDelegate
     private let alarmKitBackend: WarmAlarmAlarmKitScheduling?
@@ -680,6 +714,9 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         notificationCenter: UNUserNotificationCenter,
         notificationCenterDelegate: WarmAlarmNotificationCenterDelegate,
         pendingNotificationReader: PendingNotificationReader? = nil,
+        notificationSettingsReader: NotificationSettingsReader? = nil,
+        notificationAuthorizationRequester: NotificationAuthorizationRequester? = nil,
+        timeSensitiveAuthorizationAvailable: TimeSensitiveAuthorizationAvailability? = nil,
         scheduleSoundPreparer: ((URL) throws -> URL)? = nil,
         alarmKitBackend: WarmAlarmAlarmKitScheduling? = WarmAlarmAlarmKitBackendFactory.make(),
         alarmKitUsageDescription: String? = Bundle.main.object(
@@ -694,6 +731,18 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         self.notificationCenter = notificationCenter
         self.pendingNotificationReader = pendingNotificationReader ?? { completion in
             notificationCenter.getPendingNotificationRequests(completionHandler: completion)
+        }
+        self.notificationSettingsReader = notificationSettingsReader ?? { completion in
+            notificationCenter.getNotificationSettings { settings in
+                completion(Self.notificationSettingsSnapshot(from: settings))
+            }
+        }
+        self.notificationAuthorizationRequester = notificationAuthorizationRequester ?? { options, completion in
+            notificationCenter.requestAuthorization(options: options, completionHandler: completion)
+        }
+        self.timeSensitiveAuthorizationAvailable = timeSensitiveAuthorizationAvailable ?? {
+            if #available(iOS 15.0, *) { return true }
+            return false
         }
         self.notificationCenterDelegate = notificationCenterDelegate
         self.scheduleSoundPreparer = scheduleSoundPreparer
@@ -1666,7 +1715,11 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
     func requestNotificationPermission(
         completion: @escaping (Result<WarmAlarmRemediationResultWire, Error>) -> Void
     ) {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, error in
+        var options: UNAuthorizationOptions = [.alert, .sound]
+        if #available(iOS 15.0, *), timeSensitiveAuthorizationAvailable() {
+            options.insert(.timeSensitive)
+        }
+        notificationAuthorizationRequester(options) { _, error in
             if let error {
                 WarmAlarmPlatformReply.complete(.failure(error), completion: completion, finish: {})
                 return
@@ -1679,16 +1732,18 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         reason: WarmAlarmReadinessReasonWire,
         completion: @escaping (Result<WarmAlarmRemediationResultWire, Error>) -> Void
     ) {
-        guard reason == .notificationPermissionDenied || reason == .exactAlarmPermissionDenied else {
+        let notificationSettingsURLString: String? = if #available(iOS 16.0, *) {
+            UIApplication.openNotificationSettingsURLString
+        } else {
+            nil
+        }
+        guard let settingsURLString = Self.settingsURLString(
+            for: reason,
+            notificationSettingsURLString: notificationSettingsURLString,
+            appSettingsURLString: UIApplication.openSettingsURLString
+        ) else {
             completeRemediation(status: .unsupported, completion: completion)
             return
-        }
-
-        let settingsURLString: String
-        if reason == .notificationPermissionDenied, #available(iOS 16.0, *) {
-            settingsURLString = UIApplication.openNotificationSettingsURLString
-        } else {
-            settingsURLString = UIApplication.openSettingsURLString
         }
         guard let settingsURL = URL(string: settingsURLString) else {
             completeRemediation(status: .unavailable, completion: completion)
@@ -1714,16 +1769,14 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         effectiveBackend: WarmAlarmAppleSchedulingBackend? = nil,
         _ handler: @escaping (WarmAlarmPermissionStateWire, WarmAlarmReadinessWire) -> Void
     ) {
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            let granted = settings.authorizationStatus == .authorized
-                || settings.authorizationStatus == .provisional
+        notificationSettingsReader { notificationSettings in
             let alarmKitConfigured = Self.schedulingBackend(
                 alarmKitAvailable: self.alarmKitBackend != nil,
                 alarmKitUsageDescription: self.alarmKitUsageDescription,
                 authorizationState: .authorized
             ) == .alarmKit
             let snapshot = Self.permissionSnapshot(
-                notificationsGranted: granted,
+                notificationSettings: notificationSettings,
                 alarmKitConfigured: alarmKitConfigured,
                 alarmKitAuthorization: self.alarmKitBackend?.authorizationState,
                 effectiveBackend: effectiveBackend
@@ -1738,6 +1791,26 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         alarmKitAuthorization: WarmAlarmAlarmKitAuthorization?,
         effectiveBackend: WarmAlarmAppleSchedulingBackend? = nil
     ) -> WarmAlarmPermissionSnapshot {
+        permissionSnapshot(
+            notificationSettings: WarmAlarmNotificationSettingsSnapshot(
+                authorizationStatus: notificationsGranted ? .authorized : .denied,
+                alertsEnabled: notificationsGranted,
+                soundsEnabled: notificationsGranted,
+                timeSensitiveEnabled: notificationsGranted
+            ),
+            alarmKitConfigured: alarmKitConfigured,
+            alarmKitAuthorization: alarmKitAuthorization,
+            effectiveBackend: effectiveBackend
+        )
+    }
+
+    static func permissionSnapshot(
+        notificationSettings: WarmAlarmNotificationSettingsSnapshot,
+        alarmKitConfigured: Bool,
+        alarmKitAuthorization: WarmAlarmAlarmKitAuthorization?,
+        effectiveBackend: WarmAlarmAppleSchedulingBackend? = nil
+    ) -> WarmAlarmPermissionSnapshot {
+        let notificationsGranted = notificationSettings.notificationsGranted
         let exactAlarmGranted = alarmKitConfigured && alarmKitAuthorization == .authorized
         let permissionState = WarmAlarmPermissionStateWire(
             notificationsGranted: notificationsGranted,
@@ -1747,13 +1820,21 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         if effectiveBackend != .userNotifications, exactAlarmGranted {
             return WarmAlarmPermissionSnapshot(
                 permissionState: permissionState,
-                readiness: WarmAlarmReadinessWire(level: .ready, reasons: [])
+                readiness: WarmAlarmReadinessWire(
+                    level: .ready,
+                    reasons: [],
+                    notificationSettings: notificationSettings.wire
+                )
             )
         }
         if effectiveBackend != .userNotifications, alarmKitConfigured, alarmKitAuthorization == .notDetermined {
             return WarmAlarmPermissionSnapshot(
                 permissionState: permissionState,
-                readiness: WarmAlarmReadinessWire(level: .limited, reasons: [.unknown])
+                readiness: WarmAlarmReadinessWire(
+                    level: .limited,
+                    reasons: [.unknown],
+                    notificationSettings: notificationSettings.wire
+                )
             )
         }
 
@@ -1767,9 +1848,62 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
             permissionState: permissionState,
             readiness: WarmAlarmReadinessWire(
                 level: notificationsGranted ? .limited : .blocked,
-                reasons: reasons
+                reasons: reasons,
+                notificationSettings: notificationSettings.wire
             )
         )
+    }
+
+    static func settingsURLString(
+        for reason: WarmAlarmReadinessReasonWire,
+        notificationSettingsURLString: String?,
+        appSettingsURLString: String
+    ) -> String? {
+        switch reason {
+        case .notificationPermissionDenied, .backgroundExecutionLimited:
+            notificationSettingsURLString ?? appSettingsURLString
+        case .exactAlarmPermissionDenied:
+            appSettingsURLString
+        case .fullScreenPermissionDenied, .backgroundAudioLimited, .platformUnsupported,
+             .batteryOptimizationMayDelay, .unknown:
+            nil
+        }
+    }
+
+    private static func notificationSettingsSnapshot(
+        from settings: UNNotificationSettings
+    ) -> WarmAlarmNotificationSettingsSnapshot {
+        let timeSensitiveEnabled: Bool?
+        if #available(iOS 15.0, *) {
+            timeSensitiveEnabled = settings.timeSensitiveSetting == .enabled
+        } else {
+            timeSensitiveEnabled = nil
+        }
+        return WarmAlarmNotificationSettingsSnapshot(
+            authorizationStatus: notificationAuthorizationStatus(from: settings.authorizationStatus),
+            alertsEnabled: settings.alertSetting == .enabled,
+            soundsEnabled: settings.soundSetting == .enabled,
+            timeSensitiveEnabled: timeSensitiveEnabled
+        )
+    }
+
+    private static func notificationAuthorizationStatus(
+        from status: UNAuthorizationStatus
+    ) -> WarmAlarmNotificationAuthorizationStatusWire {
+        switch status {
+        case .notDetermined:
+            .notDetermined
+        case .denied:
+            .denied
+        case .authorized:
+            .authorized
+        case .provisional:
+            .provisional
+        case .ephemeral:
+            .ephemeral
+        @unknown default:
+            .unknown
+        }
     }
 
     private func completeRemediation(
@@ -3117,10 +3251,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
               let title = dict["title"] as? String,
               let body = dict["body"] as? String
         else { return }
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        content.sound = .default
+        let content = Self.killWarningContent(title: title, body: body)
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1.0, repeats: false)
         let request = UNNotificationRequest(
             identifier: WarmAlarmPlugin.killWarningNotifId, content: content, trigger: trigger)
@@ -3140,6 +3271,14 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         }
     }
 
+    static func killWarningContent(title: String, body: String) -> UNMutableNotificationContent {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        return content
+    }
+
     /// Posts the kill warning on genuine termination for future process-owned alarms or active playback.
     /// Shares the notification id with `postKillWarningIfNeeded()` so both paths produce one notification.
     private func postKillWarningOnTerminate() {
@@ -3153,10 +3292,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
               let title = dict["title"] as? String,
               let body = dict["body"] as? String
         else { return }
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        content.sound = .default
+        let content = Self.killWarningContent(title: title, body: body)
         // Deliver immediately and block briefly so the request is enqueued before the
         // process dies (willTerminate grants ~5s). The add completion runs off the main
         // queue, so waiting here does not deadlock.

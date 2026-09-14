@@ -205,6 +205,15 @@ enum WarmAlarmReadinessReasonWire: Int {
   case unknown = 7
 }
 
+enum WarmAlarmNotificationAuthorizationStatusWire: Int {
+  case notDetermined = 0
+  case denied = 1
+  case authorized = 2
+  case provisional = 3
+  case ephemeral = 4
+  case unknown = 5
+}
+
 enum WarmAlarmRemediationStatusWire: Int {
   case completed = 0
   case unavailable = 1
@@ -329,38 +338,89 @@ struct WarmAlarmPermissionStateWire: Hashable {
 }
 
 /// Generated class from Pigeon that represents data sent in messages.
+struct WarmAlarmNotificationSettingsWire: Hashable {
+  var authorizationStatus: WarmAlarmNotificationAuthorizationStatusWire
+  var alertsEnabled: Bool
+  var soundsEnabled: Bool
+  var timeSensitiveEnabled: Bool? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> WarmAlarmNotificationSettingsWire? {
+    let authorizationStatus = pigeonVar_list[0] as! WarmAlarmNotificationAuthorizationStatusWire
+    let alertsEnabled = pigeonVar_list[1] as! Bool
+    let soundsEnabled = pigeonVar_list[2] as! Bool
+    let timeSensitiveEnabled: Bool? = nilOrValue(pigeonVar_list[3])
+
+    return WarmAlarmNotificationSettingsWire(
+      authorizationStatus: authorizationStatus,
+      alertsEnabled: alertsEnabled,
+      soundsEnabled: soundsEnabled,
+      timeSensitiveEnabled: timeSensitiveEnabled
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      authorizationStatus,
+      alertsEnabled,
+      soundsEnabled,
+      timeSensitiveEnabled,
+    ]
+  }
+  static func == (lhs: WarmAlarmNotificationSettingsWire, rhs: WarmAlarmNotificationSettingsWire) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return deepEqualsMessages(lhs.authorizationStatus, rhs.authorizationStatus) && deepEqualsMessages(lhs.alertsEnabled, rhs.alertsEnabled) && deepEqualsMessages(lhs.soundsEnabled, rhs.soundsEnabled) && deepEqualsMessages(lhs.timeSensitiveEnabled, rhs.timeSensitiveEnabled)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("WarmAlarmNotificationSettingsWire")
+    deepHashMessages(value: authorizationStatus, hasher: &hasher)
+    deepHashMessages(value: alertsEnabled, hasher: &hasher)
+    deepHashMessages(value: soundsEnabled, hasher: &hasher)
+    deepHashMessages(value: timeSensitiveEnabled, hasher: &hasher)
+  }
+}
+
+/// Generated class from Pigeon that represents data sent in messages.
 struct WarmAlarmReadinessWire: Hashable {
   var level: WarmAlarmReadinessLevelWire
   var reasons: [WarmAlarmReadinessReasonWire]
+  var notificationSettings: WarmAlarmNotificationSettingsWire? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
   static func fromList(_ pigeonVar_list: [Any?]) -> WarmAlarmReadinessWire? {
     let level = pigeonVar_list[0] as! WarmAlarmReadinessLevelWire
     let reasons = pigeonVar_list[1] as! [WarmAlarmReadinessReasonWire]
+    let notificationSettings: WarmAlarmNotificationSettingsWire? = nilOrValue(pigeonVar_list[2])
 
     return WarmAlarmReadinessWire(
       level: level,
-      reasons: reasons
+      reasons: reasons,
+      notificationSettings: notificationSettings
     )
   }
   func toList() -> [Any?] {
     return [
       level,
       reasons,
+      notificationSettings,
     ]
   }
   static func == (lhs: WarmAlarmReadinessWire, rhs: WarmAlarmReadinessWire) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return deepEqualsMessages(lhs.level, rhs.level) && deepEqualsMessages(lhs.reasons, rhs.reasons)
+    return deepEqualsMessages(lhs.level, rhs.level) && deepEqualsMessages(lhs.reasons, rhs.reasons) && deepEqualsMessages(lhs.notificationSettings, rhs.notificationSettings)
   }
 
   func hash(into hasher: inout Hasher) {
     hasher.combine("WarmAlarmReadinessWire")
     deepHashMessages(value: level, hasher: &hasher)
     deepHashMessages(value: reasons, hasher: &hasher)
+    deepHashMessages(value: notificationSettings, hasher: &hasher)
   }
 }
 
@@ -950,50 +1010,58 @@ private class MessagesPigeonCodecReader: FlutterStandardReader {
     case 132:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return WarmAlarmRemediationStatusWire(rawValue: enumResultAsInt)
+        return WarmAlarmNotificationAuthorizationStatusWire(rawValue: enumResultAsInt)
       }
       return nil
     case 133:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return WarmAlarmFailureCodeWire(rawValue: enumResultAsInt)
+        return WarmAlarmRemediationStatusWire(rawValue: enumResultAsInt)
       }
       return nil
     case 134:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return WarmAlarmEventTypeWire(rawValue: enumResultAsInt)
+        return WarmAlarmFailureCodeWire(rawValue: enumResultAsInt)
       }
       return nil
     case 135:
-      return WarmAlarmCapabilitiesWire.fromList(self.readValue() as! [Any?])
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return WarmAlarmEventTypeWire(rawValue: enumResultAsInt)
+      }
+      return nil
     case 136:
-      return WarmAlarmPermissionStateWire.fromList(self.readValue() as! [Any?])
+      return WarmAlarmCapabilitiesWire.fromList(self.readValue() as! [Any?])
     case 137:
-      return WarmAlarmReadinessWire.fromList(self.readValue() as! [Any?])
+      return WarmAlarmPermissionStateWire.fromList(self.readValue() as! [Any?])
     case 138:
-      return WarmAlarmRemediationResultWire.fromList(self.readValue() as! [Any?])
+      return WarmAlarmNotificationSettingsWire.fromList(self.readValue() as! [Any?])
     case 139:
-      return WarmAlarmWarningWire.fromList(self.readValue() as! [Any?])
+      return WarmAlarmReadinessWire.fromList(self.readValue() as! [Any?])
     case 140:
-      return WarmAlarmFailureWire.fromList(self.readValue() as! [Any?])
+      return WarmAlarmRemediationResultWire.fromList(self.readValue() as! [Any?])
     case 141:
-      return WarmAlarmScheduleResultWire.fromList(self.readValue() as! [Any?])
+      return WarmAlarmWarningWire.fromList(self.readValue() as! [Any?])
     case 142:
-      return WarmAlarmNotificationWire.fromList(self.readValue() as! [Any?])
+      return WarmAlarmFailureWire.fromList(self.readValue() as! [Any?])
     case 143:
-      return WarmAlarmVolumeFadeStepWire.fromList(self.readValue() as! [Any?])
+      return WarmAlarmScheduleResultWire.fromList(self.readValue() as! [Any?])
     case 144:
-      return WarmAlarmAudioWire.fromList(self.readValue() as! [Any?])
+      return WarmAlarmNotificationWire.fromList(self.readValue() as! [Any?])
     case 145:
-      return WarmAlarmRecurrenceWire.fromList(self.readValue() as! [Any?])
+      return WarmAlarmVolumeFadeStepWire.fromList(self.readValue() as! [Any?])
     case 146:
-      return WarmAlarmSnoozeWire.fromList(self.readValue() as! [Any?])
+      return WarmAlarmAudioWire.fromList(self.readValue() as! [Any?])
     case 147:
-      return WarmAlarmScheduleWire.fromList(self.readValue() as! [Any?])
+      return WarmAlarmRecurrenceWire.fromList(self.readValue() as! [Any?])
     case 148:
-      return WarmAlarmSnapshotWire.fromList(self.readValue() as! [Any?])
+      return WarmAlarmSnoozeWire.fromList(self.readValue() as! [Any?])
     case 149:
+      return WarmAlarmScheduleWire.fromList(self.readValue() as! [Any?])
+    case 150:
+      return WarmAlarmSnapshotWire.fromList(self.readValue() as! [Any?])
+    case 151:
       return WarmAlarmEventWire.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
@@ -1012,59 +1080,65 @@ private class MessagesPigeonCodecWriter: FlutterStandardWriter {
     } else if let value = value as? WarmAlarmReadinessReasonWire {
       super.writeByte(131)
       super.writeValue(value.rawValue)
-    } else if let value = value as? WarmAlarmRemediationStatusWire {
+    } else if let value = value as? WarmAlarmNotificationAuthorizationStatusWire {
       super.writeByte(132)
       super.writeValue(value.rawValue)
-    } else if let value = value as? WarmAlarmFailureCodeWire {
+    } else if let value = value as? WarmAlarmRemediationStatusWire {
       super.writeByte(133)
       super.writeValue(value.rawValue)
-    } else if let value = value as? WarmAlarmEventTypeWire {
+    } else if let value = value as? WarmAlarmFailureCodeWire {
       super.writeByte(134)
       super.writeValue(value.rawValue)
-    } else if let value = value as? WarmAlarmCapabilitiesWire {
+    } else if let value = value as? WarmAlarmEventTypeWire {
       super.writeByte(135)
-      super.writeValue(value.toList())
-    } else if let value = value as? WarmAlarmPermissionStateWire {
+      super.writeValue(value.rawValue)
+    } else if let value = value as? WarmAlarmCapabilitiesWire {
       super.writeByte(136)
       super.writeValue(value.toList())
-    } else if let value = value as? WarmAlarmReadinessWire {
+    } else if let value = value as? WarmAlarmPermissionStateWire {
       super.writeByte(137)
       super.writeValue(value.toList())
-    } else if let value = value as? WarmAlarmRemediationResultWire {
+    } else if let value = value as? WarmAlarmNotificationSettingsWire {
       super.writeByte(138)
       super.writeValue(value.toList())
-    } else if let value = value as? WarmAlarmWarningWire {
+    } else if let value = value as? WarmAlarmReadinessWire {
       super.writeByte(139)
       super.writeValue(value.toList())
-    } else if let value = value as? WarmAlarmFailureWire {
+    } else if let value = value as? WarmAlarmRemediationResultWire {
       super.writeByte(140)
       super.writeValue(value.toList())
-    } else if let value = value as? WarmAlarmScheduleResultWire {
+    } else if let value = value as? WarmAlarmWarningWire {
       super.writeByte(141)
       super.writeValue(value.toList())
-    } else if let value = value as? WarmAlarmNotificationWire {
+    } else if let value = value as? WarmAlarmFailureWire {
       super.writeByte(142)
       super.writeValue(value.toList())
-    } else if let value = value as? WarmAlarmVolumeFadeStepWire {
+    } else if let value = value as? WarmAlarmScheduleResultWire {
       super.writeByte(143)
       super.writeValue(value.toList())
-    } else if let value = value as? WarmAlarmAudioWire {
+    } else if let value = value as? WarmAlarmNotificationWire {
       super.writeByte(144)
       super.writeValue(value.toList())
-    } else if let value = value as? WarmAlarmRecurrenceWire {
+    } else if let value = value as? WarmAlarmVolumeFadeStepWire {
       super.writeByte(145)
       super.writeValue(value.toList())
-    } else if let value = value as? WarmAlarmSnoozeWire {
+    } else if let value = value as? WarmAlarmAudioWire {
       super.writeByte(146)
       super.writeValue(value.toList())
-    } else if let value = value as? WarmAlarmScheduleWire {
+    } else if let value = value as? WarmAlarmRecurrenceWire {
       super.writeByte(147)
       super.writeValue(value.toList())
-    } else if let value = value as? WarmAlarmSnapshotWire {
+    } else if let value = value as? WarmAlarmSnoozeWire {
       super.writeByte(148)
       super.writeValue(value.toList())
-    } else if let value = value as? WarmAlarmEventWire {
+    } else if let value = value as? WarmAlarmScheduleWire {
       super.writeByte(149)
+      super.writeValue(value.toList())
+    } else if let value = value as? WarmAlarmSnapshotWire {
+      super.writeByte(150)
+      super.writeValue(value.toList())
+    } else if let value = value as? WarmAlarmEventWire {
+      super.writeByte(151)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)

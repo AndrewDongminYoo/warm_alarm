@@ -24,6 +24,25 @@ This package is [endorsed][endorsed_link], which means you do **not** add it dir
 guaranteed to launch automatically in the background — audio plays only after the user interacts
 with the notification (or if the app is already in the foreground).
 
+## User Notifications host setup
+
+`requestNotificationPermission()` requests User Notifications authorization only.
+On iOS 15 and later, the request includes Time Sensitive authorization with alert and sound authorization.
+The host app must add the Time Sensitive Notifications capability, which provides this entitlement:
+
+```xml
+<key>com.apple.developer.usernotifications.time-sensitive</key>
+<true/>
+```
+
+Alarm notifications use the Time Sensitive interruption level, while process-termination warning notifications keep the default interruption level.
+`getReadiness()` reports the current authorization status and whether alert, sound, and Time Sensitive delivery are enabled.
+Full authorization with all three delivery settings enabled needs no notification-settings guidance.
+Provisional authorization or a disabled alert, sound, or Time Sensitive setting needs guidance through `openReadinessSettings(backgroundExecutionLimited)`.
+When notification settings are healthy, ignore `backgroundExecutionLimited` for notification remediation and select the first other supported reason, if any.
+A `null` settings snapshot means that the current platform implementation does not report granular notification settings.
+`openReadinessSettings(backgroundExecutionLimited)` opens the notification-specific settings screen when iOS provides one and otherwise falls back to the app settings screen.
+
 ## AlarmKit opt-in
 
 The plugin uses AlarmKit when the app runs on iOS 26 or later, the build SDK contains AlarmKit, the host app has a non-empty `NSAlarmKitUsageDescription`, and AlarmKit authorization is not denied.
@@ -40,7 +59,6 @@ Add a usage description to the host app's `Info.plist`.
 <string>Allow alarms that you schedule in this app to alert you.</string>
 ```
 
-`requestNotificationPermission()` requests User Notifications authorization only.
 AlarmKit requests its own authorization when the app schedules its first native alarm.
 If AlarmKit authorization is denied, `getPermissionState()` reports `exactAlarmGranted: false`, `getReadiness()` includes `exactAlarmPermissionDenied`, and `openReadinessSettings(exactAlarmPermissionDenied)` opens the app settings page.
 

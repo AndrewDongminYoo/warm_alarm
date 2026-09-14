@@ -167,12 +167,12 @@ Do not change sound selection or category identifiers.
 The settings snapshot is always attached to an iOS readiness result.
 The effective scheduling backend determines whether the settings affect the readiness level.
 
-| Effective backend          | Authorization and settings            | Level     | Existing reasons                                                                                       |
-| -------------------------- | ------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------ |
-| AlarmKit                   | AlarmKit authorized                   | `ready`   | none                                                                                                   |
-| AlarmKit selection pending | AlarmKit not determined               | `limited` | `unknown`                                                                                              |
-| User Notifications         | denied or not determined              | `blocked` | `notificationPermissionDenied`, `backgroundExecutionLimited`                                           |
-| User Notifications         | authorized, provisional, or ephemeral | `limited` | `backgroundExecutionLimited`, plus `exactAlarmPermissionDenied` when AlarmKit is configured and denied |
+| Effective backend          | Authorization and settings            | Level     | Existing reasons                                                                                                                       |
+| -------------------------- | ------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| AlarmKit                   | AlarmKit authorized                   | `ready`   | none                                                                                                                                   |
+| AlarmKit selection pending | AlarmKit not determined               | `limited` | `unknown`                                                                                                                              |
+| User Notifications         | denied or not determined              | `blocked` | `notificationPermissionDenied`, `backgroundExecutionLimited`, plus `exactAlarmPermissionDenied` when AlarmKit is configured and denied |
+| User Notifications         | authorized, provisional, or ephemeral | `limited` | `backgroundExecutionLimited`, plus `exactAlarmPermissionDenied` when AlarmKit is configured and denied                                 |
 
 For a User Notifications result, hosts inspect `notificationSettings` in addition to `level` and `reasons`.
 Provisional authorization, disabled alerts, disabled sounds, or disabled Time Sensitive Notifications require notification-settings guidance even though the existing compatibility reason stays `backgroundExecutionLimited`.
