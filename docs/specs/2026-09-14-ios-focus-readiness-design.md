@@ -131,6 +131,9 @@ Introduce an internal value type that contains only the notification settings re
 Introduce a `NotificationSettingsReader` closure on `WarmAlarmPlugin` and default it to `notificationCenter.getNotificationSettings` plus a conversion to the internal value.
 Tests inject the closure and supply each settings combination without constructing `UNNotificationSettings`.
 
+Introduce an internal `NotificationAuthorizationRequester` closure whose default calls `requestAuthorization` on the injected `notificationCenter`.
+Inject the time-sensitive availability decision so tests can exercise both request-option paths through `requestNotificationPermission` on one simulator.
+
 The plugin must use its injected `notificationCenter` for authorization requests and settings reads.
 It must not call `UNUserNotificationCenter.current()` from these paths.
 
@@ -143,6 +146,8 @@ The request options are:
 
 The method continues to return the post-request remediation snapshot.
 An authorization error continues to fail the method.
+Native tests call `requestNotificationPermission` through an injected requester and assert the exact options for supported and unsupported availability states.
+A helper-only assertion is not sufficient because it would not prove that the public method uses those options.
 
 Time Sensitive Notifications are a host-target capability, not a plugin entitlement.
 Each iOS host must enable the Time Sensitive Notifications capability and include `com.apple.developer.usernotifications.time-sensitive` with a Boolean `true` value in its signed entitlements.
@@ -174,6 +179,7 @@ Provisional authorization, disabled alerts, disabled sounds, or disabled Time Se
 On iOS, `openReadinessSettings(backgroundExecutionLimited)` opens the app notification settings page so hosts can use the existing handoff for these granular states.
 Hosts pass `backgroundExecutionLimited` only when the settings snapshot needs notification guidance.
 When an exact-alarm reason and a granular notification issue coexist, hosts prioritize `backgroundExecutionLimited` instead of blindly passing `reasons.first`.
+When the granular notification settings are healthy, hosts ignore `backgroundExecutionLimited` for notification remediation and select the first other supported reason, if any.
 
 `notificationsGranted` remains `true` for `.authorized`, `.provisional`, and `.ephemeral` because the OS has granted a notification authorization state.
 It remains `false` for `.denied`, `.notDetermined`, and unknown states.
@@ -200,10 +206,11 @@ Follow Red, Green, Refactor for each behavior.
 Native iOS tests must cover:
 
 - alarm content uses `.timeSensitive` on supported iOS versions;
-- authorization options contain `.timeSensitive` on supported iOS versions;
-- the injected reader drives authorized, provisional, denied, not-determined, alert-disabled, sound-disabled, and time-sensitive-disabled snapshots;
+- `requestNotificationPermission` passes `.timeSensitive` through the injected authorization boundary only on supported iOS versions;
+- the injected reader drives authorized, provisional, ephemeral, denied, not-determined, unknown, alert-disabled, sound-disabled, and time-sensitive-disabled snapshots;
 - AlarmKit-authorized readiness remains `ready` for every notification settings combination;
 - `backgroundExecutionLimited` maps to the notification settings handoff on iOS;
+- the notification-settings URL selector covers both the iOS 16-specific URL and the earlier app-settings fallback;
 - User Notifications readiness follows the table above.
 
 Dart tests must cover:

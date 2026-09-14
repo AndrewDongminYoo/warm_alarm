@@ -333,12 +333,28 @@ Expected: the iOS Dart suite passes.
 
 - [ ] **Step 1: Write failing native tests for request options and content**
 
-Add tests that fail when `.timeSensitive` is absent:
+Add tests that fail when `.timeSensitive` is absent.
+The authorization test must call `requestNotificationPermission` through an injected request boundary and capture the options that the method passes for both injected availability states:
 
 ```swift
-func testSupportedAuthorizationOptionsRequestTimeSensitiveDelivery() {
-    XCTAssertTrue(WarmAlarmPlugin.notificationAuthorizationOptions(timeSensitiveAvailable: true).contains(.timeSensitive))
-    XCTAssertFalse(WarmAlarmPlugin.notificationAuthorizationOptions(timeSensitiveAvailable: false).contains(.timeSensitive))
+func testRequestNotificationPermissionUsesAvailabilitySpecificOptions() {
+    let cases = [(available: true, expectsTimeSensitive: true), (available: false, expectsTimeSensitive: false)]
+    for testCase in cases {
+        let requested = expectation(description: "authorization requested")
+        let plugin = makeSoundLifecyclePlugin(
+            notificationAuthorizationRequester: { options, completion in
+                XCTAssertTrue(options.contains(.alert))
+                XCTAssertTrue(options.contains(.sound))
+                XCTAssertEqual(options.contains(.timeSensitive), testCase.expectsTimeSensitive)
+                completion(true, nil)
+                requested.fulfill()
+            },
+            timeSensitiveAuthorizationAvailable: { testCase.available }
+        )
+
+        plugin.requestNotificationPermission { _ in }
+        wait(for: [requested], timeout: 1)
+    }
 }
 
 func testAlarmContentUsesTimeSensitiveInterruptionLevel() throws {
@@ -352,8 +368,12 @@ func testAlarmContentUsesTimeSensitiveInterruptionLevel() throws {
 }
 ```
 
-Add a native routing test that expects `backgroundExecutionLimited` to select notification settings, and add example Dart tests for the remediation reason selector.
-The selector must prefer `notificationPermissionDenied` for denied or undetermined authorization, prefer `backgroundExecutionLimited` for provisional authorization or disabled alert, sound, or Time Sensitive settings, and otherwise preserve the first existing reason.
+Add a native routing test for a pure internal settings URL selector.
+It must select the notification settings URL for `backgroundExecutionLimited` and `notificationPermissionDenied` when the iOS 16 URL is available, fall back to the app settings URL when it is unavailable, select app settings for `exactAlarmPermissionDenied`, and return `nil` for unsupported reasons.
+
+Add example Dart tests for the remediation reason selector.
+The selector must prefer `notificationPermissionDenied` for denied or undetermined authorization and prefer `backgroundExecutionLimited` for provisional authorization or disabled alert, sound, or Time Sensitive settings.
+When the granular settings are healthy, it must skip `backgroundExecutionLimited`, preserve the first other reason, or return `null` when no other reason remains.
 
 Before adding the example entitlement, run its validation commands from Step 4 and verify that they fail because the file and build setting do not exist.
 
@@ -365,12 +385,17 @@ Check machine load first, select one available iPhone simulator, and run the `Ru
 uptime
 simulator_udid=$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone"))] | last | .udid')
 result_directory=$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/warm-alarm-runner-tests.XXXXXX")
-cd warm_alarm/example/ios
-xcodebuild test -quiet -workspace Runner.xcworkspace -scheme Runner -destination "platform=iOS Simulator,id=$simulator_udid" -only-testing:RunnerTests -resultBundlePath "$result_directory/RunnerTests.xcresult"
+(
+  cd warm_alarm/example/ios
+  xcodebuild test -quiet -workspace Runner.xcworkspace -scheme Runner -destination "platform=iOS Simulator,id=$simulator_udid" -only-testing:RunnerTests -resultBundlePath "$result_directory/RunnerTests.xcresult"
+)
+(
+  cd warm_alarm/example
+  flutter test test/readiness_remediation_reason_test.dart
+)
 ```
 
-Also run the focused example selector test.
-Expected: compilation fails because `notificationAuthorizationOptions` and the selector do not exist, or the content assertion fails because interruption level is not time-sensitive.
+Expected: compilation fails because the injected authorization boundary, native URL selector, and example remediation selector do not exist, or the content assertion fails because interruption level is not time-sensitive.
 
 - [ ] **Step 3: Add the minimal request and content behavior**
 
@@ -384,11 +409,12 @@ static func notificationAuthorizationOptions(timeSensitiveAvailable: Bool) -> UN
 }
 ```
 
-Use `#available(iOS 15.0, *)` to select the Boolean in `requestNotificationPermission`.
-Use the injected `notificationCenter` for the request.
+Add `NotificationAuthorizationRequester` and `TimeSensitiveAuthorizationAvailability` initializer dependencies.
+The default requester must close over the injected `notificationCenter`, and the default availability closure must use `#available(iOS 15.0, *)`.
+Make `requestNotificationPermission` use both dependencies so its actual request options are observable in tests.
 Set `content.interruptionLevel = .timeSensitive` in `WarmAlarmDelegate.makeContent` under the same availability guard.
-Map `backgroundExecutionLimited` to the notification settings URL on iOS 16 and later and to the app settings URL on earlier supported versions.
-Keep unsupported reasons unsupported.
+Add a pure internal URL selector that accepts the reason, the optional iOS 16 notification settings URL string, and the app settings URL string.
+Make `openReadinessSettings` use it so `backgroundExecutionLimited` and `notificationPermissionDenied` select notification settings on iOS 16 and later, both fall back to app settings on earlier supported versions, exact-alarm remediation selects app settings, and unsupported reasons remain unsupported.
 
 Add an example-only remediation selector that uses `WarmAlarmReadiness.notificationSettings` before list order.
 Add `Runner/Runner.entitlements` with `com.apple.developer.usernotifications.time-sensitive` set to `true`, and set `CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements` in the example Runner target's Debug, Profile, and Release build configurations.
@@ -396,7 +422,7 @@ The plugin package itself must not declare a host entitlement.
 
 - [ ] **Step 4: Run the native target and verify Green for delivery behavior**
 
-Run the same `RunnerTests` command and the focused example selector test.
+Run the same parenthesized `RunnerTests` command and focused example selector command from Step 2.
 
 Verify the example host configuration:
 
@@ -410,10 +436,11 @@ Expected: every native test and Dart test passes with no native skip on the sele
 - [ ] **Step 5: Write failing native tests for the injected settings matrix**
 
 Name the production changes that make these tests pass: `NotificationSettingsReader`, `WarmAlarmNotificationSettingsSnapshot`, and propagation through `getReadiness`.
-Cover authorized, provisional, denied, not-determined, alert-disabled, sound-disabled, and time-sensitive-disabled values.
+Cover authorized, provisional, ephemeral, denied, not-determined, unknown, alert-disabled, sound-disabled, and time-sensitive-disabled values.
 For each case, call `plugin.getReadiness`, then assert `notificationSettings` and the readiness table from the spec.
+Assert that ephemeral authorization is granted with limited User Notifications readiness and that an unknown authorization is not granted with blocked readiness.
 Also assert that an authorized AlarmKit backend stays `ready` when every notification setting is disabled.
-Add a native test that passes `backgroundExecutionLimited` to `openReadinessSettings` and observes the notification settings URL instead of an unsupported result.
+Add focused assertions for the pure URL selector before testing the handoff completion path.
 
 ```swift
 func testInjectedProvisionalSettingsRemainVisibleInReadiness() throws {
