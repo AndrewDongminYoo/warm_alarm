@@ -1,3 +1,7 @@
+# 0.1.3
+
+- Expose granular notification authorization and delivery settings through the optional readiness snapshot.
+
 # 0.1.2
 
 - Add optional system-sound preparation and an AlarmKit sound-file override without changing legacy audio inputs.
