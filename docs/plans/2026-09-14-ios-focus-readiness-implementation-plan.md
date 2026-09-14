@@ -31,7 +31,7 @@
 **Files:**
 
 - Create: `warm_alarm_platform_interface/lib/src/models/warm_alarm_notification_settings.dart`
-- Create: `warm_alarm_platform_interface/test/src/models/warm_alarm_notification_settings_test.dart`
+- Create: `warm_alarm_platform_interface/test/src/warm_alarm_notification_settings_test.dart`
 - Modify: `warm_alarm_platform_interface/lib/src/models/warm_alarm_readiness.dart`
 - Modify: `warm_alarm_platform_interface/lib/src/models/models.dart`
 
@@ -80,7 +80,7 @@ Run:
 
 ```bash
 cd warm_alarm_platform_interface
-flutter test test/src/models/warm_alarm_notification_settings_test.dart
+flutter test test/src/warm_alarm_notification_settings_test.dart
 ```
 
 Expected: compilation fails because `WarmAlarmNotificationSettings`, `WarmAlarmNotificationAuthorizationStatus`, and `notificationSettings` do not exist.
@@ -128,7 +128,7 @@ Run:
 
 ```bash
 cd warm_alarm_platform_interface
-flutter test test/src/models/warm_alarm_notification_settings_test.dart
+flutter test test/src/warm_alarm_notification_settings_test.dart
 ```
 
 Expected: both tests pass.
