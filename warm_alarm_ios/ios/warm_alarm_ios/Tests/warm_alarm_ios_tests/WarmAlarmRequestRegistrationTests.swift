@@ -92,6 +92,47 @@ final class WarmAlarmRequestRegistrationTests: XCTestCase {
         XCTAssertEqual(snapshot.readiness.reasons, [])
     }
 
+    func testGetReadinessUsesPersistedUserNotificationsFallbackWhenAlarmKitIsAuthorized() {
+        let alarmID: Int64 = 8_424_242_499
+        defer { WarmAlarmStore.shared.remove(id: alarmID) }
+        WarmAlarmStore.shared.save(WarmAlarmScheduleData.from(wire: WarmAlarmScheduleWire(
+            id: alarmID,
+            scheduledAtMillis: 1_900_000_000_000,
+            notification: WarmAlarmNotificationWire(
+                title: "Wake up",
+                body: "Fallback",
+                keepNotificationAfterAlarmEnds: false
+            ),
+            audio: WarmAlarmAudioWire(loop: true, vibrate: true, volumeEnforced: false)
+        )))
+        let settings = WarmAlarmNotificationSettingsSnapshot(
+            authorizationStatus: .authorized,
+            alertsEnabled: true,
+            soundsEnabled: true,
+            timeSensitiveEnabled: false
+        )
+        let completed = expectation(description: "Fallback readiness")
+        let plugin = makeReadinessPlugin(
+            settings: settings,
+            backend: RecordingAlarmKitBackend(scheduleError: nil, authorizationState: .authorized)
+        )
+
+        plugin.getReadiness { result in
+            guard case let .success(readiness) = result else {
+                XCTFail("Expected readiness for the persisted fallback")
+                completed.fulfill()
+                return
+            }
+            XCTAssertEqual(readiness.level, .limited)
+            XCTAssertEqual(readiness.reasons, [.backgroundExecutionLimited])
+            XCTAssertEqual(readiness.notificationSettings?.timeSensitiveEnabled, false)
+            completed.fulfill()
+        }
+
+        wait(for: [completed], timeout: 1)
+        withExtendedLifetime(plugin) {}
+    }
+
     func testNotificationFallbackReadinessUsesNotificationPermission() {
         for authorization in [WarmAlarmAlarmKitAuthorization.authorized, .notDetermined] {
             let blocked = WarmAlarmPlugin.permissionSnapshot(

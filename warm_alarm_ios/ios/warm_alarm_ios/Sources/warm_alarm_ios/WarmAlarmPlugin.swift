@@ -1770,6 +1770,9 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         _ handler: @escaping (WarmAlarmPermissionStateWire, WarmAlarmReadinessWire) -> Void
     ) {
         notificationSettingsReader { notificationSettings in
+            let resolvedEffectiveBackend = effectiveBackend ?? Self.schedulingBackend(
+                storedSchedules: Array(WarmAlarmStore.shared.loadAll().values)
+            )
             let alarmKitConfigured = Self.schedulingBackend(
                 alarmKitAvailable: self.alarmKitBackend != nil,
                 alarmKitUsageDescription: self.alarmKitUsageDescription,
@@ -1779,7 +1782,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                 notificationSettings: notificationSettings,
                 alarmKitConfigured: alarmKitConfigured,
                 alarmKitAuthorization: self.alarmKitBackend?.authorizationState,
-                effectiveBackend: effectiveBackend
+                effectiveBackend: resolvedEffectiveBackend
             )
             handler(snapshot.permissionState, snapshot.readiness)
         }
@@ -1852,6 +1855,13 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                 notificationSettings: notificationSettings.wire
             )
         )
+    }
+
+    static func schedulingBackend(
+        storedSchedules: [WarmAlarmScheduleData]
+    ) -> WarmAlarmAppleSchedulingBackend? {
+        guard !storedSchedules.isEmpty else { return nil }
+        return storedSchedules.contains { !$0.alarmKitManaged } ? .userNotifications : .alarmKit
     }
 
     static func settingsURLString(
