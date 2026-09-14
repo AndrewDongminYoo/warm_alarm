@@ -270,14 +270,23 @@ void main() {
     });
 
     test('getReadiness delegates to platform', () async {
+      const notificationSettings = WarmAlarmNotificationSettings(
+        authorizationStatus: WarmAlarmNotificationAuthorizationStatus.provisional,
+        alertsEnabled: false,
+        soundsEnabled: true,
+        timeSensitiveEnabled: false,
+      );
       when(warmAlarmPlatform.getReadiness).thenAnswer(
         (_) async => const WarmAlarmReadiness(
-          level: WarmAlarmReadinessLevel.ready,
-          reasons: <WarmAlarmReadinessReason>[],
+          level: WarmAlarmReadinessLevel.limited,
+          reasons: <WarmAlarmReadinessReason>[
+            WarmAlarmReadinessReason.backgroundExecutionLimited,
+          ],
+          notificationSettings: notificationSettings,
         ),
       );
       final readiness = await WarmAlarm.getReadiness();
-      expect(readiness.level, WarmAlarmReadinessLevel.ready);
+      expect(readiness.notificationSettings, same(notificationSettings));
       verify(warmAlarmPlatform.getReadiness).called(1);
     });
 

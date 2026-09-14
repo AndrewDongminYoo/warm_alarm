@@ -1,3 +1,8 @@
+# 0.1.4
+
+- Expose granular iOS notification settings through alarm readiness results.
+- Require the iOS implementation and platform interface that support Time Sensitive delivery and notification-settings remediation.
+
 # 0.1.3
 
 - Expose system-sound preparation for recording-only and combined voice alarms on configured iOS AlarmKit hosts.
