@@ -134,6 +134,15 @@ enum WarmAlarmReadinessReasonWire {
   unknown,
 }
 
+enum WarmAlarmNotificationAuthorizationStatusWire {
+  notDetermined,
+  denied,
+  authorized,
+  provisional,
+  ephemeral,
+  unknown,
+}
+
 enum WarmAlarmRemediationStatusWire {
   completed,
   unavailable,
@@ -275,20 +284,79 @@ class WarmAlarmPermissionStateWire {
   int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
 }
 
+class WarmAlarmNotificationSettingsWire {
+  WarmAlarmNotificationSettingsWire({
+    required this.authorizationStatus,
+    required this.alertsEnabled,
+    required this.soundsEnabled,
+    this.timeSensitiveEnabled,
+  });
+
+  WarmAlarmNotificationAuthorizationStatusWire authorizationStatus;
+
+  bool alertsEnabled;
+
+  bool soundsEnabled;
+
+  bool? timeSensitiveEnabled;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      authorizationStatus,
+      alertsEnabled,
+      soundsEnabled,
+      timeSensitiveEnabled,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static WarmAlarmNotificationSettingsWire decode(Object result) {
+    result as List<Object?>;
+    return WarmAlarmNotificationSettingsWire(
+      authorizationStatus: result[0]! as WarmAlarmNotificationAuthorizationStatusWire,
+      alertsEnabled: result[1]! as bool,
+      soundsEnabled: result[2]! as bool,
+      timeSensitiveEnabled: result[3] as bool?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! WarmAlarmNotificationSettingsWire || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(authorizationStatus, other.authorizationStatus) && _deepEquals(alertsEnabled, other.alertsEnabled) && _deepEquals(soundsEnabled, other.soundsEnabled) && _deepEquals(timeSensitiveEnabled, other.timeSensitiveEnabled);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
 class WarmAlarmReadinessWire {
   WarmAlarmReadinessWire({
     required this.level,
     required this.reasons,
+    this.notificationSettings,
   });
 
   WarmAlarmReadinessLevelWire level;
 
   List<WarmAlarmReadinessReasonWire> reasons;
 
+  WarmAlarmNotificationSettingsWire? notificationSettings;
+
   List<Object?> _toList() {
     return <Object?>[
       level,
       reasons,
+      notificationSettings,
     ];
   }
 
@@ -300,6 +368,7 @@ class WarmAlarmReadinessWire {
     return WarmAlarmReadinessWire(
       level: result[0]! as WarmAlarmReadinessLevelWire,
       reasons: (result[1]! as List<Object?>).cast<WarmAlarmReadinessReasonWire>(),
+      notificationSettings: result[2] as WarmAlarmNotificationSettingsWire?,
     );
   }
 
@@ -312,7 +381,7 @@ class WarmAlarmReadinessWire {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(level, other.level) && _deepEquals(reasons, other.reasons);
+    return _deepEquals(level, other.level) && _deepEquals(reasons, other.reasons) && _deepEquals(notificationSettings, other.notificationSettings);
   }
 
   @override
@@ -1007,59 +1076,65 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is WarmAlarmReadinessReasonWire) {
       buffer.putUint8(131);
       writeValue(buffer, value.index);
-    }    else if (value is WarmAlarmRemediationStatusWire) {
+    }    else if (value is WarmAlarmNotificationAuthorizationStatusWire) {
       buffer.putUint8(132);
       writeValue(buffer, value.index);
-    }    else if (value is WarmAlarmFailureCodeWire) {
+    }    else if (value is WarmAlarmRemediationStatusWire) {
       buffer.putUint8(133);
       writeValue(buffer, value.index);
-    }    else if (value is WarmAlarmEventTypeWire) {
+    }    else if (value is WarmAlarmFailureCodeWire) {
       buffer.putUint8(134);
       writeValue(buffer, value.index);
-    }    else if (value is WarmAlarmCapabilitiesWire) {
+    }    else if (value is WarmAlarmEventTypeWire) {
       buffer.putUint8(135);
-      writeValue(buffer, value.encode());
-    }    else if (value is WarmAlarmPermissionStateWire) {
+      writeValue(buffer, value.index);
+    }    else if (value is WarmAlarmCapabilitiesWire) {
       buffer.putUint8(136);
       writeValue(buffer, value.encode());
-    }    else if (value is WarmAlarmReadinessWire) {
+    }    else if (value is WarmAlarmPermissionStateWire) {
       buffer.putUint8(137);
       writeValue(buffer, value.encode());
-    }    else if (value is WarmAlarmRemediationResultWire) {
+    }    else if (value is WarmAlarmNotificationSettingsWire) {
       buffer.putUint8(138);
       writeValue(buffer, value.encode());
-    }    else if (value is WarmAlarmWarningWire) {
+    }    else if (value is WarmAlarmReadinessWire) {
       buffer.putUint8(139);
       writeValue(buffer, value.encode());
-    }    else if (value is WarmAlarmFailureWire) {
+    }    else if (value is WarmAlarmRemediationResultWire) {
       buffer.putUint8(140);
       writeValue(buffer, value.encode());
-    }    else if (value is WarmAlarmScheduleResultWire) {
+    }    else if (value is WarmAlarmWarningWire) {
       buffer.putUint8(141);
       writeValue(buffer, value.encode());
-    }    else if (value is WarmAlarmNotificationWire) {
+    }    else if (value is WarmAlarmFailureWire) {
       buffer.putUint8(142);
       writeValue(buffer, value.encode());
-    }    else if (value is WarmAlarmVolumeFadeStepWire) {
+    }    else if (value is WarmAlarmScheduleResultWire) {
       buffer.putUint8(143);
       writeValue(buffer, value.encode());
-    }    else if (value is WarmAlarmAudioWire) {
+    }    else if (value is WarmAlarmNotificationWire) {
       buffer.putUint8(144);
       writeValue(buffer, value.encode());
-    }    else if (value is WarmAlarmRecurrenceWire) {
+    }    else if (value is WarmAlarmVolumeFadeStepWire) {
       buffer.putUint8(145);
       writeValue(buffer, value.encode());
-    }    else if (value is WarmAlarmSnoozeWire) {
+    }    else if (value is WarmAlarmAudioWire) {
       buffer.putUint8(146);
       writeValue(buffer, value.encode());
-    }    else if (value is WarmAlarmScheduleWire) {
+    }    else if (value is WarmAlarmRecurrenceWire) {
       buffer.putUint8(147);
       writeValue(buffer, value.encode());
-    }    else if (value is WarmAlarmSnapshotWire) {
+    }    else if (value is WarmAlarmSnoozeWire) {
       buffer.putUint8(148);
       writeValue(buffer, value.encode());
-    }    else if (value is WarmAlarmEventWire) {
+    }    else if (value is WarmAlarmScheduleWire) {
       buffer.putUint8(149);
+      writeValue(buffer, value.encode());
+    }    else if (value is WarmAlarmSnapshotWire) {
+      buffer.putUint8(150);
+      writeValue(buffer, value.encode());
+    }    else if (value is WarmAlarmEventWire) {
+      buffer.putUint8(151);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -1080,42 +1155,47 @@ class _PigeonCodec extends StandardMessageCodec {
         return value == null ? null : WarmAlarmReadinessReasonWire.values[value];
       case 132:
         final value = readValue(buffer) as int?;
-        return value == null ? null : WarmAlarmRemediationStatusWire.values[value];
+        return value == null ? null : WarmAlarmNotificationAuthorizationStatusWire.values[value];
       case 133:
         final value = readValue(buffer) as int?;
-        return value == null ? null : WarmAlarmFailureCodeWire.values[value];
+        return value == null ? null : WarmAlarmRemediationStatusWire.values[value];
       case 134:
         final value = readValue(buffer) as int?;
-        return value == null ? null : WarmAlarmEventTypeWire.values[value];
+        return value == null ? null : WarmAlarmFailureCodeWire.values[value];
       case 135:
-        return WarmAlarmCapabilitiesWire.decode(readValue(buffer)!);
+        final value = readValue(buffer) as int?;
+        return value == null ? null : WarmAlarmEventTypeWire.values[value];
       case 136:
-        return WarmAlarmPermissionStateWire.decode(readValue(buffer)!);
+        return WarmAlarmCapabilitiesWire.decode(readValue(buffer)!);
       case 137:
-        return WarmAlarmReadinessWire.decode(readValue(buffer)!);
+        return WarmAlarmPermissionStateWire.decode(readValue(buffer)!);
       case 138:
-        return WarmAlarmRemediationResultWire.decode(readValue(buffer)!);
+        return WarmAlarmNotificationSettingsWire.decode(readValue(buffer)!);
       case 139:
-        return WarmAlarmWarningWire.decode(readValue(buffer)!);
+        return WarmAlarmReadinessWire.decode(readValue(buffer)!);
       case 140:
-        return WarmAlarmFailureWire.decode(readValue(buffer)!);
+        return WarmAlarmRemediationResultWire.decode(readValue(buffer)!);
       case 141:
-        return WarmAlarmScheduleResultWire.decode(readValue(buffer)!);
+        return WarmAlarmWarningWire.decode(readValue(buffer)!);
       case 142:
-        return WarmAlarmNotificationWire.decode(readValue(buffer)!);
+        return WarmAlarmFailureWire.decode(readValue(buffer)!);
       case 143:
-        return WarmAlarmVolumeFadeStepWire.decode(readValue(buffer)!);
+        return WarmAlarmScheduleResultWire.decode(readValue(buffer)!);
       case 144:
-        return WarmAlarmAudioWire.decode(readValue(buffer)!);
+        return WarmAlarmNotificationWire.decode(readValue(buffer)!);
       case 145:
-        return WarmAlarmRecurrenceWire.decode(readValue(buffer)!);
+        return WarmAlarmVolumeFadeStepWire.decode(readValue(buffer)!);
       case 146:
-        return WarmAlarmSnoozeWire.decode(readValue(buffer)!);
+        return WarmAlarmAudioWire.decode(readValue(buffer)!);
       case 147:
-        return WarmAlarmScheduleWire.decode(readValue(buffer)!);
+        return WarmAlarmRecurrenceWire.decode(readValue(buffer)!);
       case 148:
-        return WarmAlarmSnapshotWire.decode(readValue(buffer)!);
+        return WarmAlarmSnoozeWire.decode(readValue(buffer)!);
       case 149:
+        return WarmAlarmScheduleWire.decode(readValue(buffer)!);
+      case 150:
+        return WarmAlarmSnapshotWire.decode(readValue(buffer)!);
+      case 151:
         return WarmAlarmEventWire.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);

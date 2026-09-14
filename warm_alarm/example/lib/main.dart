@@ -8,6 +8,32 @@ void main() {
   runApp(const MyApp());
 }
 
+WarmAlarmReadinessReason? readinessRemediationReason(WarmAlarmReadiness readiness) {
+  final reasons = readiness.reasons;
+  if (reasons.isEmpty) return null;
+
+  final settings = readiness.notificationSettings;
+  if (settings == null) return reasons.first;
+
+  final authorizationNeedsAttention =
+      settings.authorizationStatus != WarmAlarmNotificationAuthorizationStatus.authorized;
+  final deliveryNeedsAttention =
+      !settings.alertsEnabled || !settings.soundsEnabled || settings.timeSensitiveEnabled == false;
+  if ((authorizationNeedsAttention || deliveryNeedsAttention) &&
+      reasons.contains(WarmAlarmReadinessReason.notificationPermissionDenied)) {
+    return WarmAlarmReadinessReason.notificationPermissionDenied;
+  }
+  if ((authorizationNeedsAttention || deliveryNeedsAttention) &&
+      reasons.contains(WarmAlarmReadinessReason.backgroundExecutionLimited)) {
+    return WarmAlarmReadinessReason.backgroundExecutionLimited;
+  }
+
+  for (final reason in reasons) {
+    if (reason != WarmAlarmReadinessReason.backgroundExecutionLimited) return reason;
+  }
+  return null;
+}
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -168,15 +194,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () async {
-                  // Readiness reasons are what the settings screens map to, so the
-                  // first outstanding reason is the one worth sending the user to.
-                  final reasons = _readiness?.reasons ?? const <WarmAlarmReadinessReason>[];
-                  if (reasons.isEmpty) {
+                  final readiness = _readiness;
+                  final reason = readiness == null ? null : readinessRemediationReason(readiness);
+                  if (reason == null) {
                     setState(() => _remediationStatus = 'no readiness reason to fix');
                     return;
                   }
                   await _remediate(
-                    () => WarmAlarm.openReadinessSettings(reasons.first),
+                    () => WarmAlarm.openReadinessSettings(reason),
                   );
                 },
                 child: const Text('Open readiness settings'),

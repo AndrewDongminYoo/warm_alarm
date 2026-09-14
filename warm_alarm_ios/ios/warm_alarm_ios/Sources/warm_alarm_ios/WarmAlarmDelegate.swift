@@ -566,6 +566,9 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         }
         content.userInfo = ["alarmId": String(schedule.id)]
         content.categoryIdentifier = Self.categoryIdentifier
+        if #available(iOS 15.0, *) {
+            content.interruptionLevel = .timeSensitive
+        }
         return content
     }
 

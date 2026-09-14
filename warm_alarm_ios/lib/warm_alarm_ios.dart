@@ -255,7 +255,37 @@ WarmAlarmReadiness _readinessFromWire(WarmAlarmReadinessWire wire) {
   return WarmAlarmReadiness(
     level: _readinessLevelFromWire(wire.level),
     reasons: wire.reasons.map(_readinessReasonFromWire).toList(growable: false),
+    notificationSettings: _notificationSettingsFromWire(wire.notificationSettings),
   );
+}
+
+WarmAlarmNotificationSettings? _notificationSettingsFromWire(WarmAlarmNotificationSettingsWire? wire) {
+  if (wire == null) return null;
+  return WarmAlarmNotificationSettings(
+    authorizationStatus: _notificationAuthorizationStatusFromWire(wire.authorizationStatus),
+    alertsEnabled: wire.alertsEnabled,
+    soundsEnabled: wire.soundsEnabled,
+    timeSensitiveEnabled: wire.timeSensitiveEnabled,
+  );
+}
+
+WarmAlarmNotificationAuthorizationStatus _notificationAuthorizationStatusFromWire(
+  WarmAlarmNotificationAuthorizationStatusWire wire,
+) {
+  switch (wire) {
+    case WarmAlarmNotificationAuthorizationStatusWire.notDetermined:
+      return WarmAlarmNotificationAuthorizationStatus.notDetermined;
+    case WarmAlarmNotificationAuthorizationStatusWire.denied:
+      return WarmAlarmNotificationAuthorizationStatus.denied;
+    case WarmAlarmNotificationAuthorizationStatusWire.authorized:
+      return WarmAlarmNotificationAuthorizationStatus.authorized;
+    case WarmAlarmNotificationAuthorizationStatusWire.provisional:
+      return WarmAlarmNotificationAuthorizationStatus.provisional;
+    case WarmAlarmNotificationAuthorizationStatusWire.ephemeral:
+      return WarmAlarmNotificationAuthorizationStatus.ephemeral;
+    case WarmAlarmNotificationAuthorizationStatusWire.unknown:
+      return WarmAlarmNotificationAuthorizationStatus.unknown;
+  }
 }
 
 WarmAlarmRemediationResult _remediationResultFromWire(

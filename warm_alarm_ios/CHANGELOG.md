@@ -1,3 +1,9 @@
+# 0.1.8
+
+- Request Time Sensitive notification authorization on supported iOS versions and mark alarm notifications with the Time Sensitive interruption level.
+- Report granular notification authorization, alert, sound, and Time Sensitive settings through readiness results.
+- Open the notification-specific settings screen for notification delivery limitations.
+
 # 0.1.7
 
 - Add optional AlarmKit scheduling with native Stop and Snooze state reconciliation.
