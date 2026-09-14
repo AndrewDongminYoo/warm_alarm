@@ -321,11 +321,15 @@ Expected: the iOS Dart suite passes.
 - Modify: `warm_alarm_ios/ios/warm_alarm_ios/Sources/warm_alarm_ios/WarmAlarmPlugin.swift`
 - Modify: `warm_alarm_ios/ios/warm_alarm_ios/Sources/warm_alarm_ios/WarmAlarmDelegate.swift`
 - Modify: `warm_alarm_ios/ios/warm_alarm_ios/Tests/warm_alarm_ios_tests/WarmAlarmRequestRegistrationTests.swift`
+- Modify: `warm_alarm/example/lib/main.dart`
+- Create: `warm_alarm/example/test/readiness_remediation_reason_test.dart`
+- Create: `warm_alarm/example/ios/Runner/Runner.entitlements`
+- Modify: `warm_alarm/example/ios/Runner.xcodeproj/project.pbxproj`
 
 **Interfaces:**
 
 - Consumes: Task 3 generated Swift wire types and existing injected `notificationCenter`.
-- Produces: `WarmAlarmNotificationSettingsSnapshot`, `NotificationSettingsReader`, time-sensitive request options, time-sensitive alarm content, and backend-aware readiness.
+- Produces: `WarmAlarmNotificationSettingsSnapshot`, `NotificationSettingsReader`, time-sensitive request options, time-sensitive alarm content, backend-aware readiness, a working granular-settings handoff, and a host entitlement example.
 
 - [ ] **Step 1: Write failing native tests for request options and content**
 
@@ -348,6 +352,11 @@ func testAlarmContentUsesTimeSensitiveInterruptionLevel() throws {
 }
 ```
 
+Add a native routing test that expects `backgroundExecutionLimited` to select notification settings, and add example Dart tests for the remediation reason selector.
+The selector must prefer `notificationPermissionDenied` for denied or undetermined authorization, prefer `backgroundExecutionLimited` for provisional authorization or disabled alert, sound, or Time Sensitive settings, and otherwise preserve the first existing reason.
+
+Before adding the example entitlement, run its validation commands from Step 4 and verify that they fail because the file and build setting do not exist.
+
 - [ ] **Step 2: Run the native test target and verify Red**
 
 Check machine load first, select one available iPhone simulator, and run the `RunnerTests` target through the example workspace.
@@ -360,7 +369,8 @@ cd warm_alarm/example/ios
 xcodebuild test -quiet -workspace Runner.xcworkspace -scheme Runner -destination "platform=iOS Simulator,id=$simulator_udid" -only-testing:RunnerTests -resultBundlePath "$result_directory/RunnerTests.xcresult"
 ```
 
-Expected: compilation fails because `notificationAuthorizationOptions` does not exist, or the content assertion fails because interruption level is not time-sensitive.
+Also run the focused example selector test.
+Expected: compilation fails because `notificationAuthorizationOptions` and the selector do not exist, or the content assertion fails because interruption level is not time-sensitive.
 
 - [ ] **Step 3: Add the minimal request and content behavior**
 
@@ -377,12 +387,25 @@ static func notificationAuthorizationOptions(timeSensitiveAvailable: Bool) -> UN
 Use `#available(iOS 15.0, *)` to select the Boolean in `requestNotificationPermission`.
 Use the injected `notificationCenter` for the request.
 Set `content.interruptionLevel = .timeSensitive` in `WarmAlarmDelegate.makeContent` under the same availability guard.
+Map `backgroundExecutionLimited` to the notification settings URL on iOS 16 and later and to the app settings URL on earlier supported versions.
+Keep unsupported reasons unsupported.
+
+Add an example-only remediation selector that uses `WarmAlarmReadiness.notificationSettings` before list order.
+Add `Runner/Runner.entitlements` with `com.apple.developer.usernotifications.time-sensitive` set to `true`, and set `CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements` in the example Runner target's Debug, Profile, and Release build configurations.
+The plugin package itself must not declare a host entitlement.
 
 - [ ] **Step 4: Run the native target and verify Green for delivery behavior**
 
-Run the same `RunnerTests` command.
+Run the same `RunnerTests` command and the focused example selector test.
 
-Expected: every native test passes with no skip on the selected supported simulator.
+Verify the example host configuration:
+
+```bash
+/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.usernotifications.time-sensitive' warm_alarm/example/ios/Runner/Runner.entitlements
+rg -n 'CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;' warm_alarm/example/ios/Runner.xcodeproj/project.pbxproj
+```
+
+Expected: every native test and Dart test passes with no native skip on the selected supported simulator, the entitlement command prints `true`, and the project file contains one Runner setting for each of its three build configurations.
 
 - [ ] **Step 5: Write failing native tests for the injected settings matrix**
 
@@ -390,6 +413,7 @@ Name the production changes that make these tests pass: `NotificationSettingsRea
 Cover authorized, provisional, denied, not-determined, alert-disabled, sound-disabled, and time-sensitive-disabled values.
 For each case, call `plugin.getReadiness`, then assert `notificationSettings` and the readiness table from the spec.
 Also assert that an authorized AlarmKit backend stays `ready` when every notification setting is disabled.
+Add a native test that passes `backgroundExecutionLimited` to `openReadinessSettings` and observes the notification settings URL instead of an unsupported result.
 
 ```swift
 func testInjectedProvisionalSettingsRemainVisibleInReadiness() throws {
@@ -460,6 +484,7 @@ git diff --check
 ```
 
 Run the native `RunnerTests` target once more after formatting.
+Run `flutter test test/readiness_remediation_reason_test.dart` from `warm_alarm/example` and repeat the example entitlement checks from Step 4.
 Expected: every command exits zero and the native result contains a positive test count.
 
 ### Task 5: Release the iOS implementation stage
@@ -469,6 +494,7 @@ Expected: every command exits zero and the native result contains a positive tes
 - Modify: `warm_alarm_ios/pubspec.yaml`
 - Modify: `warm_alarm_ios/CHANGELOG.md`
 - Modify: `warm_alarm_ios/README.md`
+- Modify: `warm_alarm/README.md`
 
 **Interfaces:**
 
@@ -479,7 +505,9 @@ Expected: every command exits zero and the native result contains a positive tes
 
 Set `version: 0.1.8` and `warm_alarm_platform_interface: ^0.1.3`.
 Prepend a changelog entry for time-sensitive delivery and granular readiness.
-Document the host interpretation of authorization, alert, sound, and time-sensitive settings.
+Document the host interpretation of authorization, alert, sound, and time-sensitive settings in the iOS and facade READMEs.
+Document that consuming iOS targets must enable the Time Sensitive Notifications capability and include `com.apple.developer.usernotifications.time-sensitive = true` in their signed entitlements.
+Document the `backgroundExecutionLimited` notification-settings handoff for granular failures.
 
 - [ ] **Step 2: Verify the iOS release candidate**
 
@@ -487,7 +515,7 @@ Run `flutter pub get`, the Task 4 iOS gates, the native test target, and `git di
 
 - [ ] **Step 3: Commit the iOS concern**
 
-Stage only `warm_alarm_ios` paths and inspect the complete index.
+Stage only the iOS package, example host, and scoped README paths and inspect the complete index.
 
 ```bash
 git commit -m "feat(ios): align Focus delivery and readiness"
@@ -588,6 +616,7 @@ Verify the tag workflow and pub.dev version `0.1.4` before Task 7.
 - Modify: `/Users/dongminyu/Development/01_personal/mirae/pubspec.yaml`
 - Modify: `/Users/dongminyu/Development/01_personal/mirae/pubspec.lock`
 - Modify only if required by generated dependency state: `/Users/dongminyu/Development/01_personal/mirae/ios/Podfile.lock`
+- Verify without changing unless drifted: `/Users/dongminyu/Development/01_personal/mirae/ios/{development,staging,production}/Runner.entitlements`
 
 **Interfaces:**
 
@@ -608,6 +637,16 @@ flutter pub upgrade warm_alarm
 ```
 
 Inspect `pubspec.lock` and require the three exact published versions from the task interface.
+
+Verify the Time Sensitive Notifications key for every Mirae flavor before the device build:
+
+```bash
+for entitlement_file in ios/development/Runner.entitlements ios/staging/Runner.entitlements ios/production/Runner.entitlements; do
+  /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.usernotifications.time-sensitive' "$entitlement_file"
+done
+```
+
+Expected: each command prints `true`.
 
 - [ ] **Step 3: Run Mirae verification**
 
@@ -654,7 +693,20 @@ flutter build ios --release --flavor development --no-pub
 
 Do not use `flutter build` as a generic verification gate; this build exists only for the approved physical-device acceptance.
 
-- [ ] **Step 2: Announce and install the artifact**
+- [ ] **Step 2: Verify the signed Time Sensitive entitlement**
+
+Inspect the artifact that will be installed, not only its source entitlement file:
+
+```bash
+entitlements_output=$(/usr/bin/mktemp -t mirae-signed-entitlements)
+codesign -d --entitlements :- build/ios/iphoneos/Runner.app > "$entitlements_output"
+/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.usernotifications.time-sensitive' "$entitlements_output"
+```
+
+Expected: the signed application entitlement value is `true`.
+Stop before installation if it is absent or false.
+
+- [ ] **Step 3: Announce and install the artifact**
 
 Immediately before the device write, state the exact artifact, bundle identifier, and that the existing daily-phone app will be overwritten without deletion.
 Use an install-over-existing command rather than `flutter install`.
@@ -663,7 +715,7 @@ Use an install-over-existing command rather than `flutter install`.
 xcrun devicectl device install app --device 00008140-001938282206801C build/ios/iphoneos/Runner.app
 ```
 
-- [ ] **Step 3: Announce and launch the app**
+- [ ] **Step 4: Announce and launch the app**
 
 Immediately before launch, state whether the command terminates an existing process.
 Launch without `--terminate-existing` unless the scenario explicitly requires it.
@@ -672,13 +724,13 @@ Launch without `--terminate-existing` unless the scenario explicitly requires it
 xcrun devicectl device process launch --device 00008140-001938282206801C kr.mirae.app.dev
 ```
 
-- [ ] **Step 4: Run the operator-observed Focus scenario**
+- [ ] **Step 5: Run the operator-observed Focus scenario**
 
 Enable Focus, schedule a User Notifications fallback scenario where supported, and record the authorization, alerts, sounds, and Time Sensitive Notifications settings.
 Observe scheduled time, first audible time, lifecycle state, Stop, and Snooze.
 Automation does not infer audibility.
 
-- [ ] **Step 5: Record and publish the evidence**
+- [ ] **Step 6: Record and publish the evidence**
 
 Add the exact device, OS, app version, build, SHA, settings, timing, and operator observation to the device matrix.
 Update AND-50 and AND-148 with the result.

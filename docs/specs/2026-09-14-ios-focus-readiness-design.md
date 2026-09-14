@@ -144,6 +144,11 @@ The request options are:
 The method continues to return the post-request remediation snapshot.
 An authorization error continues to fail the method.
 
+Time Sensitive Notifications are a host-target capability, not a plugin entitlement.
+Each iOS host must enable the Time Sensitive Notifications capability and include `com.apple.developer.usernotifications.time-sensitive` with a Boolean `true` value in its signed entitlements.
+The package README documents this requirement, and the example iOS target demonstrates it.
+Mirae's development, staging, and production Runner entitlement files already contain this key.
+
 ## Notification Content
 
 `WarmAlarmDelegate.makeContent` is the single alarm-content factory for User Notifications primary, recurrence, recovery, snooze, and fallback requests.
@@ -166,7 +171,9 @@ The effective scheduling backend determines whether the settings affect the read
 
 For a User Notifications result, hosts inspect `notificationSettings` in addition to `level` and `reasons`.
 Provisional authorization, disabled alerts, disabled sounds, or disabled Time Sensitive Notifications require notification-settings guidance even though the existing compatibility reason stays `backgroundExecutionLimited`.
-Hosts can use the existing notification settings handoff to open the app notification settings page.
+On iOS, `openReadinessSettings(backgroundExecutionLimited)` opens the app notification settings page so hosts can use the existing handoff for these granular states.
+Hosts pass `backgroundExecutionLimited` only when the settings snapshot needs notification guidance.
+When an exact-alarm reason and a granular notification issue coexist, hosts prioritize `backgroundExecutionLimited` instead of blindly passing `reasons.first`.
 
 `notificationsGranted` remains `true` for `.authorized`, `.provisional`, and `.ephemeral` because the OS has granted a notification authorization state.
 It remains `false` for `.denied`, `.notDetermined`, and unknown states.
@@ -179,6 +186,7 @@ The example and README describe these host decisions:
 - Full authorization with alerts, sounds, and Time Sensitive Notifications enabled needs no settings guidance.
 - Provisional authorization needs guidance to grant full notification authorization.
 - Disabled alerts, sounds, or Time Sensitive Notifications need guidance to open notification settings.
+- A host target must include the Time Sensitive Notifications entitlement before it can rely on Focus breakthrough behavior.
 - A `null` snapshot means that the current platform implementation does not report granular notification settings.
 
 Mirae receives the new fields after it updates its hosted `warm_alarm` constraint and lockfile.
@@ -195,6 +203,7 @@ Native iOS tests must cover:
 - authorization options contain `.timeSensitive` on supported iOS versions;
 - the injected reader drives authorized, provisional, denied, not-determined, alert-disabled, sound-disabled, and time-sensitive-disabled snapshots;
 - AlarmKit-authorized readiness remains `ready` for every notification settings combination;
+- `backgroundExecutionLimited` maps to the notification settings handoff on iOS;
 - User Notifications readiness follows the table above.
 
 Dart tests must cover:
@@ -202,7 +211,11 @@ Dart tests must cover:
 - the new public model and the nullable constructor default;
 - every iOS wire authorization status maps to the public status;
 - `getReadiness`, remediation results, and schedule results preserve the settings snapshot;
+- the example selects notification remediation from the granular settings instead of using list order;
 - Android, macOS, and default implementations still compile and return their existing readiness contract.
+
+Host configuration verification must prove that the example Runner entitlement file contains `com.apple.developer.usernotifications.time-sensitive = true` and that every Runner build configuration uses that file.
+The Mirae adoption stage must verify the same key in its development, staging, and production Runner entitlement files before the physical Focus pass.
 
 Generated-output verification must run after the Pigeon input changes.
 The focused native and Dart suites must pass before the workspace-wide checks.
