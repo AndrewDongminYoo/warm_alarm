@@ -216,7 +216,8 @@ private struct WarmAlarmOccurrenceMetadata {
 
     init?(dictionary: [String: Any]) {
         guard let token = dictionary["token"] as? String, !token.isEmpty,
-              let ordinal = Self.int(dictionary["ordinal"]), (0...6).contains(ordinal),
+              let ordinal = Self.int(dictionary["ordinal"]),
+              (0...WarmAlarmPlugin.fallbackCount).contains(ordinal),
               let year = Self.int(dictionary["year"]), year > 0,
               let month = Self.int(dictionary["month"]), (1...12).contains(month),
               let day = Self.int(dictionary["day"]), (1...31).contains(day),
@@ -680,7 +681,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
     private let alarmKitLiveActivityEnabled: Bool
     private static let killWarningNotifId = "warm_alarm_kill_warning_notif"
     private static let killWarningDefaultsKey = "warm_alarm_kill_warning"
-    private static let fallbackCount = 6
+    fileprivate static let fallbackCount = 10
     private static let fallbackIntervalMillis: Int64 = 30_000
     private static let pendingNotificationLimit = 64
     private var lifecycleObservers: [NSObjectProtocol] = []
