@@ -1,3 +1,7 @@
+# 0.1.9
+
+- Extend the User Notifications fallback chain to ten 30-second follow-up requests so the full-capacity chain reaches five minutes after the primary request.
+
 # 0.1.8
 
 - Request Time Sensitive notification authorization on supported iOS versions and mark alarm notifications with the Time Sensitive interruption level.

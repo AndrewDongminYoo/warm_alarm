@@ -2960,6 +2960,10 @@ final class WarmAlarmRequestTests: XCTestCase {
                 "42#fallback#4",
                 "42#fallback#5",
                 "42#fallback#6",
+                "42#fallback#7",
+                "42#fallback#8",
+                "42#fallback#9",
+                "42#fallback#10",
             ]
         )
     }
@@ -2977,7 +2981,44 @@ final class WarmAlarmRequestTests: XCTestCase {
                 "42#fallback#4",
                 "42#fallback#5",
                 "42#fallback#6",
+                "42#fallback#7",
+                "42#fallback#8",
+                "42#fallback#9",
+                "42#fallback#10",
             ]
+        )
+    }
+
+    func testFallbackPolicySchedulesTenFollowUpsThroughFiveMinutes() {
+        let anchorMillis = Int64(1_900_000_000_000)
+        let requests = WarmAlarmPlugin.makeRequests(
+            for: makeWireSchedule(scheduledAtMillis: anchorMillis),
+            content: UNMutableNotificationContent(),
+            fallbackAnchorMillis: anchorMillis,
+            calendar: utcCalendar()
+        )
+
+        XCTAssertEqual(requests.count, 11)
+        XCTAssertEqual(
+            requests.dropFirst().map(\.identifier),
+            [
+                "42#fallback#1",
+                "42#fallback#2",
+                "42#fallback#3",
+                "42#fallback#4",
+                "42#fallback#5",
+                "42#fallback#6",
+                "42#fallback#7",
+                "42#fallback#8",
+                "42#fallback#9",
+                "42#fallback#10",
+            ]
+        )
+        let lastTrigger = requests.last?.trigger as? UNCalendarNotificationTrigger
+        XCTAssertEqual(
+            lastTrigger.flatMap { utcCalendar().date(from: $0.dateComponents) }
+                .map { Int64($0.timeIntervalSince1970 * 1_000) },
+            anchorMillis + 300_000
         )
     }
 
@@ -3015,16 +3056,23 @@ final class WarmAlarmRequestTests: XCTestCase {
                 "42#fallback#4",
                 "42#fallback#5",
                 "42#fallback#6",
+                "42#fallback#7",
+                "42#fallback#8",
+                "42#fallback#9",
+                "42#fallback#10",
             ]
         )
         let triggers = requests.compactMap { $0.trigger as? UNCalendarNotificationTrigger }
-        XCTAssertEqual(triggers.count, 7)
+        XCTAssertEqual(triggers.count, 11)
         XCTAssertTrue(triggers.allSatisfy { !$0.repeats })
         XCTAssertEqual(
             triggers.compactMap { utcCalendar().date(from: $0.dateComponents) }
                 .map { Int64($0.timeIntervalSince1970.rounded()) },
-            [1_900_000_000, 1_900_000_030, 1_900_000_060, 1_900_000_090, 1_900_000_120, 1_900_000_150,
-             1_900_000_180]
+            [
+                1_900_000_000, 1_900_000_030, 1_900_000_060, 1_900_000_090, 1_900_000_120,
+                1_900_000_150, 1_900_000_180, 1_900_000_210, 1_900_000_240, 1_900_000_270,
+                1_900_000_300,
+            ]
         )
         for request in requests {
             XCTAssertEqual(request.content.title, "Wake up")
@@ -3055,9 +3103,9 @@ final class WarmAlarmRequestTests: XCTestCase {
 
         let firstMetadata = firstRequests.compactMap { occurrenceMetadata(from: $0.content) }
         let secondMetadata = secondRequests.compactMap { occurrenceMetadata(from: $0.content) }
-        XCTAssertEqual(firstMetadata.count, 7)
+        XCTAssertEqual(firstMetadata.count, 11)
         XCTAssertEqual(Set(firstMetadata.compactMap { $0["token"] as? String }).count, 1)
-        XCTAssertEqual(firstMetadata.compactMap { $0["ordinal"] as? Int }, Array(0...6))
+        XCTAssertEqual(firstMetadata.compactMap { $0["ordinal"] as? Int }, Array(0...10))
         XCTAssertTrue(firstRequests.allSatisfy { $0.content.userInfo["alarmId"] as? String == "42" })
         XCTAssertTrue(firstRequests.allSatisfy { $0.content.userInfo["hostPayload"] as? String == "preserved" })
         XCTAssertTrue(firstRequests.allSatisfy {
@@ -3094,17 +3142,21 @@ final class WarmAlarmRequestTests: XCTestCase {
             "42#fallback#4",
             "42#fallback#5",
             "42#fallback#6",
+            "42#fallback#7",
+            "42#fallback#8",
+            "42#fallback#9",
+            "42#fallback#10",
         ])
         XCTAssertEqual(
             requests.compactMap { ($0.trigger as? UNTimeIntervalNotificationTrigger)?.timeInterval },
-            [60, 90, 120, 150, 180, 210, 240]
+            [60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360]
         )
         XCTAssertTrue(requests.allSatisfy { $0.content.userInfo["alarmId"] as? String == "42" })
         XCTAssertTrue(requests.allSatisfy { $0.content.categoryIdentifier == "WARM_ALARM" })
         let metadata = requests.compactMap { occurrenceMetadata(from: $0.content) }
-        XCTAssertEqual(metadata.count, 7)
+        XCTAssertEqual(metadata.count, 11)
         XCTAssertEqual(Set(metadata.compactMap { $0["token"] as? String }).count, 1)
-        XCTAssertEqual(metadata.compactMap { $0["ordinal"] as? Int }, Array(0...6))
+        XCTAssertEqual(metadata.compactMap { $0["ordinal"] as? Int }, Array(0...10))
     }
 
     func testSnoozeOccurrenceMetadataKeepsFixedEpochAcrossTimeZoneChanges() {
@@ -3178,6 +3230,10 @@ final class WarmAlarmRequestTests: XCTestCase {
                 "42#fallback#4",
                 "42#fallback#5",
                 "42#fallback#6",
+                "42#fallback#7",
+                "42#fallback#8",
+                "42#fallback#9",
+                "42#fallback#10",
             ]
         )
         XCTAssertTrue(requests.prefix(2).allSatisfy {
@@ -3186,12 +3242,15 @@ final class WarmAlarmRequestTests: XCTestCase {
         let fallbackTriggers = requests.dropFirst(2).compactMap {
             $0.trigger as? UNCalendarNotificationTrigger
         }
-        XCTAssertEqual(fallbackTriggers.count, 6)
+        XCTAssertEqual(fallbackTriggers.count, 10)
         XCTAssertTrue(fallbackTriggers.allSatisfy { !$0.repeats })
         XCTAssertEqual(
             fallbackTriggers.compactMap { calendar.date(from: $0.dateComponents) }
                 .map { Int64($0.timeIntervalSince1970.rounded()) },
-            [1_900_172_790, 1_900_172_820, 1_900_172_850, 1_900_172_880, 1_900_172_910, 1_900_172_940]
+            [
+                1_900_172_790, 1_900_172_820, 1_900_172_850, 1_900_172_880, 1_900_172_910,
+                1_900_172_940, 1_900_172_970, 1_900_173_000, 1_900_173_030, 1_900_173_060,
+            ]
         )
         for request in requests {
             XCTAssertEqual(request.content.userInfo["alarmId"] as? String, "42")
@@ -3304,7 +3363,7 @@ final class WarmAlarmRequestTests: XCTestCase {
             "42#fallback#4",
             "42#fallback#5",
         ])
-        XCTAssertEqual(selection?.omittedFallbackCount, 1)
+        XCTAssertEqual(selection?.omittedFallbackCount, 5)
         XCTAssertNotNil(WarmAlarmPlugin.fallbackCapacityWarning(
             omittedCount: selection?.omittedFallbackCount ?? 0
         ))
@@ -3338,7 +3397,7 @@ final class WarmAlarmRequestTests: XCTestCase {
             limit: 64
         )
         XCTAssertEqual(killWarningReserved?.requests.map(\.identifier), ["42"])
-        XCTAssertEqual(killWarningReserved?.omittedFallbackCount, 6)
+        XCTAssertEqual(killWarningReserved?.omittedFallbackCount, 10)
 
         let pendingWithFallbacks = Set((0..<58).map { "existing-\($0)" })
             .union(WarmAlarmPlugin.fallbackIdentifiers(for: 42))
@@ -3356,7 +3415,7 @@ final class WarmAlarmRequestTests: XCTestCase {
             "42#fallback#4",
             "42#fallback#5",
         ])
-        XCTAssertEqual(replacingFallbacks?.omittedFallbackCount, 1)
+        XCTAssertEqual(replacingFallbacks?.omittedFallbackCount, 5)
     }
 
     func testPendingLimitRefusesScheduleWhenCoreDoesNotFit() {
@@ -3389,7 +3448,7 @@ final class WarmAlarmRequestTests: XCTestCase {
             calendar: utcCalendar()
         )
         let replacing = Set(WarmAlarmPlugin.requestIdentifiers(for: 42, recurrenceWeekdays: nil))
-        let pending = replacing.union((0..<57).map { "existing-\($0)" })
+        let pending = replacing.union((0..<53).map { "existing-\($0)" })
 
         let selection = WarmAlarmPlugin.selectRequestsWithinPendingLimit(
             requests,
@@ -3398,7 +3457,7 @@ final class WarmAlarmRequestTests: XCTestCase {
             limit: 64
         )
 
-        XCTAssertEqual(selection?.requests.count, 7)
+        XCTAssertEqual(selection?.requests.count, 11)
         XCTAssertEqual(selection?.omittedFallbackCount, 0)
     }
 
@@ -3423,7 +3482,7 @@ final class WarmAlarmRequestTests: XCTestCase {
         )
 
         XCTAssertEqual(selection?.requests.map(\.identifier), ["42#2", "42#fallback#1"])
-        XCTAssertEqual(selection?.omittedFallbackCount, 5)
+        XCTAssertEqual(selection?.omittedFallbackCount, 9)
     }
 
     func testPendingLimitReservesConfiguredKillWarningSlot() {
@@ -3456,7 +3515,7 @@ final class WarmAlarmRequestTests: XCTestCase {
             "42#fallback#4",
             "42#fallback#5",
         ])
-        XCTAssertEqual(selection?.omittedFallbackCount, 1)
+        XCTAssertEqual(selection?.omittedFallbackCount, 5)
         XCTAssertEqual(WarmAlarmPlugin.killWarningReservedSlotCount(
             isConfigured: false,
             pendingIdentifiers: pending
@@ -3534,11 +3593,15 @@ final class WarmAlarmRequestTests: XCTestCase {
             "42#fallback#4",
             "42#fallback#5",
             "42#fallback#6",
+            "42#fallback#7",
+            "42#fallback#8",
+            "42#fallback#9",
+            "42#fallback#10",
         ])
         let triggers = requests.compactMap { $0.trigger as? UNTimeIntervalNotificationTrigger }
-        XCTAssertEqual(triggers.count, 5)
+        XCTAssertEqual(triggers.count, 9)
         XCTAssertTrue(triggers.allSatisfy { !$0.repeats })
-        XCTAssertEqual(triggers.map(\.timeInterval), [15, 45, 75, 105, 135])
+        XCTAssertEqual(triggers.map(\.timeInterval), [15, 45, 75, 105, 135, 165, 195, 225, 255])
     }
 
     func testRecoveryKeepsScheduledFallbacksAlignedToCalendar() {
@@ -3563,14 +3626,21 @@ final class WarmAlarmRequestTests: XCTestCase {
             "42#fallback#4",
             "42#fallback#5",
             "42#fallback#6",
+            "42#fallback#7",
+            "42#fallback#8",
+            "42#fallback#9",
+            "42#fallback#10",
         ])
         let triggers = requests.compactMap { $0.trigger as? UNCalendarNotificationTrigger }
-        XCTAssertEqual(triggers.count, 5)
+        XCTAssertEqual(triggers.count, 9)
         XCTAssertTrue(triggers.allSatisfy { !$0.repeats })
         XCTAssertEqual(
             triggers.compactMap { calendar.date(from: $0.dateComponents) }
                 .map { Int64($0.timeIntervalSince1970 * 1_000) },
-            [anchor + 60_000, anchor + 90_000, anchor + 120_000, anchor + 150_000, anchor + 180_000]
+            [
+                anchor + 60_000, anchor + 90_000, anchor + 120_000, anchor + 150_000, anchor + 180_000,
+                anchor + 210_000, anchor + 240_000, anchor + 270_000, anchor + 300_000,
+            ]
         )
     }
 
@@ -3609,14 +3679,18 @@ final class WarmAlarmRequestTests: XCTestCase {
             "42#fallback#4",
             "42#fallback#5",
             "42#fallback#6",
+            "42#fallback#7",
+            "42#fallback#8",
+            "42#fallback#9",
+            "42#fallback#10",
         ])
         let primaryTrigger = requests.first?.trigger as? UNCalendarNotificationTrigger
         XCTAssertEqual(primaryTrigger?.dateComponents.hour, 7)
         XCTAssertEqual(primaryTrigger?.dateComponents.minute, 0)
         let fallbackTriggers = requests.dropFirst().compactMap { $0.trigger as? UNCalendarNotificationTrigger }
-        XCTAssertEqual(fallbackTriggers.map(\.dateComponents.hour), [7, 7, 7, 7, 7])
-        XCTAssertEqual(fallbackTriggers.map(\.dateComponents.minute), [1, 1, 2, 2, 3])
-        XCTAssertEqual(fallbackTriggers.map(\.dateComponents.second), [0, 30, 0, 30, 0])
+        XCTAssertEqual(fallbackTriggers.map(\.dateComponents.hour), [7, 7, 7, 7, 7, 7, 7, 7, 7])
+        XCTAssertEqual(fallbackTriggers.map(\.dateComponents.minute), [1, 1, 2, 2, 3, 3, 4, 4, 5])
+        XCTAssertEqual(fallbackTriggers.map(\.dateComponents.second), [0, 30, 0, 30, 0, 30, 0, 30, 0])
     }
 
     func testRecoveryDetectsDateLineChangeWhenRecurringHourIsUnchanged() {
@@ -3669,7 +3743,7 @@ final class WarmAlarmRequestTests: XCTestCase {
 
         let requests = WarmAlarmPlugin.makeRecoveryRequests(
             for: schedule,
-            nowMillis: anchor + 181_000,
+            nowMillis: anchor + 301_000,
             pendingIdentifiers: ["42#1"],
             content: UNMutableNotificationContent(),
             calendar: calendar
@@ -3742,8 +3816,12 @@ final class WarmAlarmRequestTests: XCTestCase {
             "42#fallback#4",
             "42#fallback#5",
             "42#fallback#6",
+            "42#fallback#7",
+            "42#fallback#8",
+            "42#fallback#9",
+            "42#fallback#10",
         ])
-        XCTAssertEqual(requests.compactMap { $0.trigger as? UNCalendarNotificationTrigger }.count, 5)
+        XCTAssertEqual(requests.compactMap { $0.trigger as? UNCalendarNotificationTrigger }.count, 9)
         XCTAssertTrue(requests.compactMap { $0.trigger as? UNTimeIntervalNotificationTrigger }.isEmpty)
     }
 
@@ -3769,7 +3847,7 @@ final class WarmAlarmRequestTests: XCTestCase {
 
         let requests = WarmAlarmPlugin.makeRecoveryRequests(
             for: schedule,
-            nowMillis: snoozeAnchorMillis + 181_000,
+            nowMillis: snoozeAnchorMillis + 301_000,
             pendingIdentifiers: ["42#1"],
             content: UNMutableNotificationContent(),
             calendar: recoveryCalendar
@@ -3905,7 +3983,7 @@ final class WarmAlarmRequestTests: XCTestCase {
             "42#fallback#1",
             "42#fallback#2",
         ])
-        XCTAssertEqual(selection?.omittedFallbackCount, 10)
+        XCTAssertEqual(selection?.omittedFallbackCount, 18)
     }
 
     func testRecoveryOrdersTimeZoneShiftedSchedulesByReconstructedOccurrence() {
@@ -4515,7 +4593,7 @@ final class WarmAlarmRequestTests: XCTestCase {
         let rollbackRequests = WarmAlarmPlugin.makeSnoozeRollbackRequests(
             for: schedule,
             restoring: originalFallbacks,
-            nowMillis: snoozeAtMillis + 181_000,
+            nowMillis: snoozeAtMillis + 301_000,
             content: UNMutableNotificationContent(),
             calendar: calendar
         )
@@ -5053,7 +5131,7 @@ final class WarmAlarmRequestTests: XCTestCase {
         let minimumOccurrenceMillis = WarmAlarmPlugin.actionOccurrenceLowerBound(
             for: schedule,
             content: snoozeContent,
-            nowMillis: snoozeOccurrenceMillis + 181_000,
+            nowMillis: snoozeOccurrenceMillis + 301_000,
             calendar: calendar
         )
 
@@ -5776,6 +5854,10 @@ final class WarmAlarmRequestTests: XCTestCase {
                 "42#fallback#4",
                 "42#fallback#5",
                 "42#fallback#6",
+                "42#fallback#7",
+                "42#fallback#8",
+                "42#fallback#9",
+                "42#fallback#10",
             ]
         )
     }

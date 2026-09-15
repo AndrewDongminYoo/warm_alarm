@@ -164,7 +164,7 @@ The series recurs without a re-arm and survives app termination.
 ISO weekdays (1 = Mon … 7 = Sun) are mapped to Apple's Calendar weekdays (1 = Sun … 7 = Sat).
 Dismissing an alarm ends only the current occurrence.
 `cancelAlarm(id)` removes every weekday request and tears down the series.
-Each alarm also uses up to six slots for its finite fallback chain.
+Each alarm also uses up to ten slots for its finite fallback chain, with 30-second follow-ups through five minutes after the primary request.
 Before scheduling, the plugin counts all pending app requests against the iOS limit of 64 requests.
 The plugin keeps every primary or weekday request and adds the longest fallback prefix that fits.
 The schedule result contains a warning if the plugin omits a fallback.
