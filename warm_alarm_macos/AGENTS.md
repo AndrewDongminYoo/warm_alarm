@@ -33,7 +33,10 @@ macos/
 
 - This package is a **separate copy** of the `warm_alarm_ios` Swift implementation, not a symlink/include. Behavioral changes must be applied here too. Diff against `warm_alarm_ios/ios/warm_alarm_ios/Sources/warm_alarm_ios/` after any non-trivial change to keep them aligned.
 - Use AppKit (`NSApplication`) — never reference `UIApplication` here.
-- Test directory is intentionally absent at `macos/.../Tests/`; Dart unit tests live in `test/` and exercise the wire-mapping layer.
+- Dart unit tests in `test/` exercise the wire-mapping layer.
+- Native tests in `macos/warm_alarm_macos/Tests/warm_alarm_macos_tests/` exercise event persistence, acknowledgement, replay, and audio source selection.
+  Run the `warm_alarm_macos_tests` SwiftPM target with the Flutter SDK's real `FlutterMacOS` framework search and runtime paths; a bare `swift test` cannot resolve that framework outside a configured host.
+  Keep native storage and concurrency regressions here because Dart mapping tests cannot observe those mechanisms.
 
 ## ANTI-PATTERNS
 

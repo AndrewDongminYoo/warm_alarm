@@ -270,48 +270,48 @@ class WarmAlarmEventWire {
 
 @HostApi()
 abstract class WarmAlarmApi {
-  @async
+  @asyncCallback
   void initialize();
 
-  @async
+  @asyncCallback
   WarmAlarmCapabilitiesWire getCapabilities();
 
-  @async
+  @asyncCallback
   WarmAlarmPermissionStateWire getPermissionState();
 
-  @async
+  @asyncCallback
   WarmAlarmReadinessWire getReadiness();
 
-  @async
+  @asyncCallback
   WarmAlarmRemediationResultWire requestNotificationPermission();
 
-  @async
+  @asyncCallback
   WarmAlarmRemediationResultWire openReadinessSettings(WarmAlarmReadinessReasonWire reason);
 
-  @async
+  @asyncCallback
   WarmAlarmScheduleResultWire scheduleAlarm(WarmAlarmScheduleWire schedule);
 
-  @async
+  @asyncCallback
   void cancelAlarm(int id);
 
-  @async
+  @asyncCallback
   void cancelAllAlarms();
 
-  @async
+  @asyncCallback
   List<WarmAlarmSnapshotWire> getScheduledAlarms();
 
-  @async
+  @asyncCallback
   bool isRinging(int? alarmId);
 
-  @async
+  @asyncCallback
   void setKillWarning(String title, String body);
 
-  @async
+  @asyncCallback
   void clearKillWarning();
 }
 
 @FlutterApi()
 abstract class WarmAlarmEventsApi {
-  @async
+  @asyncCallback
   void emitEvent(WarmAlarmEventWire event);
 }

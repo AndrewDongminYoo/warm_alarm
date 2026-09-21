@@ -47,6 +47,17 @@ jobs:
         working-directory: warm_alarm/example
         run: flutter build macos --debug
 
+      - name: Run the macOS native unit tests
+        run: |
+          set -euo pipefail
+          flutter_root=$(flutter --version --machine | jq -er '.flutterRoot')
+          framework_directory="$flutter_root/bin/cache/artifacts/engine/darwin-x64/FlutterMacOS.xcframework/macos-arm64_x86_64"
+          test -d "$framework_directory/FlutterMacOS.framework"
+          swift test --package-path warm_alarm_macos/macos/warm_alarm_macos --jobs 2 \
+            -Xswiftc -F"$framework_directory" \
+            -Xlinker -F -Xlinker "$framework_directory" \
+            -Xlinker -rpath -Xlinker "$framework_directory"
+
   pana:
     uses: ./.github/workflows/pana.yaml
     with:

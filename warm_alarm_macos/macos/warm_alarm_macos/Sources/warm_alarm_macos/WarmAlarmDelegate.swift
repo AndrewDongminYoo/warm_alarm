@@ -9,14 +9,33 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     static let stopActionIdentifier = "STOP"
     static let snoozeActionIdentifier = "SNOOZE"
 
-    private let eventsApi: WarmAlarmEventsApi
+    private let eventQueue: WarmAlarmEventQueue
     private var audioPlayer: AVAudioPlayer?
     private(set) var currentlyPlayingAlarmId: Int64?
     private var fadeWorkItems: [DispatchWorkItem] = []
     private var volumeEnforcerTimer: Timer?
 
-    init(eventsApi: WarmAlarmEventsApi) {
-        self.eventsApi = eventsApi
+    init(
+        eventsApi: WarmAlarmEventsApi,
+        eventQueue: WarmAlarmEventQueue? = nil
+    ) {
+        self.eventQueue = eventQueue ?? WarmAlarmEventQueue { event, completion in
+            let emit = {
+                eventsApi.emitEvent(event: event) { result in
+                    switch result {
+                    case .success:
+                        completion(true)
+                    case .failure:
+                        completion(false)
+                    }
+                }
+            }
+            if Thread.isMainThread {
+                emit()
+            } else {
+                DispatchQueue.main.async(execute: emit)
+            }
+        }
     }
 
     // MARK: - UNUserNotificationCenterDelegate
@@ -148,12 +167,16 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     private func startAudio(alarmId: Int64, for schedule: WarmAlarmScheduleData?) {
         configureAudioSession()
         let player: AVAudioPlayer?
-        if let path = schedule?.filePath, !path.isEmpty {
+        switch WarmAlarmAudioSource.select(filePath: schedule?.filePath, assetPath: schedule?.assetPath) {
+        case let .file(path):
             player = try? AVAudioPlayer(contentsOf: URL(fileURLWithPath: path))
-        } else if let asset = schedule?.assetPath, !asset.isEmpty,
-                  let url = Bundle.main.url(forResource: "flutter_assets/\(asset)", withExtension: nil) {
-            player = try? AVAudioPlayer(contentsOf: url)
-        } else {
+        case let .asset(asset):
+            if let url = Bundle.main.url(forResource: "flutter_assets/\(asset)", withExtension: nil) {
+                player = try? AVAudioPlayer(contentsOf: url)
+            } else {
+                player = nil
+            }
+        case .none:
             player = nil
         }
         if let p = player {
@@ -224,6 +247,10 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     private func nowMillis() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
 
     private func emitEvent(_ event: WarmAlarmEventWire) {
-        eventsApi.emitEvent(event: event) { _ in }
+        eventQueue.enqueue(event)
+    }
+
+    func drainEvents() {
+        eventQueue.drain()
     }
 }

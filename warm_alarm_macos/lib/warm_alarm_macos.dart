@@ -11,14 +11,20 @@ class WarmAlarmMacOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   /// {@macro warm_alarm_macos}
   WarmAlarmMacOS({
     @visibleForTesting WarmAlarmApi? api,
-  }) : api = api ?? WarmAlarmApi();
+  }) : api = api ?? WarmAlarmApi() {
+    _events = StreamController<WarmAlarmEvent>.broadcast(onListen: _handleFirstEventListener);
+  }
+
+  static const int _pendingEventLimit = 64;
 
   /// The API used to interact with the native platform.
   final WarmAlarmApi api;
 
   bool _eventsApiSetUp = false;
 
-  final StreamController<WarmAlarmEvent> _events = StreamController<WarmAlarmEvent>.broadcast();
+  late final StreamController<WarmAlarmEvent> _events;
+  final List<WarmAlarmEvent> _pendingEvents = <WarmAlarmEvent>[];
+  bool _hasEventListener = false;
 
   /// Registers this class as the default instance of [WarmAlarmPlatform].
   static void registerWith() {
@@ -32,7 +38,10 @@ class WarmAlarmMacOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   }
 
   @override
-  Future<void> init() => api.initialize();
+  Future<void> init() async {
+    _ensureEventsApiSetUp();
+    await api.initialize();
+  }
 
   @override
   Future<void> cancelAlarm(int id) => api.cancelAlarm(id);
@@ -89,7 +98,22 @@ class WarmAlarmMacOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
 
   @override
   Future<void> emitEvent(WarmAlarmEventWire event) async {
-    _events.add(_eventFromWire(event));
+    final mappedEvent = _eventFromWire(event);
+    if (!_hasEventListener) {
+      if (_pendingEvents.length == _pendingEventLimit) {
+        _pendingEvents.removeAt(0);
+      }
+      _pendingEvents.add(mappedEvent);
+      return;
+    }
+    _events.add(mappedEvent);
+  }
+
+  void _handleFirstEventListener() {
+    if (_hasEventListener) return;
+    _hasEventListener = true;
+    _pendingEvents.forEach(_events.add);
+    _pendingEvents.clear();
   }
 }
 
