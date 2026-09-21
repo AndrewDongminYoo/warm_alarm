@@ -88,3 +88,28 @@ Physical-phone installation or launch requires explicit action-specific operator
 The authorized PR loop covers scoped commits, pushes, PR creation, and review replies.
 Merge, issue closure, package publication, cleanup, and memory recording have not been authorized.
 Future publication must preserve the existing interface → platform packages → facade release order and raise sibling constraints to the releases that supply new APIs.
+
+## Hosted review follow-up
+
+PR #56 is a draft while the required federated release sequence and final device acceptance remain incomplete.
+The first hosted run exposed missing facade forwarding coverage and an optimized iOS test binding collision.
+The repair adds direct forwarding/error coverage and removes unnecessary binding initialization from the new Live Activity tests while preserving the existing custom-binding regression.
+The repaired Dart suite passed 248 tests; the optimized facade and iOS runs passed 43 and 49 tests respectively, each with 100% reported coverage.
+Flutter analysis passed after the repairs.
+
+The first hosted Pana checks failed for the facade and iOS package because the published interface 0.1.3 does not contain the new Live Activity contract.
+A separate interface 0.1.4 prerequisite PR is required before dependent package lower bounds can be raised.
+No Pana threshold was relaxed, and no release was published.
+The release precedent confirmed this ordering: `/Users/dongminyu/.claude/projects/-Users-dongminyu-Development-01-personal-warm-alarm/memory/federated-release-order.md`.
+
+Hosted review also identified a race between reading an empty event queue and becoming idle.
+Independent Sol review extended the repair to preserve a drain request that arrives before a failed callback or failed acknowledgement write.
+Regression fixtures reproduced the empty-read failure on Android, iOS, and macOS.
+The two additional failure-path fixtures failed on the original macOS implementation with the expected missing retry before the production repair.
+The macOS package policy now explicitly permits native persistence, acknowledgement, replay, and audio-source tests while retaining Dart wire-mapping coverage.
+The advisory Codex doctor run after that policy update reported one warning and zero failures; the warning concerned rollout inventory and is unrelated to the package behavior.
+
+The final queue repair passed Android 54, iOS 249, and macOS 18 native tests with zero failures or skips.
+Android evidence is `/tmp/warm-alarm-android-queue-race-green.log` and the JUnit XML; iOS evidence is `/tmp/warm-alarm-pr56-queue-final.xcresult`; macOS evidence is `/tmp/warm-alarm-macos-queue-race-green.log`.
+The final Sol review found no remaining defect in the six queue files or Apple delegate/plugin integration.
+The seven changed queue/evidence files passed scoped Trunk checks.
