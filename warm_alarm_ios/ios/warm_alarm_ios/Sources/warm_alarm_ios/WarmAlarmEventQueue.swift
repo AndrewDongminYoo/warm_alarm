@@ -65,8 +65,14 @@ struct QueuedWarmAlarmEvent {
     let event: WarmAlarmEventWire
 }
 
+protocol WarmAlarmEventQueueStoreProtocol: AnyObject {
+    func enqueue(_ event: WarmAlarmEventWire) -> Bool
+    func peek() -> QueuedWarmAlarmEvent?
+    func remove(occurrenceID: String) -> Bool
+}
+
 /// A persistent FIFO. At 64 entries, enqueue drops the oldest occurrence.
-final class WarmAlarmEventQueueStore: @unchecked Sendable {
+final class WarmAlarmEventQueueStore: WarmAlarmEventQueueStoreProtocol, @unchecked Sendable {
     static let defaultCapacity = 64
 
     private let storage: WarmAlarmEventQueueStorage
@@ -100,6 +106,12 @@ final class WarmAlarmEventQueueStore: @unchecked Sendable {
         Self.storageLock.lock()
         defer { Self.storageLock.unlock() }
         return readAndRepair()
+    }
+
+    func peek() -> QueuedWarmAlarmEvent? {
+        Self.storageLock.lock()
+        defer { Self.storageLock.unlock() }
+        return readAndRepair().first
     }
 
     func remove(occurrenceID: String) -> Bool {
@@ -224,13 +236,14 @@ final class WarmAlarmEventQueueStore: @unchecked Sendable {
 }
 
 final class WarmAlarmEventQueue: @unchecked Sendable {
-    private let store: WarmAlarmEventQueueStore
+    private let store: WarmAlarmEventQueueStoreProtocol
     private let emit: (WarmAlarmEventWire, @escaping (Bool) -> Void) -> Void
     private let lock = NSLock()
     private var isDraining = false
+    private var drainRequestedWhileActive = false
 
     init(
-        store: WarmAlarmEventQueueStore = WarmAlarmEventQueueStore(),
+        store: WarmAlarmEventQueueStoreProtocol = WarmAlarmEventQueueStore(),
         emit: @escaping (WarmAlarmEventWire, @escaping (Bool) -> Void) -> Void
     ) {
         self.store = store
@@ -247,6 +260,7 @@ final class WarmAlarmEventQueue: @unchecked Sendable {
     func drain() {
         lock.lock()
         guard !isDraining else {
+            drainRequestedWhileActive = true
             lock.unlock()
             return
         }
@@ -256,23 +270,33 @@ final class WarmAlarmEventQueue: @unchecked Sendable {
     }
 
     private func emitNext() {
-        guard let pending = store.loadAll().first else {
-            stopDraining()
+        lock.lock()
+        drainRequestedWhileActive = false
+        guard let pending = store.peek() else {
+            isDraining = false
+            lock.unlock()
             return
         }
+        lock.unlock()
         emit(pending.event) { [weak self] succeeded in
             guard let self else { return }
             guard succeeded, self.store.remove(occurrenceID: pending.occurrenceID) else {
-                self.stopDraining()
+                self.retryRequestedDrainOrStop()
                 return
             }
             self.emitNext()
         }
     }
 
-    private func stopDraining() {
+    private func retryRequestedDrainOrStop() {
         lock.lock()
-        isDraining = false
+        guard drainRequestedWhileActive else {
+            isDraining = false
+            lock.unlock()
+            return
+        }
+        drainRequestedWhileActive = false
         lock.unlock()
+        emitNext()
     }
 }

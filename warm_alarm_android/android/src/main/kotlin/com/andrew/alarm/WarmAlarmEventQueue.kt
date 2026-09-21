@@ -30,6 +30,14 @@ internal data class QueuedWarmAlarmEvent(
     val event: WarmAlarmEventWire,
 )
 
+internal interface WarmAlarmEventQueueStoreProtocol {
+    fun enqueue(event: WarmAlarmEventWire): Boolean
+
+    fun peek(): QueuedWarmAlarmEvent?
+
+    fun remove(occurrenceId: String): Boolean
+}
+
 /**
  * A persistent FIFO. When [capacity] is reached, enqueue drops the oldest occurrence.
  */
@@ -37,12 +45,12 @@ internal class WarmAlarmEventQueueStore(
     private val storage: WarmAlarmEventQueueStorage,
     private val capacity: Int = DEFAULT_CAPACITY,
     private val occurrenceId: () -> String = { UUID.randomUUID().toString() },
-) {
+) : WarmAlarmEventQueueStoreProtocol {
     init {
         require(capacity > 0)
     }
 
-    fun enqueue(event: WarmAlarmEventWire): Boolean =
+    override fun enqueue(event: WarmAlarmEventWire): Boolean =
         synchronized(storageLock) {
             val events = readAndRepair().toMutableList()
             events += QueuedWarmAlarmEvent(occurrenceId(), event)
@@ -54,7 +62,9 @@ internal class WarmAlarmEventQueueStore(
 
     fun loadAll(): List<QueuedWarmAlarmEvent> = synchronized(storageLock) { readAndRepair() }
 
-    fun remove(occurrenceId: String): Boolean =
+    override fun peek(): QueuedWarmAlarmEvent? = synchronized(storageLock) { readAndRepair().firstOrNull() }
+
+    override fun remove(occurrenceId: String): Boolean =
         synchronized(storageLock) {
             val events = readAndRepair()
             val retained = events.filterNot { it.occurrenceId == occurrenceId }
@@ -159,10 +169,11 @@ internal class WarmAlarmEventQueueStore(
 }
 
 internal class WarmAlarmEventQueue(
-    private val store: WarmAlarmEventQueueStore,
+    private val store: WarmAlarmEventQueueStoreProtocol,
     private val emit: (WarmAlarmEventWire, (Result<Unit>) -> Unit) -> Unit,
 ) {
     private var isDraining = false
+    private var drainRequestedWhileActive = false
 
     fun enqueue(event: WarmAlarmEventWire): Boolean {
         if (!store.enqueue(event)) return false
@@ -170,26 +181,49 @@ internal class WarmAlarmEventQueue(
         return true
     }
 
-    @Synchronized
     fun drain() {
-        if (isDraining) return
-        isDraining = true
+        val shouldStart =
+            synchronized(this) {
+                if (isDraining) {
+                    drainRequestedWhileActive = true
+                    return@synchronized false
+                }
+                isDraining = true
+                true
+            }
+        if (!shouldStart) return
         emitNext()
     }
 
     private fun emitNext() {
-        val pending = store.loadAll().firstOrNull()
-        if (pending == null) {
-            synchronized(this) { isDraining = false }
-            return
-        }
+        val pending =
+            synchronized(this) {
+                drainRequestedWhileActive = false
+                store.peek() ?: run {
+                    isDraining = false
+                    return@synchronized null
+                }
+            } ?: return
         emit(pending.event) { result ->
             if (result.isFailure || !store.remove(pending.occurrenceId)) {
-                synchronized(this) { isDraining = false }
+                retryRequestedDrainOrStop()
                 return@emit
             }
             emitNext()
         }
+    }
+
+    private fun retryRequestedDrainOrStop() {
+        val shouldRetry =
+            synchronized(this) {
+                if (!drainRequestedWhileActive) {
+                    isDraining = false
+                    return@synchronized false
+                }
+                drainRequestedWhileActive = false
+                true
+            }
+        if (shouldRetry) emitNext()
     }
 }
 

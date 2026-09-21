@@ -105,20 +105,87 @@ final class WarmAlarmEventQueueTests: XCTestCase {
         }
 
         XCTAssertTrue(queue.enqueue(makeEvent(alarmID: 1)))
-        XCTAssertTrue(queue.enqueue(makeEvent(alarmID: 2)))
         XCTAssertEqual(emitted, [1])
 
         callbacks.removeFirst()(false)
-        XCTAssertEqual(store.loadAll().map(\.event.alarmId), [1, 2])
+        XCTAssertEqual(store.loadAll().map(\.event.alarmId), [1])
 
-        XCTAssertTrue(queue.enqueue(makeEvent(alarmID: 3)))
+        XCTAssertTrue(queue.enqueue(makeEvent(alarmID: 2)))
         XCTAssertEqual(emitted, [1, 1])
         callbacks.removeFirst()(true)
         XCTAssertEqual(emitted, [1, 1, 2])
         callbacks.removeFirst()(true)
-        XCTAssertEqual(emitted, [1, 1, 2, 3])
+        XCTAssertTrue(store.loadAll().isEmpty)
+    }
+
+    func testFailedCallbackConsumesOneConcurrentDrainRequestWithoutLooping() {
+        let store = WarmAlarmEventQueueStore(storage: MemoryWarmAlarmEventQueueStorage())
+        var callbacks = [(Bool) -> Void]()
+        var emitted = [Int64]()
+        let queue = WarmAlarmEventQueue(store: store) { event, callback in
+            emitted.append(event.alarmId)
+            callbacks.append(callback)
+        }
+
+        XCTAssertTrue(queue.enqueue(makeEvent(alarmID: 1)))
+        XCTAssertTrue(queue.enqueue(makeEvent(alarmID: 2)))
+
+        callbacks.removeFirst()(false)
+        XCTAssertEqual(emitted, [1, 1])
+
+        guard !callbacks.isEmpty else { return }
+        callbacks.removeFirst()(false)
+        XCTAssertEqual(emitted, [1, 1])
+
+        queue.drain()
+        XCTAssertEqual(emitted, [1, 1, 1])
+    }
+
+    func testFailedRemovalConsumesOneConcurrentDrainRequest() {
+        let storage = MemoryWarmAlarmEventQueueStorage()
+        let store = WarmAlarmEventQueueStore(storage: storage)
+        var callbacks = [(Bool) -> Void]()
+        var emitted = [Int64]()
+        let queue = WarmAlarmEventQueue(store: store) { event, callback in
+            emitted.append(event.alarmId)
+            callbacks.append(callback)
+        }
+
+        XCTAssertTrue(queue.enqueue(makeEvent(alarmID: 1)))
+        XCTAssertTrue(queue.enqueue(makeEvent(alarmID: 2)))
+        storage.rejectsWrites = true
+
+        callbacks.removeFirst()(true)
+        XCTAssertEqual(emitted, [1, 1])
+        XCTAssertEqual(store.loadAll().map(\.event.alarmId), [1, 2])
+
+        guard !callbacks.isEmpty else { return }
+        storage.rejectsWrites = false
+        callbacks.removeFirst()(true)
+        XCTAssertEqual(emitted, [1, 1, 2])
         callbacks.removeFirst()(true)
         XCTAssertTrue(store.loadAll().isEmpty)
+    }
+
+    func testSuccessfulAckDoesNotLoseEnqueueDuringTheFollowUpEmptyCheck() {
+        let store = CoordinatedWarmAlarmEventQueueStore(
+            first: makeEvent(alarmID: 1),
+            second: makeEvent(alarmID: 2)
+        )
+        var callbacks = [(Bool) -> Void]()
+        var emitted = [Int64]()
+        let queue = WarmAlarmEventQueue(store: store) { event, callback in
+            emitted.append(event.alarmId)
+            callbacks.append(callback)
+        }
+        store.coordinateNextEmptyPeek(queue: queue)
+
+        queue.drain()
+        callbacks.removeFirst()(true)
+
+        XCTAssertTrue(store.awaitConcurrentDrain())
+        XCTAssertTrue(store.coordinationStarted)
+        XCTAssertEqual(emitted, [1, 2])
     }
 
     func testSuccessfulCallbackReplaysAfterRemovalWriteFailsThenPersistsTheNextAck() {
@@ -175,6 +242,73 @@ final class WarmAlarmEventQueueTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
+    }
+}
+
+private final class CoordinatedWarmAlarmEventQueueStore: WarmAlarmEventQueueStoreProtocol, @unchecked Sendable {
+    private let lock = NSLock()
+    private var records: [QueuedWarmAlarmEvent]
+    private let second: QueuedWarmAlarmEvent
+    private var queue: WarmAlarmEventQueue?
+    private var coordinateNextEmptyPeek = false
+    private let drainAttempted = DispatchSemaphore(value: 0)
+    private let drainReturned = DispatchSemaphore(value: 0)
+    private let worker = DispatchGroup()
+    private(set) var coordinationStarted = false
+
+    init(first: WarmAlarmEventWire, second: WarmAlarmEventWire) {
+        records = [QueuedWarmAlarmEvent(occurrenceID: "first", event: first)]
+        self.second = QueuedWarmAlarmEvent(occurrenceID: "second", event: second)
+    }
+
+    func coordinateNextEmptyPeek(queue: WarmAlarmEventQueue) {
+        lock.lock()
+        self.queue = queue
+        coordinateNextEmptyPeek = true
+        lock.unlock()
+    }
+
+    func enqueue(_ event: WarmAlarmEventWire) -> Bool {
+        lock.lock()
+        records.append(QueuedWarmAlarmEvent(occurrenceID: "second", event: event))
+        lock.unlock()
+        return true
+    }
+
+    func peek() -> QueuedWarmAlarmEvent? {
+        lock.lock()
+        if !records.isEmpty || !coordinateNextEmptyPeek {
+            let first = records.first
+            lock.unlock()
+            return first
+        }
+        coordinateNextEmptyPeek = false
+        let queue = queue
+        lock.unlock()
+
+        guard let queue else { return nil }
+        worker.enter()
+        DispatchQueue.global().async { [self, queue] in
+            _ = enqueue(second.event)
+            drainAttempted.signal()
+            queue.drain()
+            drainReturned.signal()
+            worker.leave()
+        }
+        coordinationStarted = drainAttempted.wait(timeout: .now() + 1) == .success
+        _ = drainReturned.wait(timeout: .now() + .milliseconds(250))
+        return nil
+    }
+
+    func remove(occurrenceID: String) -> Bool {
+        lock.lock()
+        records.removeAll { $0.occurrenceID == occurrenceID }
+        lock.unlock()
+        return true
+    }
+
+    func awaitConcurrentDrain() -> Bool {
+        worker.wait(timeout: .now() + 1) == .success
     }
 }
 

@@ -1,5 +1,7 @@
 package com.andrew.alarm
 
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -77,20 +79,89 @@ class WarmAlarmEventQueueTest {
             }
 
         assertTrue(queue.enqueue(event(alarmId = 1)))
-        assertTrue(queue.enqueue(event(alarmId = 2)))
         assertEquals(listOf(1L), emitted)
 
         callbacks.removeFirst()(Result.failure(IllegalStateException("Dart unavailable")))
-        assertEquals(listOf(1L, 2L), store.loadAll().map { it.event.alarmId })
+        assertEquals(listOf(1L), store.loadAll().map { it.event.alarmId })
 
-        assertTrue(queue.enqueue(event(alarmId = 3)))
+        assertTrue(queue.enqueue(event(alarmId = 2)))
         assertEquals(listOf(1L, 1L), emitted)
         callbacks.removeFirst()(Result.success(Unit))
         assertEquals(listOf(1L, 1L, 2L), emitted)
         callbacks.removeFirst()(Result.success(Unit))
-        assertEquals(listOf(1L, 1L, 2L, 3L), emitted)
+        assertTrue(store.loadAll().isEmpty())
+    }
+
+    @Test
+    fun failedCallbackConsumesOneConcurrentDrainRequestWithoutLooping() {
+        val store = WarmAlarmEventQueueStore(FakeEventQueueStorage(), occurrenceId = { "id-${nextId++}" })
+        val callbacks = ArrayDeque<(Result<Unit>) -> Unit>()
+        val emitted = mutableListOf<Long>()
+        val queue =
+            WarmAlarmEventQueue(store) { event, callback ->
+                emitted += event.alarmId
+                callbacks += callback
+            }
+
+        assertTrue(queue.enqueue(event(alarmId = 1)))
+        assertTrue(queue.enqueue(event(alarmId = 2)))
+
+        callbacks.removeFirst()(Result.failure(IllegalStateException("Dart unavailable")))
+        assertEquals(listOf(1L, 1L), emitted)
+
+        callbacks.removeFirst()(Result.failure(IllegalStateException("still unavailable")))
+        assertEquals(listOf(1L, 1L), emitted)
+
+        queue.drain()
+        assertEquals(listOf(1L, 1L, 1L), emitted)
+    }
+
+    @Test
+    fun failedRemovalConsumesOneConcurrentDrainRequest() {
+        val storage = FakeEventQueueStorage()
+        val store = WarmAlarmEventQueueStore(storage, occurrenceId = { "id-${nextId++}" })
+        val callbacks = ArrayDeque<(Result<Unit>) -> Unit>()
+        val emitted = mutableListOf<Long>()
+        val queue =
+            WarmAlarmEventQueue(store) { event, callback ->
+                emitted += event.alarmId
+                callbacks += callback
+            }
+
+        assertTrue(queue.enqueue(event(alarmId = 1)))
+        assertTrue(queue.enqueue(event(alarmId = 2)))
+        storage.writeSucceeds = false
+
+        callbacks.removeFirst()(Result.success(Unit))
+        assertEquals(listOf(1L, 1L), emitted)
+        assertEquals(listOf(1L, 2L), store.loadAll().map { it.event.alarmId })
+
+        storage.writeSucceeds = true
+        callbacks.removeFirst()(Result.success(Unit))
+        assertEquals(listOf(1L, 1L, 2L), emitted)
         callbacks.removeFirst()(Result.success(Unit))
         assertTrue(store.loadAll().isEmpty())
+    }
+
+    @Test
+    fun successfulAckDoesNotLoseEnqueueDuringTheFollowUpEmptyCheck() {
+        val first = event(alarmId = 1)
+        val second = event(alarmId = 2)
+        val store = CoordinatedWarmAlarmEventQueueStore(first, second)
+        val callbacks = ArrayDeque<(Result<Unit>) -> Unit>()
+        val emitted = mutableListOf<Long>()
+        val queue =
+            WarmAlarmEventQueue(store) { event, callback ->
+                emitted += event.alarmId
+                callbacks += callback
+            }
+        store.coordinateNextEmptyPeek(queue)
+
+        queue.drain()
+        callbacks.removeFirst()(Result.success(Unit))
+        store.awaitConcurrentDrain()
+
+        assertEquals(listOf(1L, 2L), emitted)
     }
 
     @Test
@@ -161,9 +232,65 @@ class WarmAlarmEventQueueTest {
     }
 }
 
+private class CoordinatedWarmAlarmEventQueueStore(
+    first: WarmAlarmEventWire,
+    private val second: WarmAlarmEventWire,
+) : WarmAlarmEventQueueStoreProtocol {
+    private val records = mutableListOf(QueuedWarmAlarmEvent("first", first))
+    private val drainAttempted = CountDownLatch(1)
+    private val drainReturned = CountDownLatch(1)
+    private val workerFinished = CountDownLatch(1)
+    private var coordinateNextEmptyPeek = false
+    private lateinit var queue: WarmAlarmEventQueue
+
+    fun coordinateNextEmptyPeek(queue: WarmAlarmEventQueue) {
+        this.queue = queue
+        coordinateNextEmptyPeek = true
+    }
+
+    override fun enqueue(event: WarmAlarmEventWire): Boolean {
+        synchronized(records) {
+            records += QueuedWarmAlarmEvent("second", event)
+        }
+        return true
+    }
+
+    override fun peek(): QueuedWarmAlarmEvent? {
+        val shouldCoordinate =
+            synchronized(records) {
+                if (records.isNotEmpty() || !coordinateNextEmptyPeek) return records.firstOrNull()
+                coordinateNextEmptyPeek = false
+                true
+            }
+        if (shouldCoordinate) {
+            Thread {
+                enqueue(second)
+                drainAttempted.countDown()
+                queue.drain()
+                drainReturned.countDown()
+                workerFinished.countDown()
+            }.start()
+            check(drainAttempted.await(1, TimeUnit.SECONDS))
+            drainReturned.await(250, TimeUnit.MILLISECONDS)
+        }
+        return null
+    }
+
+    override fun remove(occurrenceId: String): Boolean {
+        synchronized(records) {
+            records.removeAll { it.occurrenceId == occurrenceId }
+        }
+        return true
+    }
+
+    fun awaitConcurrentDrain() {
+        check(workerFinished.await(1, TimeUnit.SECONDS))
+    }
+}
+
 private class FakeEventQueueStorage(
     initialValue: String? = null,
-    private val writeSucceeds: Boolean = true,
+    var writeSucceeds: Boolean = true,
 ) : WarmAlarmEventQueueStorage {
     var value = initialValue
 
