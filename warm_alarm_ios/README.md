@@ -19,8 +19,9 @@ This package is [endorsed][endorsed_link], which means you do **not** add it dir
 | Background audio playback | ⚠️ Limited            | `AVAudioSession` `.playback` applies only while the app process runs |
 | Full-screen presentation  | ❌ None               | AlarmKit presents system UI; it does not open a Flutter screen       |
 | Wake-check                | ❌ None               | iOS does not provide the Android wake-check flow                     |
+| Live Activity             | ✅ Full or ⚠️ Limited | Opt-in ActivityKit adapter and host-owned Widget Extension           |
 
-**⚠️ Limited** means the alarm fires via a `UNUserNotificationCenter` notification. The app is not
+**⚠️ Limited** for exact alarm scheduling means the alarm fires via a `UNUserNotificationCenter` notification. The app is not
 guaranteed to launch automatically in the background — audio plays only after the user interacts
 with the notification (or if the app is already in the foreground).
 
@@ -61,6 +62,7 @@ Add a usage description to the host app's `Info.plist`.
 
 AlarmKit requests its own authorization when the app schedules its first native alarm.
 If AlarmKit authorization is denied, `getPermissionState()` reports `exactAlarmGranted: false`, `getReadiness()` includes `exactAlarmPermissionDenied`, and `openReadinessSettings(exactAlarmPermissionDenied)` opens the app settings page.
+`getCapabilities().exactScheduling` returns `limited` after denial because User Notifications becomes the active backend.
 
 ### Snooze host requirement
 
@@ -77,6 +79,8 @@ After the extension is ready, enable Live Activities and the plugin opt-in in th
 <true/>
 ```
 
+The plugin verifies both values before it selects AlarmKit for a schedule with Snooze.
+The custom opt-in alone does not establish system Live Activity support.
 Without the extension and this opt-in, schedules with Snooze use the User Notifications fallback and return a warning.
 
 The AlarmKit Pause and Resume buttons use the `Pause` and `Resume` localization keys in the host app's `Localizable` table.
@@ -145,6 +149,36 @@ Keep prepared files immutable while any alarm references them.
 Successful replacement, cancellation, one-shot Stop, and confirmed backend removal release unreferenced generated files.
 Recurring Stop and Snooze retain their sound.
 If native scheduling and rollback both fail, candidate files are retained because native ownership is uncertain.
+
+## Custom Live Activity opt-in
+
+The custom alarm-status Live Activity API is separate from the system presentation that AlarmKit uses for Snooze countdowns.
+`WarmAlarmAlarmKitLiveActivityEnabled` does not enable the custom API.
+
+The custom API requires iOS 16.2 or later, a host-owned ActivityKit adapter, a Widget Extension, and both of these app-target `Info.plist` values:
+
+```xml
+<key>NSSupportsLiveActivities</key>
+<true/>
+<key>WarmAlarmLiveActivityEnabled</key>
+<true/>
+```
+
+`getCapabilities().liveActivity` is `unsupported` when the runtime, either key, or the adapter is missing.
+It is `limited` when the host is configured but `ActivityAuthorizationInfo.areActivitiesEnabled` is false, and `supported` when the configured adapter can start activities.
+Unsupported and disabled operations return their structured result instead of failing.
+
+The first version supports explicit start, update, and end calls with `scheduled`, `ringing`, and `snoozed` states.
+Starting returns the opaque ActivityKit identifier that later update and end calls use.
+The host adapter must recover an activity from `Activity.activities` by that identifier after process recreation and return `notFound` when the activity no longer exists.
+Start a Live Activity while the app is in the foreground.
+
+Copy the [complete host example](example/live_activity/) into the consuming app.
+The example keeps its `ActivityAttributes` source independent of Flutter and compiles it into both the app and Widget Extension targets.
+It includes accessible Lock Screen and Dynamic Island presentations whose VoiceOver labels update with the visible state.
+
+This local-only integration passes `pushType: nil`.
+It does not require APNs, an ActivityKit push server, frequent-update configuration, or a push notification entitlement.
 
 The following behavior applies to the User Notifications backend.
 
