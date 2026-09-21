@@ -1,3 +1,9 @@
+# Unreleased
+
+- Add opt-in Live Activity content, operation results, and forward-compatible unsupported defaults for start, update, and end.
+- Document the public audio contract: file-source precedence, empty-source behavior, `systemSoundFilePath` as an iOS AlarmKit override, looping, volume enforcement, fade controls, and Apple background-haptics limitations.
+- Document one-time and recurring `scheduledAt` semantics and fade-step timestamp requirements.
+
 # 0.1.3
 
 - Expose granular notification authorization and delivery settings through the optional readiness snapshot.

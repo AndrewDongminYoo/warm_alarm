@@ -11,6 +11,8 @@
 
 ## Features
 
+- **Durable lifecycle events** — bounded native replay when the Dart engine reconnects.
+- **Opt-in iOS Live Activities** — host-provided widgets with explicit start, update, and end operations.
 - **Capability-first design** — each platform reports exactly what it can do; no silent no-ops
 - **Three-level system inspection** — `getCapabilities()`, `getPermissionState()`, and `getReadiness()` before you schedule
 - **Reactive event stream** — sealed `WarmAlarmEvent` types for every alarm lifecycle transition
@@ -89,15 +91,19 @@ await WarmAlarm.cancelAlarm(1);
 
 ## Platform Capabilities
 
-| Feature                   | Android    | iOS            | macOS          |
-| ------------------------- | ---------- | -------------- | -------------- |
-| Notification scheduling   | ✅ Full    | ✅ Full        | ✅ Full        |
-| Exact alarm scheduling    | ✅ Full    | ✅ or ⚠️       | ❌ Unsupported |
-| Background audio playback | ⚠️ Limited | ⚠️ Limited     | ⚠️ Limited     |
-| Full-screen presentation  | ✅ Full    | ❌ Unsupported | ❌ Unsupported |
-| Wake-check                | ✅ Full    | ❌ Unsupported | ❌ Unsupported |
+| Feature                   | Android        | iOS                     | macOS          |
+| ------------------------- | -------------- | ----------------------- | -------------- |
+| Notification scheduling   | ✅ Full        | ✅ Full                 | ✅ Full        |
+| Exact alarm scheduling    | ✅ Full        | ✅ or ⚠️                | ❌ Unsupported |
+| Background audio playback | ⚠️ Limited     | ⚠️ Limited              | ⚠️ Limited     |
+| Full-screen presentation  | ✅ Full        | ❌ Unsupported          | ❌ Unsupported |
+| Wake-check                | ✅ Full        | ❌ Unsupported          | ❌ Unsupported |
+| Custom Live Activities    | ❌ Unsupported | Opt-in host integration | ❌ Unsupported |
 
 **⚠️ Limited** means the native implementation reports conditional support. Call `getReadiness()` before you schedule an alarm.
+
+See the [audio contract and durable event delivery](warm_alarm/README.md) for source precedence, platform limits, validation, and replay semantics.
+Custom Live Activities require the [iOS host adapter and Widget Extension](warm_alarm_ios/example/live_activity/README.md).
 
 Call `getReadiness()` at runtime and surface the reasons to your users so they can take corrective action (grant permissions, disable battery optimization, etc.).
 

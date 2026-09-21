@@ -97,13 +97,14 @@ await WarmAlarm.cancelAlarm(1);
 
 ## Platform Capabilities
 
-| Feature                   | Android    | iOS        | macOS      |
-| ------------------------- | ---------- | ---------- | ---------- |
-| Notification scheduling   | ✅ Full    | ✅ Full    | ✅ Full    |
-| Exact alarm scheduling    | ✅ Full    | ✅ or ⚠️   | ⚠️ Limited |
-| Background audio playback | ⚠️ Limited | ⚠️ Limited | ⚠️ Limited |
-| Full-screen presentation  | ✅ Full    | ❌ None    | ❌ None    |
-| Wake-check                | ✅ Full    | ❌ None    | ❌ None    |
+| Feature                   | Android    | iOS                     | macOS      |
+| ------------------------- | ---------- | ----------------------- | ---------- |
+| Notification scheduling   | ✅ Full    | ✅ Full                 | ✅ Full    |
+| Exact alarm scheduling    | ✅ Full    | ✅ or ⚠️                | ⚠️ Limited |
+| Background audio playback | ⚠️ Limited | ⚠️ Limited              | ⚠️ Limited |
+| Full-screen presentation  | ✅ Full    | ❌ None                 | ❌ None    |
+| Wake-check                | ✅ Full    | ❌ None                 | ❌ None    |
+| Custom Live Activities    | ❌ None    | Opt-in host integration | ❌ None    |
 
 **⚠️ Limited** means the native implementation reports conditional support. Call `getReadiness()` before you schedule an alarm.
 
@@ -147,6 +148,33 @@ See the [`warm_alarm_ios` host requirements][warm_alarm_ios_requirements] for th
 
 ---
 
+## Event delivery
+
+Native lifecycle events enter a durable FIFO before the plugin sends them to Dart.
+Android commits the queue to device-protected preferences, and Apple platforms atomically replace an app-scoped Application Support file before emission.
+Apple queue files remain protected until the first device unlock.
+`WarmAlarm.init()` registers the Dart callback before requesting native replay.
+Each platform queue retains up to 64 events and removes an event only after the callback succeeds.
+Callback failures stop the drain and retain the event for a later initialization or new event.
+The oldest event is dropped when the queue reaches capacity.
+Unreadable root data is replaced with an empty queue, while malformed records in a readable queue are discarded individually.
+Android imports pending Snooze events from the previous store.
+
+Events received before the first stream listener are buffered in Dart, also up to 64 entries.
+Subscribe before initialization when possible, and keep the subscription active for the session.
+Delivery is at least once across a crash between a successful callback and persistent acknowledgement, so consumers should tolerate repeated events.
+Atomic file replacement protects against process termination after a completed write; it does not promise recovery from hardware failure or power loss before filesystem buffers are flushed.
+The queue cannot reconstruct events that the operating system never delivered while the process was absent.
+
+## Custom Live Activities
+
+Configured iOS hosts can call `startLiveActivity`, `updateLiveActivity`, and `endLiveActivity`.
+These operations display alarm status without changing the alarm schedule or starting audio.
+The host must register an ActivityKit adapter and supply a Widget Extension that shares the activity attributes with the app.
+See the [iOS setup and complete Swift sample](../warm_alarm_ios/example/live_activity/README.md).
+The API returns `unsupported` on Android, macOS, older iOS versions, and unconfigured hosts, or `disabled` when the user has disabled Live Activities.
+Custom activities use a separate opt-in from AlarmKit countdown presentation.
+
 ## API Reference
 
 ### `WarmAlarm` — static entry point
@@ -179,21 +207,62 @@ user's answer.
 
 ### Key data classes
 
-| Class                        | Purpose                                                                                                                          |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `WarmAlarmSchedule`          | Full alarm configuration: timing, notification, audio, snooze, recurrence, payload, wake-check                                   |
-| `WarmAlarmCapabilities`      | `WarmAlarmSupportStatus` per feature: notification & exact scheduling, background audio, full-screen, wake-check, Live Activity  |
-| `WarmAlarmReadiness`         | Readiness level, reason list, and optional granular notification settings                                                        |
-| `WarmAlarmPermissionState`   | Boolean flags: `notificationsGranted`, `exactAlarmGranted`, `fullScreenIntentGranted`                                            |
-| `WarmAlarmRemediationResult` | Action status plus permission and readiness state when the action returns                                                        |
-| `WarmAlarmScheduleResult`    | `alarmId`, `readiness`, optional `WarmAlarmWarning`                                                                              |
-| `WarmAlarmAudio`             | `filePath?`, `assetPath?`, `loop`, `volume?`, `fadeInDuration?`, `fadeSteps?`, `volumeEnforced`, `vibrate`                       |
-| `WarmAlarmNotification`      | `title`, `body`, `stopActionTitle?`, `snoozeActionTitle?`, `androidIcon?`, `androidIconColor?`, `keepNotificationAfterAlarmEnds` |
-| `WarmAlarmSnooze`            | `duration`                                                                                                                       |
-| `WarmAlarmRecurrence`        | `weekdays` — list of ISO weekday numbers (1 = Monday … 7 = Sunday)                                                               |
-| `WarmAlarmWakeCheck`         | `checkDelay`, `retriggerDelay?`, `maxRetriggers` (Android only)                                                                  |
-| `WarmAlarmVolumeFadeStep`    | `time` (offset from alarm start), `volume` (0.0–1.0) — element of `WarmAlarmAudio.fadeSteps`                                     |
-| `WarmAlarmSnapshot`          | Full scheduled-alarm record returned by `getScheduledAlarms()` — mirrors `WarmAlarmSchedule` fields                              |
+| Class                        | Purpose                                                                                                                            |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `WarmAlarmSchedule`          | Full alarm configuration: timing, notification, audio, snooze, recurrence, payload, wake-check                                     |
+| `WarmAlarmCapabilities`      | `WarmAlarmSupportStatus` per feature: notification & exact scheduling, background audio, full-screen, wake-check, Live Activity    |
+| `WarmAlarmReadiness`         | Readiness level, reason list, and optional granular notification settings                                                          |
+| `WarmAlarmPermissionState`   | Boolean flags: `notificationsGranted`, `exactAlarmGranted`, `fullScreenIntentGranted`                                              |
+| `WarmAlarmRemediationResult` | Action status plus permission and readiness state when the action returns                                                          |
+| `WarmAlarmScheduleResult`    | `alarmId`, `readiness`, optional `WarmAlarmWarning`                                                                                |
+| `WarmAlarmAudio`             | `filePath?`, `assetPath?`, `systemSoundFilePath?`, `loop`, `volume?`, `fadeInDuration?`, `fadeSteps?`, `volumeEnforced`, `vibrate` |
+| `WarmAlarmNotification`      | `title`, `body`, `stopActionTitle?`, `snoozeActionTitle?`, `androidIcon?`, `androidIconColor?`, `keepNotificationAfterAlarmEnds`   |
+| `WarmAlarmSnooze`            | `duration`                                                                                                                         |
+| `WarmAlarmRecurrence`        | `weekdays` — list of ISO weekday numbers (1 = Monday … 7 = Sunday)                                                                 |
+| `WarmAlarmWakeCheck`         | `checkDelay`, `retriggerDelay?`, `maxRetriggers` (Android only)                                                                    |
+| `WarmAlarmVolumeFadeStep`    | `time` (offset from alarm start), `volume` (0.0–1.0) — element of `WarmAlarmAudio.fadeSteps`                                       |
+| `WarmAlarmSnapshot`          | Full scheduled-alarm record returned by `getScheduledAlarms()` — mirrors `WarmAlarmSchedule` fields                                |
+
+### Scheduling validation
+
+`WarmAlarm.scheduleAlarm` validates the request before it reaches a platform implementation.
+
+| ArgumentError name                  | Rejected value                                                                                          |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `schedule.scheduledAt`              | A one-time time that is not strictly future at millisecond precision                                    |
+| `schedule.recurrence.weekdays`      | An empty list or a weekday outside ISO 1–7                                                              |
+| `schedule.snooze.duration`          | A negative duration                                                                                     |
+| `schedule.wakeCheck.checkDelay`     | A negative duration                                                                                     |
+| `schedule.wakeCheck.retriggerDelay` | A negative duration                                                                                     |
+| `schedule.wakeCheck.maxRetriggers`  | A negative count                                                                                        |
+| `schedule.audio.volume`             | A non-finite value or a value outside 0.0–1.0                                                           |
+| `schedule.audio.fadeInDuration`     | A negative duration                                                                                     |
+| `schedule.audio.fadeSteps.time`     | A negative value or a value that is not strictly later than the preceding step at millisecond precision |
+| `schedule.audio.fadeSteps.volume`   | A non-finite value or a value outside 0.0–1.0                                                           |
+
+A recurring schedule may use a past `scheduledAt` anchor because its next local weekday and time determine its next occurrence.
+
+### Audio contract
+
+`filePath` and `assetPath` are valid custom sources.
+An empty string means that source is absent.
+When both are supplied, an accessible `filePath` takes precedence.
+When neither is supplied, the platform uses its native notification or alarm sound.
+The `backgroundAudioPlayback` capability is limited, so check `getCapabilities()` and `getReadiness()` before relying on custom audio after the app backgrounds.
+
+| Field                 | Contract and platform behavior                                                                                                                                  |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `filePath`            | Local custom audio file. Android selects it before an asset when it can read the file; iOS and macOS use it for their plugin-owned player.                      |
+| `assetPath`           | Flutter asset used when `filePath` is absent or inaccessible. Android can use it after a reboot before credential-protected files are available.                |
+| `systemSoundFilePath` | iOS AlarmKit override returned by `prepareSystemSound`. Keep `filePath` or `assetPath` for fallback. Android and macOS ignore it.                               |
+| `loop`                | Requests repeated custom playback. Android applies it to file and asset sources; its native fallback alarm loops.                                               |
+| `volume`, `fadeSteps` | Custom-player gain controls. Volume values are 0.0–1.0. Fade timestamps are nonnegative and strictly increasing at millisecond precision.                       |
+| `fadeInDuration`      | Reserved hint retained in native schedule data. Current Android, iOS, and macOS playback paths do not apply it; use `fadeSteps` for a fade curve.               |
+| `volumeEnforced`      | Android attempts to enforce the alarm stream volume. iOS and macOS can enforce only their plugin-owned player volume, so Apple system volume is not guaranteed. |
+| `vibrate`             | Android requests alarm vibration. Apple background haptics are unsupported for scheduled alarms.                                                                |
+
+Without a custom source, Android uses the system alarm sound and falls back to the notification sound when necessary.
+iOS and macOS use their native notification or AlarmKit sound behavior.
 
 ### `WarmAlarmEvent` — sealed event types
 

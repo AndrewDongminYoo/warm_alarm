@@ -1,0 +1,90 @@
+# Issues 14–21 verification
+
+## Delivery state
+
+This record captures implementation and local review before PR publication.
+The operator subsequently authorized scoped commits, pushes, and PR review through `pr-loop`.
+Current remote check and review results belong to the PR and Git-local loop state.
+No GitHub issue has been closed during this task.
+The operator's physical iPhone has not been installed, launched, or otherwise changed.
+
+| Issue | Change or assessment                                                                                                            | Evidence and remaining acceptance                                                                                                                                                            |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #14   | Retained the existing readiness remediation API and platform behavior                                                           | Existing Dart and native regression suites pass; no duplicate implementation added                                                                                                           |
+| #15   | Durable bounded native event queues, callback acknowledgements, replay, corruption recovery, and early Dart listener buffering  | Native tests cover persistence, replay, failed callbacks, failed acknowledgement writes, overflow, and valid neighbors of corrupt records; Dart platform tests cover initialization delivery |
+| #16   | Android vibration follows playback and stops during teardown                                                                    | Vibration controller and audio policy tests pass                                                                                                                                             |
+| #17   | Reject past one-time alarms and invalid fade timestamps before platform dispatch                                                | Facade tests cover past one-time schedules, recurring anchors, negative timestamps, ordering, and millisecond collisions                                                                     |
+| #18   | Recover readable Android schedules from corrupt persisted data                                                                  | Store tests cover invalid roots and mixed valid/invalid entries                                                                                                                              |
+| #19   | Match AlarmKit capabilities to actual authorization; require both Live Activity host flags for Snooze countdown configuration   | Native regression suite passes; final-build physical-device schedule, Stop, and Snooze acceptance remains pending                                                                            |
+| #20   | Define source precedence and platform audio limits; repair Android loop/volume behavior and share tested Apple source selection | Audio policy/source tests and documentation updated; physical audio and vibration behavior was not exercised in this task                                                                    |
+| #21   | Public start/update/end API, unsupported defaults, opt-in iOS routing, local ActivityKit adapter, and accessible Widget sample  | Dart mappings, native controller tests, and real-SDK sample type checks pass; a configured host's actual ActivityKit lifecycle and rendered Widget acceptance remain pending                 |
+
+The queues acknowledge Dart callback delivery, not downstream application processing.
+Apple queue writes use atomic file replacement; the tests establish persistence across storage recreation, not a power-loss durability guarantee.
+Queues retain at most 64 records and can replay an acknowledged callback if the process exits before acknowledgement persistence.
+
+## Verification results
+
+Each test suite reads implementation behavior within its test boundary.
+None of these unit suites proves physical alarm presentation, sound, haptics, or Widget rendering.
+
+| Check                                | Result                                                                             | Evidence                                                                                          |
+| ------------------------------------ | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Sequential workspace Flutter tests   | 243 passed across seven packages                                                   | `/tmp/warm-alarm-dart-final.log`                                                                  |
+| Android native unit tests            | 51 passed, zero failures/errors/skips                                              | `/tmp/warm-alarm-android-final.log` and example build JUnit XML                                   |
+| iOS RunnerTests                      | 246 passed, zero failed/skipped                                                    | `/tmp/warm-alarm-backlog-final.xcresult`; `xcresulttool get test-results summary`                 |
+| macOS native package tests           | 15 passed                                                                          | `/tmp/warm-alarm-macos-final.log`                                                                 |
+| Flutter analysis                     | No issues                                                                          | `/tmp/warm-alarm-analyze-final.log`                                                               |
+| Scoped Dart formatting               | 21 files checked, zero changes                                                     | `dart format --line-length 120 --output=none --set-exit-if-changed` on changed and new Dart paths |
+| Live Activity host and Widget source | Both Swift 6 type checks passed against the actual iOS SDK and built plugin module | Separate app and Widget compilation boundaries; no Flutter dependency in the Widget               |
+
+The Flutter suite included `check_readiness` 6, facade 40, Android 54, example 9, iOS 47, macOS 38, and platform interface 49 tests.
+The iOS run used an iOS 26.5 simulator and a command-only `IPHONEOS_DEPLOYMENT_TARGET=15.0` override because the installed Xcode SDK rejected the example's older deployment target.
+This does not establish compatibility with the oldest supported iOS deployment target.
+The run emitted existing deprecated API and XCTest deployment-target linker warnings; the result bundle reports no test runtime warnings.
+
+The Android scalar-corruption regression was verified red by temporarily removing per-record decoding recovery, then green after restoring it.
+The Pigeon whitespace normalizer refused a non-generated fixture before accepting a generated fixture.
+A temporary unknown-word canary caused the spelling gate to fail, and the original README bytes were restored afterward.
+
+## Reproduction
+
+Run the Dart suite and analysis from the repository root.
+
+```bash
+melos exec --concurrency=1 --dir-exists=test --fail-fast -- "flutter test --concurrency 2 --test-randomize-ordering-seed random"
+flutter analyze --no-pub
+trunk check --no-fix --jobs 2
+git diff --check
+```
+
+Run native jobs sequentially and check machine load first.
+The Android native task is `./gradlew :warm_alarm_android:testDebugUnitTest --console=plain` from `warm_alarm/example/android`.
+The iOS native suite is the example Runner scheme's `RunnerTests` target.
+The macOS package tests require the Flutter SDK's real `FlutterMacOS` framework search and runtime paths when invoked with `swift test` outside Xcode.
+
+Regenerate the Pigeon outputs with `melos run generate`.
+The schemas use Pigeon 29's callback annotation to preserve the existing callback protocol.
+The generation command applies a guarded trailing-whitespace normalizer instead of hand-editing generated files.
+
+## Review and precedent
+
+Sol and Terra workers implemented independent scopes and reviewed Android, Apple, and public API behavior.
+Repairs include per-record event decoding, durable Apple queue storage, acknowledgement-write failure replay, correct AlarmKit authorization reporting, ActivityKit sample imports, and immutable alarm identity validation during recovered updates.
+
+The Oracle precedent requires Android notification permission callbacks to survive Activity configuration changes and rejects overlapping requests.
+This confirmed preservation of the existing permission lifecycle during event-delivery changes.
+Source: `wiki/sources/claude--projects---users-dongminyu-development-01-personal-warm-alarm--memory--android-permission-callback-lifecycle.md`.
+For the other queried topics: \[no precedent found\].
+
+## Next acceptance and authority
+
+For #19, use a configured AlarmKit host on a supported physical iPhone and verify scheduling, native Stop, and Snooze on the final build.
+Earlier evidence in PR #50 does not cover final-build Stop acceptance.
+For #21, build the app and Widget targets described in `warm_alarm_ios/example/live_activity/README.md`, then verify start, visible update, end, disabled authorization, and accessibility in the rendered presentations.
+The repository's general Flutter example does not yet embed this optional Widget sample.
+
+Physical-phone installation or launch requires explicit action-specific operator approval.
+The authorized PR loop covers scoped commits, pushes, PR creation, and review replies.
+Merge, issue closure, package publication, cleanup, and memory recording have not been authorized.
+Future publication must preserve the existing interface → platform packages → facade release order and raise sibling constraints to the releases that supply new APIs.

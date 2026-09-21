@@ -1,3 +1,12 @@
+# Unreleased
+
+- Persist native alarm events until Dart acknowledges delivery, including retry after acknowledgement storage failures.
+- Match AlarmKit capabilities to current authorization and require both host Live Activity flags for Snooze countdowns.
+- Align file and asset audio source precedence with the public contract.
+- Add an opt-in custom ActivityKit adapter for starting, updating, and ending alarm-status Live Activities without a push server.
+- Add runtime, host-configuration, and authorization capability gates with structured unsupported, disabled, and not-found results.
+- Add a reusable host-owned attributes, Widget Extension, adapter, and accessibility example.
+
 # 0.1.9
 
 - Extend the User Notifications fallback chain to ten 30-second follow-up requests so the full-capacity chain reaches five minutes after the primary request.
