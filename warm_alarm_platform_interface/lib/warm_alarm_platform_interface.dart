@@ -38,6 +38,21 @@ abstract class WarmAlarmPlatform extends PlatformInterface {
 
   Future<void> init();
 
+  /// Starts a host-configured Live Activity while the app is in the foreground.
+  /// Unsupported platforms and unconfigured hosts return unsupported.
+  Future<WarmAlarmLiveActivityResult> startLiveActivity(WarmAlarmLiveActivityState state) async =>
+      const WarmAlarmLiveActivityResult(status: WarmAlarmLiveActivityResultStatus.unsupported);
+
+  /// Updates an existing Live Activity without changing the alarm schedule.
+  Future<WarmAlarmLiveActivityResult> updateLiveActivity(
+    String activityId,
+    WarmAlarmLiveActivityState state,
+  ) async => const WarmAlarmLiveActivityResult(status: WarmAlarmLiveActivityResultStatus.unsupported);
+
+  /// Ends an existing Live Activity using the system's default dismissal policy.
+  Future<WarmAlarmLiveActivityResult> endLiveActivity(String activityId) async =>
+      const WarmAlarmLiveActivityResult(status: WarmAlarmLiveActivityResultStatus.unsupported);
+
   Future<WarmAlarmCapabilities> getCapabilities();
 
   Future<WarmAlarmPermissionState> getPermissionState();
