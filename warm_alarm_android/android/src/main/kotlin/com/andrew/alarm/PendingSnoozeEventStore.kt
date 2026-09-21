@@ -38,11 +38,14 @@ internal class PendingSnoozeEventStore(
     }
 
     @Synchronized
-    fun loadAll(): List<PendingSnoozeEvent> =
-        preferences
-            .read()
-            .mapNotNull(::decode)
-            .sortedWith(compareBy({ it.event.occurredAtMillis }, { it.storageValue }))
+    fun loadAll(): List<PendingSnoozeEvent> {
+        val stored = preferences.read()
+        val valid = stored.mapNotNull(::decode)
+        if (valid.size != stored.size) {
+            preferences.write(valid.mapTo(mutableSetOf()) { it.storageValue })
+        }
+        return valid.sortedWith(compareBy({ it.event.occurredAtMillis }, { it.storageValue }))
+    }
 
     @Synchronized
     fun remove(event: PendingSnoozeEvent): Boolean = preferences.write(preferences.read() - event.storageValue)

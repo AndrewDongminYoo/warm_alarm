@@ -434,26 +434,54 @@ void main() {
     );
 
     test(
-      'emitEvent does not buffer non-snooze events without a listener',
+      'emitEvent buffers non-snooze events until the first listener',
       () async {
         final api = _MockWarmAlarmApi();
         final platform = WarmAlarmAndroid(api: api);
 
-        await platform.emitEvent(
+        final delivery = platform.emitEvent(
           WarmAlarmEventWire(
             alarmId: 7,
             type: WarmAlarmEventTypeWire.stopped,
             occurredAtMillis: 1_000,
           ),
         );
+        await Future<void>.delayed(Duration.zero);
         final emitted = <WarmAlarmEvent>[];
         final sub = platform.events.listen(emitted.add);
+        await delivery;
         await Future<void>.delayed(Duration.zero);
 
-        expect(emitted, isEmpty);
+        expect(emitted.single, isA<WarmAlarmStopped>());
         await sub.cancel();
       },
     );
+
+    test('retains only the 64 newest events before a listener', () async {
+      final platform = WarmAlarmAndroid(api: _MockWarmAlarmApi());
+      final deliveries = <Future<void>>[];
+      for (var alarmId = 0; alarmId < 65; alarmId++) {
+        deliveries.add(
+          platform.emitEvent(
+            WarmAlarmEventWire(
+              alarmId: alarmId,
+              type: WarmAlarmEventTypeWire.fired,
+              occurredAtMillis: alarmId,
+            ),
+          ),
+        );
+      }
+
+      final emitted = <WarmAlarmEvent>[];
+      final sub = platform.events.listen(emitted.add);
+      await Future.wait(deliveries);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(emitted, hasLength(64));
+      expect(emitted.first.alarmId, 1);
+      expect(emitted.last.alarmId, 64);
+      await sub.cancel();
+    });
 
     test('emitEvent maps scheduled event', () async {
       final api = _MockWarmAlarmApi();

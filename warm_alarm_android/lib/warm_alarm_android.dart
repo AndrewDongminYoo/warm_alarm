@@ -21,6 +21,8 @@ class WarmAlarmAndroid extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   /// The API used to interact with the native platform.
   final WarmAlarmApi api;
 
+  static const int _pendingEventLimit = 64;
+
   late final StreamController<WarmAlarmEvent> _events = StreamController<WarmAlarmEvent>.broadcast(
     onListen: _handleFirstEventsListener,
   );
@@ -111,8 +113,11 @@ class WarmAlarmAndroid extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   @override
   Future<void> emitEvent(WarmAlarmEventWire event) async {
     final mappedEvent = _eventFromWire(event);
-    if (!_events.hasListener && event.type == WarmAlarmEventTypeWire.snoozed) {
+    if (!_events.hasListener) {
       final delivered = Completer<void>();
+      if (_pendingEvents.length == _pendingEventLimit) {
+        _pendingEvents.removeAt(0).delivered.complete();
+      }
       _pendingEvents.add((event: mappedEvent, delivered: delivered));
       await delivered.future;
       return;

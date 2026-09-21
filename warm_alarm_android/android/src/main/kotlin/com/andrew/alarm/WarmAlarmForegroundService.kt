@@ -52,8 +52,8 @@ class WarmAlarmForegroundService : Service() {
     }
 
     private var mediaPlayer: MediaPlayer? = null
-    private var backgroundPlayer: MediaPlayer? = null
     private var currentSchedule: WarmAlarmScheduleWire? = null
+    private var vibrationController: WarmAlarmVibrationController? = null
     private val fadeStepHandler = Handler(Looper.getMainLooper())
     private val volumeEnforcerHandler = Handler(Looper.getMainLooper())
 
@@ -101,6 +101,7 @@ class WarmAlarmForegroundService : Service() {
         currentAlarmId = null
         stopAudio()
         WarmAlarmPlugin.emitEventFromBackground(
+            this,
             WarmAlarmEventWire(
                 alarmId = alarmId,
                 type = WarmAlarmEventTypeWire.STOPPED,
@@ -192,49 +193,51 @@ class WarmAlarmForegroundService : Service() {
                     ?: audio?.volume?.toFloat()
                     ?: 1f
             ).coerceIn(0f, 1f)
-        // Voice messages live in credential-protected storage, which is unavailable until the
-        // first user unlock after reboot. Keep the asset or system-alarm path available instead.
         val filePath = audio?.filePath
-        val hasFilePath =
-            !filePath.isNullOrBlank() &&
-                (WarmAlarmDirectBoot.canReadCredentialProtectedFiles(this) || File(filePath).canRead())
-        val hasAssetPath = !audio?.assetPath.isNullOrBlank()
-
-        boostAlarmVolume()
+        val selection =
+            WarmAlarmAudioPolicy.select(
+                filePath = filePath,
+                assetPath = audio?.assetPath,
+                loop = audio?.loop ?: true,
+                canReadCredentialProtectedFiles = WarmAlarmDirectBoot.canReadCredentialProtectedFiles(this),
+                fileReadableDuringDirectBoot = !filePath.isNullOrEmpty() && File(filePath).canRead(),
+            )
 
         try {
-            if (hasFilePath) {
-                // Voice message: always plays once (no loop).
-                mediaPlayer =
-                    createPlayer(volume = initialVolume, loop = false) {
-                        setDataSource(this@WarmAlarmForegroundService, Uri.fromFile(File(audio!!.filePath!!)))
+            WarmAlarmAudioPolicy.enforceSystemVolume(audio?.volumeEnforced == true) { boostAlarmVolume() }
+            vibrationController().start(audio?.vibrate == true)
+            mediaPlayer =
+                when (selection.source) {
+                    WarmAlarmAudioSource.FILE -> {
+                        createPlayer(volume = initialVolume, loop = selection.loop) {
+                            setDataSource(this@WarmAlarmForegroundService, Uri.fromFile(File(requireNotNull(selection.path))))
+                        }
                     }
-            }
-            if (hasAssetPath) {
-                val assetPlayer =
-                    createPlayer(volume = initialVolume, loop = audio?.loop ?: true) {
-                        val fd = assets.openFd("flutter_assets/${audio!!.assetPath}")
-                        setDataSource(fd.fileDescriptor, fd.startOffset, fd.length)
-                        fd.close()
+
+                    WarmAlarmAudioSource.ASSET -> {
+                        createPlayer(volume = initialVolume, loop = selection.loop) {
+                            assets.openFd("flutter_assets/${selection.path}").use { descriptor ->
+                                setDataSource(descriptor.fileDescriptor, descriptor.startOffset, descriptor.length)
+                            }
+                        }
                     }
-                // When both are present, assetPath is the background layer.
-                if (hasFilePath) backgroundPlayer = assetPlayer else mediaPlayer = assetPlayer
-            }
-            if (!hasFilePath && !hasAssetPath) {
-                val uri =
-                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                        ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-                mediaPlayer =
-                    createPlayer(volume = initialVolume, loop = true) {
-                        setDataSource(this@WarmAlarmForegroundService, uri)
+
+                    WarmAlarmAudioSource.DEFAULT_ALARM -> {
+                        val uri =
+                            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                        createPlayer(volume = initialVolume, loop = selection.loop) {
+                            setDataSource(this@WarmAlarmForegroundService, uri)
+                        }
                     }
-            }
+                }
             if (fadeSteps != null) applyFadeSteps(fadeSteps)
             if (audio?.volumeEnforced == true) startVolumeEnforcer()
         } catch (e: Exception) {
             stopAudio()
             if (alarmId != -1L) {
                 WarmAlarmPlugin.emitEventFromBackground(
+                    this,
                     WarmAlarmEventWire(
                         alarmId = alarmId,
                         type = WarmAlarmEventTypeWire.FAILED,
@@ -282,14 +285,12 @@ class WarmAlarmForegroundService : Service() {
     private fun stopAudio() {
         fadeStepHandler.removeCallbacksAndMessages(null)
         volumeEnforcerHandler.removeCallbacksAndMessages(null)
-        listOf(mediaPlayer, backgroundPlayer).forEach {
-            it?.runCatching {
-                stop()
-                release()
-            }
+        vibrationController?.stop()
+        mediaPlayer?.runCatching {
+            stop()
+            release()
         }
         mediaPlayer = null
-        backgroundPlayer = null
     }
 
     private fun buildNotification(
@@ -375,7 +376,6 @@ class WarmAlarmForegroundService : Service() {
             val vol = step.volume.toFloat().coerceIn(0f, 1f)
             fadeStepHandler.postDelayed({
                 mediaPlayer?.setVolume(vol, vol)
-                backgroundPlayer?.setVolume(vol, vol)
             }, step.timeMillis)
         }
     }
@@ -456,4 +456,9 @@ class WarmAlarmForegroundService : Service() {
         stopAudio()
         super.onDestroy()
     }
+
+    private fun vibrationController(): WarmAlarmVibrationController =
+        vibrationController ?: WarmAlarmVibrationController(AndroidWarmAlarmVibrationBackend(this)).also {
+            vibrationController = it
+        }
 }

@@ -53,6 +53,7 @@ class WarmAlarmReceiver : BroadcastReceiver() {
         if (isRetrigger) {
             WarmAlarmStore.incrementRetriggerCount(context, alarmId)
             WarmAlarmPlugin.emitEventFromBackground(
+                context,
                 WarmAlarmEventWire(
                     alarmId = alarmId,
                     type = WarmAlarmEventTypeWire.WAKE_CHECK_EXPIRED,
@@ -60,6 +61,7 @@ class WarmAlarmReceiver : BroadcastReceiver() {
                 ),
             )
             WarmAlarmPlugin.emitEventFromBackground(
+                context,
                 WarmAlarmEventWire(
                     alarmId = alarmId,
                     type = WarmAlarmEventTypeWire.RETRIGGERED,
@@ -70,6 +72,7 @@ class WarmAlarmReceiver : BroadcastReceiver() {
         } else {
             WarmAlarmStore.clearActiveSnooze(context, alarmId)
             WarmAlarmPlugin.emitEventFromBackground(
+                context,
                 WarmAlarmEventWire(
                     alarmId = alarmId,
                     type = WarmAlarmEventTypeWire.FIRED,
@@ -112,6 +115,7 @@ class WarmAlarmReceiver : BroadcastReceiver() {
         val schedule = WarmAlarmStore.load(context, alarmId) ?: return
 
         WarmAlarmPlugin.emitEventFromBackground(
+            context,
             WarmAlarmEventWire(
                 alarmId = alarmId,
                 type = WarmAlarmEventTypeWire.WAKE_CHECK_SHOWN,
@@ -123,6 +127,7 @@ class WarmAlarmReceiver : BroadcastReceiver() {
         val retriggerCount = WarmAlarmStore.getRetriggerCount(context, alarmId)
         if (retriggerCount >= maxRetriggers) {
             WarmAlarmPlugin.emitEventFromBackground(
+                context,
                 WarmAlarmEventWire(
                     alarmId = alarmId,
                     type = WarmAlarmEventTypeWire.WAKE_CHECK_EXPIRED,
@@ -185,6 +190,7 @@ class WarmAlarmReceiver : BroadcastReceiver() {
 
         finishWakeCheck(context, alarmId, WarmAlarmStore.load(context, alarmId))
         WarmAlarmPlugin.emitEventFromBackground(
+            context,
             WarmAlarmEventWire(
                 alarmId = alarmId,
                 type = WarmAlarmEventTypeWire.WAKE_CHECK_DISMISSED,

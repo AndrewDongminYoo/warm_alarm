@@ -43,9 +43,12 @@ When the scheduled time arrives `WarmAlarmReceiver` receives the `com.andrew.ala
 broadcast and starts `WarmAlarmForegroundService`. The service:
 
 - Plays audio via `MediaPlayer` (local file, asset, or system default ringtone)
+- Selects one audio source: a nonempty local file takes precedence, an asset is the direct-boot fallback when that file is unavailable before unlock, and the system alarm sound is used when neither path is configured
+- Applies `loop` to the selected local file or asset without mixing sources
 - Applies optional fade-in via a `Handler`-driven volume schedule
+- Runs optional repeating vibration with the alarm and stops it on Stop, Snooze, playback failure, cancellation, or service destruction
 - Posts the alarm notification with configurable Stop/Snooze actions
-- Optionally enforces volume if the device is set to silent
+- Boosts and periodically enforces the maximum alarm stream volume only when `volumeEnforced` is enabled
 
 ### Wake-check
 
@@ -79,6 +82,8 @@ occurrence; `cancelAlarm(id)` tears down the series.
 `RECEIVE_BOOT_COMPLETED` permission) to reschedule any alarms that were lost when the device
 restarted. It is `directBootAware`, so alarms scheduled before first unlock are restored from
 device-protected storage.
+If the stored schedule list is unreadable, the store replaces it with an empty list.
+If individual records are unreadable, the store retains valid schedules and persists the repaired set through the same device-protected and credential-protected storage path.
 
 ### Kill warning
 
