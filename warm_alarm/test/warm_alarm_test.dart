@@ -51,6 +51,49 @@ void main() {
       );
     });
 
+    test('startLiveActivity forwards the state and returns the platform result', () async {
+      const state = WarmAlarmLiveActivityState(
+        alarmId: 7,
+        title: 'Wake up',
+        status: WarmAlarmLiveActivityStatus.scheduled,
+      );
+      const result = WarmAlarmLiveActivityResult(
+        status: WarmAlarmLiveActivityResultStatus.completed,
+        activityId: 'activity-7',
+      );
+      when(() => warmAlarmPlatform.startLiveActivity(state)).thenAnswer((_) async => result);
+
+      expect(await WarmAlarm.startLiveActivity(state), result);
+      verify(() => warmAlarmPlatform.startLiveActivity(state)).called(1);
+    });
+
+    test('updateLiveActivity forwards platform errors', () async {
+      const state = WarmAlarmLiveActivityState(
+        alarmId: 7,
+        title: 'Snoozed',
+        status: WarmAlarmLiveActivityStatus.snoozed,
+      );
+      when(
+        () => warmAlarmPlatform.updateLiveActivity('activity-7', state),
+      ).thenAnswer((_) async => throw StateError('Activity no longer exists'));
+
+      await expectLater(
+        WarmAlarm.updateLiveActivity('activity-7', state),
+        throwsA(isA<StateError>()),
+      );
+      verify(() => warmAlarmPlatform.updateLiveActivity('activity-7', state)).called(1);
+    });
+
+    test('endLiveActivity forwards the activity identifier and returns the platform result', () async {
+      const result = WarmAlarmLiveActivityResult(
+        status: WarmAlarmLiveActivityResultStatus.notFound,
+      );
+      when(() => warmAlarmPlatform.endLiveActivity('activity-7')).thenAnswer((_) async => result);
+
+      expect(await WarmAlarm.endLiveActivity('activity-7'), result);
+      verify(() => warmAlarmPlatform.endLiveActivity('activity-7')).called(1);
+    });
+
     test(
       'scheduleAlarm accepts zero values and forwards the typed result',
       () async {

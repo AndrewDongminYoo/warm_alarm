@@ -7,19 +7,20 @@ import 'package:warm_alarm_platform_interface/warm_alarm_platform_interface.dart
 class _Api extends Mock implements WarmAlarmApi {}
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-
-  test('start maps alarm content and returns the native activity identifier', () async {
-    final api = _Api();
-    final platform = WarmAlarmIOS(api: api);
-    final at = DateTime.fromMillisecondsSinceEpoch(1900000000000);
-    registerFallbackValue(
+  setUpAll(
+    () => registerFallbackValue(
       WarmAlarmLiveActivityStateWire(
         alarmId: 0,
         title: '',
         status: WarmAlarmLiveActivityStatusWire.scheduled,
       ),
-    );
+    ),
+  );
+
+  test('start maps alarm content and returns the native activity identifier', () async {
+    final api = _Api();
+    final platform = WarmAlarmIOS(api: api);
+    final at = DateTime.fromMillisecondsSinceEpoch(1900000000000);
     when(() => api.startLiveActivity(any())).thenAnswer(
       (_) async => WarmAlarmLiveActivityResultWire(
         status: WarmAlarmLiveActivityResultStatusWire.completed,
@@ -43,6 +44,61 @@ void main() {
     expect(state.scheduledAtMillis, 1900000000000);
     expect(result.status, WarmAlarmLiveActivityResultStatus.completed);
     expect(result.activityId, 'native-id');
+  });
+
+  test('update maps a ringing state without a scheduled time', () async {
+    final api = _Api();
+    final platform = WarmAlarmIOS(api: api);
+    when(() => api.updateLiveActivity(any(), any())).thenAnswer(
+      (_) async => WarmAlarmLiveActivityResultWire(
+        status: WarmAlarmLiveActivityResultStatusWire.completed,
+      ),
+    );
+
+    final result = await platform.updateLiveActivity(
+      'native-id',
+      const WarmAlarmLiveActivityState(
+        alarmId: 7,
+        title: 'Wake up',
+        status: WarmAlarmLiveActivityStatus.ringing,
+      ),
+    );
+
+    final invocation = verify(() => api.updateLiveActivity(captureAny(), captureAny())).captured;
+    expect(invocation[0], 'native-id');
+    final state = invocation[1] as WarmAlarmLiveActivityStateWire;
+    expect(state.alarmId, 7);
+    expect(state.title, 'Wake up');
+    expect(state.status, WarmAlarmLiveActivityStatusWire.ringing);
+    expect(state.scheduledAtMillis, isNull);
+    expect(result.status, WarmAlarmLiveActivityResultStatus.completed);
+  });
+
+  test('update maps a scheduled state with its next occurrence', () async {
+    final api = _Api();
+    final platform = WarmAlarmIOS(api: api);
+    final at = DateTime.fromMillisecondsSinceEpoch(1900000000000);
+    when(() => api.updateLiveActivity(any(), any())).thenAnswer(
+      (_) async => WarmAlarmLiveActivityResultWire(
+        status: WarmAlarmLiveActivityResultStatusWire.completed,
+      ),
+    );
+
+    await platform.updateLiveActivity(
+      'native-id',
+      WarmAlarmLiveActivityState(
+        alarmId: 8,
+        title: 'Tomorrow',
+        status: WarmAlarmLiveActivityStatus.scheduled,
+        scheduledAt: at,
+      ),
+    );
+
+    final invocation = verify(() => api.updateLiveActivity(captureAny(), captureAny())).captured;
+    expect(invocation[0], 'native-id');
+    final state = invocation[1] as WarmAlarmLiveActivityStateWire;
+    expect(state.status, WarmAlarmLiveActivityStatusWire.scheduled);
+    expect(state.scheduledAtMillis, at.millisecondsSinceEpoch);
   });
 
   test('end preserves every native outcome', () async {
