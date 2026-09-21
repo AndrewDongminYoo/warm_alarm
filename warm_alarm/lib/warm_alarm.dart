@@ -103,7 +103,7 @@ class WarmAlarm {
         );
       }
     }
-    return _platform.scheduleAlarm(schedule);
+    return await _platform.scheduleAlarm(schedule);
   }
 
   static Future<void> cancelAlarm(int id) => _platform.cancelAlarm(id);

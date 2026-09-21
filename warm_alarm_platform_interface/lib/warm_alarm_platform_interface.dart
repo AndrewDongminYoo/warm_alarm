@@ -46,7 +46,7 @@ abstract class WarmAlarmPlatform extends PlatformInterface {
 
   /// Requests notification authorization where the platform supports it.
   /// The result includes the permission state and readiness snapshot when the action returns.
-  Future<WarmAlarmRemediationResult> requestNotificationPermission() async => _unsupportedRemediation();
+  Future<WarmAlarmRemediationResult> requestNotificationPermission() async => await _unsupportedRemediation();
 
   /// Opens native settings for a readiness [reason] when the platform supports it.
   /// Settings open in a separate screen and this call returns as soon as the platform accepts
@@ -54,7 +54,7 @@ abstract class WarmAlarmPlatform extends PlatformInterface {
   /// anything. Call [getReadiness] again once the app resumes to see the outcome.
   Future<WarmAlarmRemediationResult> openReadinessSettings(
     WarmAlarmReadinessReason reason,
-  ) async => _unsupportedRemediation();
+  ) async => await _unsupportedRemediation();
 
   /// The result an implementation that cannot remediate returns.
   /// The snapshots are read from this instance so they agree with a direct query rather than
