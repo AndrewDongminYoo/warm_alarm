@@ -1,3 +1,8 @@
+# 0.1.4
+
+- Add opt-in Live Activity content and operation result models.
+- Add inherited unsupported defaults for start, update, and end so existing platform subclasses remain compatible.
+
 # 0.1.3
 
 - Expose granular notification authorization and delivery settings through the optional readiness snapshot.
