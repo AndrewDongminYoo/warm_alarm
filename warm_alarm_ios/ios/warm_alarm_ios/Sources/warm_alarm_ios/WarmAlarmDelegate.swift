@@ -151,7 +151,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     static let stopActionIdentifier = "STOP"
     static let snoozeActionIdentifier = "SNOOZE"
 
-    private let eventsApi: WarmAlarmEventsApiProtocol
+    private let eventQueue: WarmAlarmEventQueue
     private let notificationMutationQueue: WarmAlarmMutationQueue
     private var audioPlayer: AVAudioPlayer?
     private(set) var currentlyPlayingAlarmId: Int64?
@@ -166,9 +166,26 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         eventsApi: WarmAlarmEventsApiProtocol,
         notificationMutationQueue: WarmAlarmMutationQueue,
         currentlyPlayingAlarmId: Int64? = nil,
-        currentlyPlayingOccurrenceToken: String? = nil
+        currentlyPlayingOccurrenceToken: String? = nil,
+        eventQueue: WarmAlarmEventQueue? = nil
     ) {
-        self.eventsApi = eventsApi
+        self.eventQueue = eventQueue ?? WarmAlarmEventQueue { event, completion in
+            let emit = {
+                eventsApi.emitEvent(event: event) { result in
+                    switch result {
+                    case .success:
+                        completion(true)
+                    case .failure:
+                        completion(false)
+                    }
+                }
+            }
+            if Thread.isMainThread {
+                emit()
+            } else {
+                DispatchQueue.main.async(execute: emit)
+            }
+        }
         self.notificationMutationQueue = notificationMutationQueue
         self.currentlyPlayingAlarmId = currentlyPlayingAlarmId
         self.currentlyPlayingOccurrenceToken = currentlyPlayingOccurrenceToken
@@ -618,12 +635,16 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     ) {
         configureAudioSession()
         let player: AVAudioPlayer?
-        if let path = schedule?.filePath, !path.isEmpty {
+        switch WarmAlarmAudioSource.select(filePath: schedule?.filePath, assetPath: schedule?.assetPath) {
+        case let .file(path):
             player = try? AVAudioPlayer(contentsOf: URL(fileURLWithPath: path))
-        } else if let asset = schedule?.assetPath, !asset.isEmpty,
-                  let url = flutterAssetURL(for: asset) {
-            player = try? AVAudioPlayer(contentsOf: url)
-        } else {
+        case let .asset(asset):
+            if let url = flutterAssetURL(for: asset) {
+                player = try? AVAudioPlayer(contentsOf: url)
+            } else {
+                player = nil
+            }
+        case .none:
             player = nil
         }
         if let p = player {
@@ -822,12 +843,10 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     private func nowMillis() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
 
     private func emitEvent(_ event: WarmAlarmEventWire) {
-        if Thread.isMainThread {
-            eventsApi.emitEvent(event: event) { _ in }
-            return
-        }
-        DispatchQueue.main.async { [weak self] in
-            self?.eventsApi.emitEvent(event: event) { _ in }
-        }
+        eventQueue.enqueue(event)
+    }
+
+    func drainEvents() {
+        eventQueue.drain()
     }
 }

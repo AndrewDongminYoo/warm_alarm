@@ -944,6 +944,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
     }
 
     func initialize(completion: @escaping (Result<Void, Error>) -> Void) {
+        delegate.drainEvents()
         notificationMutationQueue.enqueue { [weak self] finish in
             guard let self else {
                 finish()

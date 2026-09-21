@@ -44,7 +44,10 @@ class WarmAlarmIOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   }
 
   @override
-  Future<void> init() => api.initialize();
+  Future<void> init() async {
+    _ensureEventsApiSetUp();
+    await api.initialize();
+  }
 
   @override
   Future<String?> prepareSystemSound({

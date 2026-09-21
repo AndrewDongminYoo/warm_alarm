@@ -87,6 +87,42 @@ void main() {
   });
 
   group('WarmAlarmMacOS events', () {
+    test('preserves events emitted before the first listener', () async {
+      final platform = WarmAlarmMacOS(api: _MockWarmAlarmApi());
+
+      await platform.emitEvent(
+        WarmAlarmEventWire(alarmId: 42, type: WarmAlarmEventTypeWire.fired, occurredAtMillis: 1_000),
+      );
+      final emitted = <WarmAlarmEvent>[];
+      final sub = platform.events.listen(emitted.add);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(emitted.single, isA<WarmAlarmFired>());
+      await sub.cancel();
+    });
+
+    test('retains only the 64 newest events before the first listener', () async {
+      final platform = WarmAlarmMacOS(api: _MockWarmAlarmApi());
+      for (var alarmId = 0; alarmId < 65; alarmId++) {
+        await platform.emitEvent(
+          WarmAlarmEventWire(
+            alarmId: alarmId,
+            type: WarmAlarmEventTypeWire.fired,
+            occurredAtMillis: alarmId,
+          ),
+        );
+      }
+
+      final emitted = <WarmAlarmEvent>[];
+      final sub = platform.events.listen(emitted.add);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(emitted, hasLength(64));
+      expect(emitted.first.alarmId, 1);
+      expect(emitted.last.alarmId, 64);
+      await sub.cancel();
+    });
+
     test('emitEvent adds WarmAlarmFired to events stream', () async {
       final api = _MockWarmAlarmApi();
       final platform = WarmAlarmMacOS(api: api);

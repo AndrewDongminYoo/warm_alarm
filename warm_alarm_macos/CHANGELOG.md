@@ -1,3 +1,8 @@
+# Unreleased
+
+- Persist lifecycle events before Dart dispatch and retry acknowledged delivery during initialization.
+- Buffer events until the first Dart stream listener and preserve file-first custom audio selection.
+
 # 0.1.2
 
 - Persist a recurring alarm's wall-clock hour and minute so recovery re-registers the series at the time it was scheduled for. Recovery derived the time from the recomputed fire date, so a series recovered across a date line or after an expired snooze could come back at the wrong time.
