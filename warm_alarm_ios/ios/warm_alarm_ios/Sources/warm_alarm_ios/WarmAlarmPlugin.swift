@@ -1691,13 +1691,18 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
             alarmKitUsageDescription: alarmKitUsageDescription,
             authorizationState: .authorized
         ) == .alarmKit
+        let liveActivity: WarmAlarmSupportStatusWire = switch WarmAlarmLiveActivityController().capability {
+        case .supported: .supported
+        case .limited: .limited
+        case .unsupported: .unsupported
+        }
         completion(.success(WarmAlarmCapabilitiesWire(
             exactScheduling: alarmKitConfigured ? .supported : .limited,
             notificationScheduling: .supported,
             backgroundAudioPlayback: .limited,
             fullScreenPresentation: .unsupported,
             wakeCheck: .unsupported,
-            liveActivity: alarmKitConfigured && alarmKitLiveActivityEnabled ? .limited : .unsupported
+            liveActivity: liveActivity
         )))
     }
 

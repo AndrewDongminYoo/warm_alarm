@@ -99,6 +99,43 @@ class WarmAlarmIOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   Future<void> clearKillWarning() => api.clearKillWarning();
 
   @override
+  Future<WarmAlarmLiveActivityResult> startLiveActivity(WarmAlarmLiveActivityState state) async =>
+      _liveActivityResultFromWire(await api.startLiveActivity(_liveActivityStateToWire(state)));
+
+  @override
+  Future<WarmAlarmLiveActivityResult> updateLiveActivity(
+    String activityId,
+    WarmAlarmLiveActivityState state,
+  ) async => _liveActivityResultFromWire(await api.updateLiveActivity(activityId, _liveActivityStateToWire(state)));
+
+  @override
+  Future<WarmAlarmLiveActivityResult> endLiveActivity(String activityId) async =>
+      _liveActivityResultFromWire(await api.endLiveActivity(activityId));
+
+  static WarmAlarmLiveActivityStateWire _liveActivityStateToWire(WarmAlarmLiveActivityState state) =>
+      WarmAlarmLiveActivityStateWire(
+        alarmId: state.alarmId,
+        title: state.title,
+        status: switch (state.status) {
+          WarmAlarmLiveActivityStatus.scheduled => WarmAlarmLiveActivityStatusWire.scheduled,
+          WarmAlarmLiveActivityStatus.ringing => WarmAlarmLiveActivityStatusWire.ringing,
+          WarmAlarmLiveActivityStatus.snoozed => WarmAlarmLiveActivityStatusWire.snoozed,
+        },
+        scheduledAtMillis: state.scheduledAt?.millisecondsSinceEpoch,
+      );
+
+  static WarmAlarmLiveActivityResult _liveActivityResultFromWire(WarmAlarmLiveActivityResultWire result) =>
+      WarmAlarmLiveActivityResult(
+        status: switch (result.status) {
+          WarmAlarmLiveActivityResultStatusWire.completed => WarmAlarmLiveActivityResultStatus.completed,
+          WarmAlarmLiveActivityResultStatusWire.unsupported => WarmAlarmLiveActivityResultStatus.unsupported,
+          WarmAlarmLiveActivityResultStatusWire.disabled => WarmAlarmLiveActivityResultStatus.disabled,
+          WarmAlarmLiveActivityResultStatusWire.notFound => WarmAlarmLiveActivityResultStatus.notFound,
+        },
+        activityId: result.activityId,
+      );
+
+  @override
   Future<WarmAlarmScheduleResult> scheduleAlarm(
     WarmAlarmSchedule schedule,
   ) async => _scheduleResultFromWire(

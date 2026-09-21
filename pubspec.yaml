@@ -38,7 +38,7 @@ melos:
       description: Get dependencies for all packages in this project.
 
     generate:
-      run: melos exec --depends-on=pigeon -- "dart run pigeon --input pigeons/messages.dart"
+      run: melos exec --depends-on=pigeon -- "dart run pigeon --input pigeons/messages.dart && dart run ../tool/normalize_pigeon.dart lib/src/messages.g.dart"
       description: Build all generated files for Dart & Flutter packages in this project.
 
     test:

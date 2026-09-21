@@ -9,6 +9,19 @@ class WarmAlarm {
 
   static Future<void> init() => _platform.init();
 
+  /// Starts a custom Live Activity on a configured iOS host.
+  static Future<WarmAlarmLiveActivityResult> startLiveActivity(WarmAlarmLiveActivityState state) =>
+      _platform.startLiveActivity(state);
+
+  /// Updates displayed content without changing the alarm schedule.
+  static Future<WarmAlarmLiveActivityResult> updateLiveActivity(
+    String activityId,
+    WarmAlarmLiveActivityState state,
+  ) => _platform.updateLiveActivity(activityId, state);
+
+  static Future<WarmAlarmLiveActivityResult> endLiveActivity(String activityId) =>
+      _platform.endLiveActivity(activityId);
+
   static Future<String?> prepareSystemSound({
     required String primaryFilePath,
     String? backgroundAssetPath,

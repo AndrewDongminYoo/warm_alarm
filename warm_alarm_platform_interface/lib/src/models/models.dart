@@ -1,6 +1,7 @@
 export 'warm_alarm_audio.dart';
 export 'warm_alarm_capabilities.dart';
 export 'warm_alarm_event.dart';
+export 'warm_alarm_live_activity.dart';
 export 'warm_alarm_notification.dart';
 export 'warm_alarm_notification_settings.dart';
 export 'warm_alarm_permission_state.dart';
