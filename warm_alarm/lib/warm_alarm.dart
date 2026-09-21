@@ -46,6 +46,14 @@ class WarmAlarm {
   static Future<WarmAlarmScheduleResult> scheduleAlarm(
     WarmAlarmSchedule schedule,
   ) async {
+    if (schedule.recurrence == null &&
+        schedule.scheduledAt.millisecondsSinceEpoch <= DateTime.now().millisecondsSinceEpoch) {
+      throw ArgumentError.value(
+        schedule.scheduledAt,
+        'schedule.scheduledAt',
+        'must be strictly in the future for a one-time schedule',
+      );
+    }
     final weekdays = schedule.recurrence?.weekdays;
     if (weekdays != null &&
         (weekdays.isEmpty ||
@@ -100,6 +108,7 @@ class WarmAlarm {
         'must be from 0 to 1',
       );
     }
+    int? previousFadeStepMillis;
     for (final fadeStep in schedule.audio.fadeSteps ?? const <WarmAlarmVolumeFadeStep>[]) {
       if (fadeStep.time.isNegative) {
         throw ArgumentError.value(
@@ -108,6 +117,15 @@ class WarmAlarm {
           'must not be negative',
         );
       }
+      final fadeStepMillis = fadeStep.time.inMilliseconds;
+      if (previousFadeStepMillis != null && fadeStepMillis <= previousFadeStepMillis) {
+        throw ArgumentError.value(
+          fadeStep.time,
+          'schedule.audio.fadeSteps.time',
+          'must be strictly increasing at millisecond precision',
+        );
+      }
+      previousFadeStepMillis = fadeStepMillis;
       if (!_isValidVolume(fadeStep.volume)) {
         throw ArgumentError.value(
           fadeStep.volume,

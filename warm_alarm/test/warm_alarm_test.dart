@@ -9,12 +9,13 @@ class MockWarmAlarmPlatform extends Mock with MockPlatformInterfaceMixin impleme
 
 WarmAlarmSchedule _schedule({
   WarmAlarmAudio audio = const WarmAlarmAudio(),
+  DateTime? scheduledAt,
   WarmAlarmRecurrence? recurrence,
   WarmAlarmSnooze? snooze,
   WarmAlarmWakeCheck? wakeCheck,
 }) => WarmAlarmSchedule(
   id: 1,
-  scheduledAt: DateTime(2026, 4, 27, 7),
+  scheduledAt: scheduledAt ?? DateTime.now().add(const Duration(days: 1)),
   notification: const WarmAlarmNotification(title: 'Wake up', body: 'Now'),
   audio: audio,
   recurrence: recurrence,
@@ -97,6 +98,13 @@ void main() {
           })
         >[
           (
+            argumentName: 'schedule.scheduledAt',
+            description: 'a past one-time schedule',
+            schedule: _schedule(
+              scheduledAt: DateTime.now().subtract(const Duration(milliseconds: 1)),
+            ),
+          ),
+          (
             argumentName: 'schedule.recurrence.weekdays',
             description: 'an empty recurring weekday list',
             schedule: _schedule(
@@ -132,6 +140,42 @@ void main() {
             description: 'a non-finite audio volume',
             schedule: _schedule(
               audio: const WarmAlarmAudio(volume: double.nan),
+            ),
+          ),
+          (
+            argumentName: 'schedule.audio.fadeSteps.time',
+            description: 'duplicate fade step times',
+            schedule: _schedule(
+              audio: const WarmAlarmAudio(
+                fadeSteps: <WarmAlarmVolumeFadeStep>[
+                  WarmAlarmVolumeFadeStep(time: Duration.zero, volume: 0),
+                  WarmAlarmVolumeFadeStep(time: Duration.zero, volume: 1),
+                ],
+              ),
+            ),
+          ),
+          (
+            argumentName: 'schedule.audio.fadeSteps.time',
+            description: 'fade step times in the same millisecond',
+            schedule: _schedule(
+              audio: const WarmAlarmAudio(
+                fadeSteps: <WarmAlarmVolumeFadeStep>[
+                  WarmAlarmVolumeFadeStep(time: Duration(microseconds: 100), volume: 0),
+                  WarmAlarmVolumeFadeStep(time: Duration(microseconds: 900), volume: 1),
+                ],
+              ),
+            ),
+          ),
+          (
+            argumentName: 'schedule.audio.fadeSteps.time',
+            description: 'decreasing fade step times',
+            schedule: _schedule(
+              audio: const WarmAlarmAudio(
+                fadeSteps: <WarmAlarmVolumeFadeStep>[
+                  WarmAlarmVolumeFadeStep(time: Duration(milliseconds: 1), volume: 0),
+                  WarmAlarmVolumeFadeStep(time: Duration.zero, volume: 1),
+                ],
+              ),
             ),
           ),
           (
@@ -239,6 +283,24 @@ void main() {
         verifyNever(() => warmAlarmPlatform.scheduleAlarm(any()));
       });
     }
+
+    test('scheduleAlarm allows a recurring schedule to use a past anchor', () async {
+      final schedule = _schedule(
+        scheduledAt: DateTime.now().subtract(const Duration(days: 1)),
+        recurrence: const WarmAlarmRecurrence(weekdays: <int>[DateTime.monday]),
+      );
+      const result = WarmAlarmScheduleResult(
+        alarmId: 1,
+        readiness: WarmAlarmReadiness(
+          level: WarmAlarmReadinessLevel.ready,
+          reasons: <WarmAlarmReadinessReason>[],
+        ),
+      );
+      when(() => warmAlarmPlatform.scheduleAlarm(schedule)).thenAnswer((_) async => result);
+
+      expect(await WarmAlarm.scheduleAlarm(schedule), result);
+      verify(() => warmAlarmPlatform.scheduleAlarm(schedule)).called(1);
+    });
 
     test('getCapabilities delegates to platform', () async {
       when(warmAlarmPlatform.getCapabilities).thenAnswer(

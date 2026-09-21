@@ -31,13 +31,31 @@ final class WarmAlarmSchedule {
     this.androidFullScreenIntent = true,
   });
 
+  /// App-assigned alarm identifier.
   final int id;
+
+  /// One-time fire time or the local weekday/time anchor for a recurring alarm.
+  ///
+  /// One-time schedules must be strictly in the future at millisecond precision.
+  /// Recurring schedules may use a past anchor because the next matching local weekday and time is scheduled.
   final DateTime scheduledAt;
+
+  /// Notification content and actions for the alarm.
   final WarmAlarmNotification notification;
+
+  /// Audio, volume, and vibration configuration for the alarm.
   final WarmAlarmAudio audio;
+
+  /// Optional local-weekday recurrence.
   final WarmAlarmRecurrence? recurrence;
+
+  /// Optional native snooze behavior.
   final WarmAlarmSnooze? snooze;
+
+  /// Optional Android wake-check behavior.
   final WarmAlarmWakeCheck? wakeCheck;
+
+  /// Optional app payload included in alarm events.
   final String? payload;
 
   /// Android only — whether to present as a full-screen intent notification.
