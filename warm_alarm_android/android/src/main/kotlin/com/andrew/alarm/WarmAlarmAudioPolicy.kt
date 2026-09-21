@@ -20,12 +20,12 @@ internal object WarmAlarmAudioPolicy {
         canReadCredentialProtectedFiles: Boolean,
         fileReadableDuringDirectBoot: Boolean,
     ): WarmAlarmAudioSelection {
-        val configuredFile = filePath?.takeUnless { it.isEmpty() }
+        val configuredFile = filePath?.takeUnless { it.isBlank() }
         if (configuredFile != null && (canReadCredentialProtectedFiles || fileReadableDuringDirectBoot)) {
             return WarmAlarmAudioSelection(WarmAlarmAudioSource.FILE, configuredFile, loop)
         }
 
-        val configuredAsset = assetPath?.takeUnless { it.isEmpty() }
+        val configuredAsset = assetPath?.takeUnless { it.isBlank() }
         if (configuredAsset != null) {
             return WarmAlarmAudioSelection(WarmAlarmAudioSource.ASSET, configuredAsset, loop)
         }

@@ -10,7 +10,7 @@ No platform release has been published during this stage.
 
 ## Code and native boundaries
 
-The six regenerated Pigeon outputs and 33 native implementation files match the reviewed integrated implementation at `9bcddb51267aca7074312e372602cfb59244e4ab`.
+At extraction, the six regenerated Pigeon outputs and 33 native implementation files matched the reviewed integrated implementation at `9bcddb51267aca7074312e372602cfb59244e4ab`.
 The facade library and its package manifest are unchanged from the merged base.
 Native queue tests previously passed 54 Android, 249 iOS, and 18 macOS cases on that integrated implementation; source parity permits reuse of that implementation evidence but does not replace current-head hosted checks.
 
@@ -61,6 +61,23 @@ Evidence: `/tmp/warm-alarm-platform-adapter-build.log` and `/tmp/warm-alarm-live
 Device Hub menu navigation reached the actual simulator Lock Screen and displayed the sample Widget.
 The system then requested Live Activity permission; permission changes are awaiting operator approval.
 Earlier app-only screenshots did not establish Widget rendering, and accessibility actions sometimes returned before the system view changed.
+
+## Hosted validation and review repair
+
+On `f137917`, all executed CI checks passed after one unchanged-head iOS retry; the existing facade platform smoke jobs were skipped.
+The four Pana jobs passed with the published interface prerequisite.
+The macOS CI job executed 18 native tests, and the Android instrumented job executed two tests.
+
+The first iOS run reported one failure in `testPendingLimitFailureEmitsAndCompletesOnMainThread` without assertion details.
+The unchanged test and implementation passed a focused local two-test run, and the unchanged-head CI retry passed all 249 native tests.
+The cause of the first failure remains uncertain.
+A separate local full-suite attempt failed because Xcode referenced a deleted temporary test bundle; that attempt is not passing evidence.
+
+Codex identified an Android regression where whitespace-only audio paths were selected instead of falling back.
+The focused regression suite failed exactly the two blank-path cases before the implementation repair.
+The repair preserves nonblank path contents and treats blank file and asset paths as unconfigured.
+After the repair, the complete Android native suite passed 56 tests with zero failures or errors.
+Evidence: `/tmp/warm-alarm-pr58-audio-red.log` and `/tmp/warm-alarm-pr58-audio-green.log`.
 
 ## Pending acceptance
 
