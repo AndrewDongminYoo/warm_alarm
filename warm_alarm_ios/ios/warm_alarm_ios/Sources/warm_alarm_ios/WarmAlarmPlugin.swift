@@ -709,6 +709,11 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         plan.snoozeDuration == nil || liveActivityConfigured
     }
 
+    static func alarmKitLiveActivityConfigured(_ info: [String: Any]) -> Bool {
+        info["NSSupportsLiveActivities"] as? Bool == true
+            && info["WarmAlarmAlarmKitLiveActivityEnabled"] as? Bool == true
+    }
+
     init(
         delegate: WarmAlarmDelegate,
         notificationMutationQueue: WarmAlarmMutationQueue,
@@ -723,9 +728,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         alarmKitUsageDescription: String? = Bundle.main.object(
             forInfoDictionaryKey: "NSAlarmKitUsageDescription"
         ) as? String,
-        alarmKitLiveActivityEnabled: Bool = Bundle.main.object(
-            forInfoDictionaryKey: "WarmAlarmAlarmKitLiveActivityEnabled"
-        ) as? Bool ?? false
+        alarmKitLiveActivityEnabled: Bool = WarmAlarmPlugin.alarmKitLiveActivityConfigured(Bundle.main.infoDictionary ?? [:])
     ) {
         self.delegate = delegate
         self.notificationMutationQueue = notificationMutationQueue
@@ -916,9 +919,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
             alarmKitUsageDescription: Bundle.main.object(
                 forInfoDictionaryKey: "NSAlarmKitUsageDescription"
             ) as? String,
-            alarmKitLiveActivityEnabled: Bundle.main.object(
-                forInfoDictionaryKey: "WarmAlarmAlarmKitLiveActivityEnabled"
-            ) as? Bool ?? false
+            alarmKitLiveActivityEnabled: Self.alarmKitLiveActivityConfigured(Bundle.main.infoDictionary ?? [:])
         )
 
         WarmAlarmDelegate.registerCategories()
@@ -1690,7 +1691,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         let alarmKitConfigured = Self.schedulingBackend(
             alarmKitAvailable: alarmKitBackend != nil,
             alarmKitUsageDescription: alarmKitUsageDescription,
-            authorizationState: .authorized
+            authorizationState: alarmKitBackend?.authorizationState ?? .denied
         ) == .alarmKit
         let liveActivity: WarmAlarmSupportStatusWire = switch WarmAlarmLiveActivityController().capability {
         case .supported: .supported
