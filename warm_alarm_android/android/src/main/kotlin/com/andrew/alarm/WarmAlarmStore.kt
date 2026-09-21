@@ -101,13 +101,9 @@ internal object WarmAlarmStore {
         val schedulePrefs = schedulePrefs(context)
         migrateLegacySchedules(context, schedulePrefs)
         val json = schedulePrefs.getString(KEY, "[]") ?: "[]"
-        val arr = JSONArray(json)
-        return buildMap {
-            for (i in 0 until arr.length()) {
-                val s = decode(arr.getJSONObject(i))
-                put(s.id, s)
-            }
-        }
+        val decoded = decodeSchedules(json)
+        if (decoded.repaired) persist(context, decoded.schedules)
+        return decoded.schedules
     }
 
     fun clear(context: Context) {
@@ -129,6 +125,24 @@ internal object WarmAlarmStore {
         if (WarmAlarmDirectBoot.canReadCredentialProtectedFiles(context)) {
             prefs(context).edit().putString(KEY, json).apply()
         }
+    }
+
+    private fun decodeSchedules(json: String): DecodedSchedules {
+        val schedules = mutableMapOf<Long, WarmAlarmScheduleWire>()
+        val array = runCatching { JSONArray(json) }.getOrElse { return DecodedSchedules(emptyMap(), repaired = true) }
+        var repaired = false
+        for (index in 0 until array.length()) {
+            val schedule =
+                runCatching {
+                    decode(array.getJSONObject(index))
+                }.getOrNull()
+            if (schedule == null) {
+                repaired = true
+            } else {
+                schedules[schedule.id] = schedule
+            }
+        }
+        return DecodedSchedules(schedules, repaired)
     }
 
     private fun prefs(context: Context) = WarmAlarmDirectBoot.storageContext(context).getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -370,4 +384,9 @@ internal object WarmAlarmStore {
             androidFullScreenIntent = obj.optBoolean("androidFullScreenIntent", true),
         )
     }
+
+    private data class DecodedSchedules(
+        val schedules: Map<Long, WarmAlarmScheduleWire>,
+        val repaired: Boolean,
+    )
 }
