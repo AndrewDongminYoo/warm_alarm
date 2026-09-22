@@ -113,7 +113,21 @@ jobs:
 
       - name: Build the iOS example host
         working-directory: warm_alarm/example
-        run: flutter build ios --simulator --no-codesign
+        run: flutter build ios --simulator --no-codesign --build-name=0.2.0 --build-number=42
+
+      - name: Assert app and Widget versions follow Flutter
+        working-directory: warm_alarm/example
+        run: |
+          set -euo pipefail
+          app_bundle=build/ios/iphonesimulator/Runner.app
+          for bundle in "$app_bundle" "$app_bundle/PlugIns/LiveActivityWidget.appex"; do
+            bundle_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$bundle/Info.plist")
+            marketing_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$bundle/Info.plist")
+            if [ "$bundle_version" != 42 ] || [ "$marketing_version" != 0.2.0 ]; then
+              echo "Unexpected version in $bundle: $marketing_version ($bundle_version)" >&2
+              exit 1
+            fi
+          done
 
       - name: Assert the plugin resolved as a Swift package
         run: test -d warm_alarm/example/ios/Flutter/ephemeral/Packages/.packages/warm_alarm_ios

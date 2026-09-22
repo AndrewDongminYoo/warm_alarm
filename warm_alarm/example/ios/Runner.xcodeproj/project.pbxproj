@@ -115,6 +115,7 @@
 		D21000000000000000000001 /* WarmAlarmEventQueueTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmEventQueueTests.swift; sourceTree = "<group>"; };
 		D21000000000000000000003 /* WarmAlarmLiveActivityTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmLiveActivityTests.swift; sourceTree = "<group>"; };
 		D21000000000000000000005 /* WarmAlarmAudioSourceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmAudioSourceTests.swift; sourceTree = "<group>"; };
+		D21000000000000000000007 /* Widget.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Widget.xcconfig; sourceTree = "<group>"; };
 		D6CF975C427F92EF2C5CC756 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E713B65BD9501484EEB7A051 /* WarmAlarmRecoveryTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmRecoveryTests.swift; sourceTree = "<group>"; };
 		FC95DB849BF641CAD26B8123 /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
@@ -166,6 +167,7 @@
 			isa = PBXGroup;
 			children = (
 				D6CF975C427F92EF2C5CC756 /* Info.plist */,
+				D21000000000000000000007 /* Widget.xcconfig */,
 			);
 			name = LiveActivityWidget;
 			path = LiveActivityWidget;
@@ -642,11 +644,12 @@
 		};
 		93A121AC6C1B1BC07ACA9AA8 /* Profile */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = D21000000000000000000007 /* Widget.xcconfig */;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = 393JTTV68D;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = LiveActivityWidget/Info.plist;
@@ -655,7 +658,7 @@
 					"$(inherited)",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.andrew.alarm.LiveActivityWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -823,11 +826,12 @@
 		};
 		BB7C37DCF50DD6FC249E8BF7 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = D21000000000000000000007 /* Widget.xcconfig */;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = 393JTTV68D;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = LiveActivityWidget/Info.plist;
@@ -836,7 +840,7 @@
 					"$(inherited)",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.andrew.alarm.LiveActivityWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -850,11 +854,12 @@
 		};
 		E58E8D62B2D48EBCE93BBE14 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = D21000000000000000000007 /* Widget.xcconfig */;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = 393JTTV68D;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = LiveActivityWidget/Info.plist;
@@ -863,7 +868,7 @@
 					"$(inherited)",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.andrew.alarm.LiveActivityWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
