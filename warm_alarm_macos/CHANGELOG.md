@@ -1,4 +1,4 @@
-# Unreleased
+# 0.1.4
 
 - Resolve Flutter audio assets from the embedded App.framework while retaining the main-bundle fallback.
 
