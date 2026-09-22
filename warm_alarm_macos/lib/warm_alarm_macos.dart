@@ -4,6 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:warm_alarm_macos/src/messages.g.dart';
 import 'package:warm_alarm_platform_interface/warm_alarm_platform_interface.dart';
 
+typedef _PendingWarmAlarmEvent = ({
+  WarmAlarmEvent event,
+  Completer<void> delivered,
+});
+
 /// {@template warm_alarm_macos}
 /// The MacOS implementation of [WarmAlarmPlatform].
 /// {@endtemplate}
@@ -26,7 +31,7 @@ class WarmAlarmMacOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   bool _eventsApiSetUp = false;
 
   late final StreamController<WarmAlarmEvent> _events;
-  final List<WarmAlarmEvent> _pendingEvents = <WarmAlarmEvent>[];
+  final List<_PendingWarmAlarmEvent> _pendingEvents = [];
   bool _hasEventListener = false;
 
   /// Registers this class as the default instance of [WarmAlarmPlatform].
@@ -103,10 +108,12 @@ class WarmAlarmMacOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   Future<void> emitEvent(WarmAlarmEventWire event) async {
     final mappedEvent = _eventFromWire(event);
     if (!_hasEventListener) {
+      final delivered = Completer<void>();
       if (_pendingEvents.length == _pendingEventLimit) {
-        _pendingEvents.removeAt(0);
+        _pendingEvents.removeAt(0).delivered.complete();
       }
-      _pendingEvents.add(mappedEvent);
+      _pendingEvents.add((event: mappedEvent, delivered: delivered));
+      await delivered.future;
       return;
     }
     _events.add(mappedEvent);
@@ -115,8 +122,12 @@ class WarmAlarmMacOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   void _handleFirstEventListener() {
     if (_hasEventListener) return;
     _hasEventListener = true;
-    _pendingEvents.forEach(_events.add);
+    final pendingEvents = List<_PendingWarmAlarmEvent>.of(_pendingEvents);
     _pendingEvents.clear();
+    for (final pending in pendingEvents) {
+      _events.add(pending.event);
+      pending.delivered.complete();
+    }
   }
 
   void _handleLastEventListenerCancelled() {
