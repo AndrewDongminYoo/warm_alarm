@@ -1,4 +1,4 @@
-# Unreleased
+# 0.1.3
 
 - Persist native alarm events until Dart acknowledges delivery, with bounded replay and corrupt-record recovery.
 - Recover malformed schedule storage by replacing unreadable root data or removing unreadable records while retaining and persisting valid schedules.

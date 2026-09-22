@@ -137,6 +137,78 @@ void main() {
   });
 
   group('WarmAlarmIOS events', () {
+    test('holds the native acknowledgement until a listener attaches', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmIOS(api: api);
+      when(api.initialize).thenAnswer((_) async {});
+      await platform.init();
+      addTearDown(() => WarmAlarmEventsApi.setUp(null));
+      var replied = false;
+      final reply =
+          _pushEvent(
+            WarmAlarmEventWire(alarmId: 45, type: WarmAlarmEventTypeWire.fired, occurredAtMillis: 1_000),
+          ).then((value) {
+            replied = true;
+            return value;
+          });
+      await Future<void>.delayed(Duration.zero);
+      expect(replied, isFalse);
+
+      final emitted = <WarmAlarmEvent>[];
+      final subscription = platform.events.listen(emitted.add);
+      addTearDown(subscription.cancel);
+      expect(WarmAlarmEventsApi.pigeonChannelCodec.decodeMessage(await reply), <Object?>[]);
+      expect(emitted.single.alarmId, 45);
+    });
+
+    test('preserves an event emitted after the last listener cancels', () async {
+      final platform = WarmAlarmIOS(api: _MockWarmAlarmApi());
+      final firstSubscription = platform.events.listen((_) {});
+      await firstSubscription.cancel();
+
+      var acknowledged = false;
+      final delivery = platform
+          .emitEvent(
+            WarmAlarmEventWire(
+              alarmId: 43,
+              type: WarmAlarmEventTypeWire.fired,
+              occurredAtMillis: DateTime.now().millisecondsSinceEpoch,
+            ),
+          )
+          .then((_) => acknowledged = true);
+      await Future<void>.delayed(Duration.zero);
+      expect(acknowledged, isFalse);
+
+      final emitted = <WarmAlarmEvent>[];
+      final secondSubscription = platform.events.listen(emitted.add);
+      await delivery;
+
+      expect(emitted.single, isA<WarmAlarmFired>());
+      expect(emitted.single.alarmId, 43);
+      await secondSubscription.cancel();
+    });
+
+    test('keeps delivering while another listener remains', () async {
+      final platform = WarmAlarmIOS(api: _MockWarmAlarmApi());
+      final firstSubscription = platform.events.listen((_) {});
+      final emitted = <WarmAlarmEvent>[];
+      final secondSubscription = platform.events.listen(emitted.add);
+      await firstSubscription.cancel();
+
+      await platform.emitEvent(
+        WarmAlarmEventWire(
+          alarmId: 44,
+          type: WarmAlarmEventTypeWire.fired,
+          occurredAtMillis: DateTime.now().millisecondsSinceEpoch,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(emitted.single, isA<WarmAlarmFired>());
+      expect(emitted.single.alarmId, 44);
+      await secondSubscription.cancel();
+    });
+
     test('registerWith buffers platform events until events is accessed', () async {
       WarmAlarmEventsApi.setUp(null);
       final now = DateTime.now().millisecondsSinceEpoch;
@@ -171,7 +243,7 @@ void main() {
     test('preserves an event before the first listener only', () async {
       final platform = WarmAlarmIOS(api: _MockWarmAlarmApi());
       final now = DateTime.now().millisecondsSinceEpoch;
-      await platform.emitEvent(
+      final delivery = platform.emitEvent(
         WarmAlarmEventWire(
           alarmId: 42,
           type: WarmAlarmEventTypeWire.fired,
@@ -181,7 +253,7 @@ void main() {
 
       final firstListenerEvents = <WarmAlarmEvent>[];
       final firstSubscription = platform.events.listen(firstListenerEvents.add);
-      await Future<void>.delayed(Duration.zero);
+      await delivery;
       expect(firstListenerEvents, hasLength(1));
       expect(firstListenerEvents.single, isA<WarmAlarmFired>());
       await firstSubscription.cancel();
@@ -195,18 +267,22 @@ void main() {
 
     test('retains only the 64 newest events before the first listener', () async {
       final platform = WarmAlarmIOS(api: _MockWarmAlarmApi());
+      final deliveries = <Future<void>>[];
       for (var alarmId = 0; alarmId < 65; alarmId++) {
-        await platform.emitEvent(
-          WarmAlarmEventWire(
-            alarmId: alarmId,
-            type: WarmAlarmEventTypeWire.scheduled,
-            occurredAtMillis: alarmId,
+        deliveries.add(
+          platform.emitEvent(
+            WarmAlarmEventWire(
+              alarmId: alarmId,
+              type: WarmAlarmEventTypeWire.scheduled,
+              occurredAtMillis: alarmId,
+            ),
           ),
         );
       }
 
       final emitted = <WarmAlarmEvent>[];
       final subscription = platform.events.listen(emitted.add);
+      await Future.wait(deliveries);
       await Future<void>.delayed(Duration.zero);
 
       expect(emitted, hasLength(64));

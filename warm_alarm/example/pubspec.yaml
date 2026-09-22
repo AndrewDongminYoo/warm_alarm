@@ -29,6 +29,7 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   very_good_analysis: ^11.0.0
+  warm_alarm_platform_interface: ^0.1.4
 
 flutter:
   uses-material-design: true

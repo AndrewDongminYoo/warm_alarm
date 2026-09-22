@@ -1,4 +1,4 @@
-# Unreleased
+# 0.1.10
 
 - Persist native alarm events until Dart acknowledges delivery, including retry after acknowledgement storage failures.
 - Match AlarmKit capabilities to current authorization and require both host Live Activity flags for Snooze countdowns.

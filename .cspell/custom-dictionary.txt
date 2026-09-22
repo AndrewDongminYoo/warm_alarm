@@ -6,4 +6,5 @@ dongminyu
 exifinterface
 ktlint
 podhelper
+widgetkit
 xcresulttool

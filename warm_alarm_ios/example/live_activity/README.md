@@ -3,6 +3,39 @@
 This example configures the optional custom alarm-status Live Activity on iOS 16.2 or later.
 It uses local ActivityKit updates only and does not use an ActivityKit push token or a push server.
 
+## Run the repository QA fixture
+
+The Flutter example app embeds a `LiveActivityWidget` extension and compiles package-local copies of these Swift files from `warm_alarm/example/ios/LiveActivityHost`.
+This directory remains the canonical host example, and CI checks that the packaged copies match it byte for byte.
+After changing a canonical Swift file, refresh its copy from the repository root:
+
+```bash
+cp warm_alarm_ios/example/live_activity/WarmAlarmLiveActivityAttributes.swift warm_alarm/example/ios/LiveActivityHost/
+cp warm_alarm_ios/example/live_activity/WarmAlarmActivityKitAdapter.swift warm_alarm/example/ios/LiveActivityHost/
+cp warm_alarm_ios/example/live_activity/WarmAlarmLiveActivityWidget.swift warm_alarm/example/ios/LiveActivityHost/
+```
+
+The Widget Extension uses iOS 16.2 as its minimum deployment target.
+The Runner keeps the example app's existing deployment baseline and availability-gates registration on earlier systems.
+
+Build the simulator app from `warm_alarm/example` with the isolated fixture entrypoint.
+
+```bash
+flutter build ios --simulator --target lib/live_activity_fixture.dart
+```
+
+Run the same entrypoint on an iOS 16.2 or later simulator or device.
+
+```bash
+flutter run -d <device-id> --target lib/live_activity_fixture.dart
+```
+
+The normal example remains the default `lib/main.dart` entrypoint and runs without a target override.
+The fixture starts with `scheduled` and a future time, updates to `ringing` with no time, updates to `snoozed` with a future time, and ends the entered ActivityKit identifier.
+Its identifier field is editable, and **Check known-unknown ID** sends a fixed missing identifier through the update API so the public `notFound` result can be inspected.
+Each operation shows the submitted state, result status, and returned ActivityKit identifier in a live accessibility region.
+These commands describe the intended QA path; this document does not assert a successful runtime or visual pass.
+
 ## Add the files to the host
 
 1. Create a Widget Extension with the **Include Live Activity** option and an iOS 16.2 or later deployment target.
@@ -33,17 +66,19 @@ Register the adapter during app startup.
 ```swift
 import Flutter
 import UIKit
-import warm_alarm_ios
 
 @main
-@objc class AppDelegate: FlutterAppDelegate {
+@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
     override func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
         WarmAlarmLiveActivityRegistration.register()
-        GeneratedPluginRegistrant.register(with: self)
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    }
+
+    func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
+        GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     }
 }
 ```

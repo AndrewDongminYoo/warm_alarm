@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -79,7 +80,9 @@ class WarmAlarmPlugin :
         notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         eventsApi = WarmAlarmEventsApi(binding.binaryMessenger)
         val eventQueueStore = WarmAlarmEventQueueStore.create(context)
-        migratePendingSnoozeEvents(PendingSnoozeEventStore.create(context), eventQueueStore)
+        if (!migratePendingSnoozeEvents(PendingSnoozeEventStore.create(context), eventQueueStore)) {
+            Log.w("WarmAlarm", "Pending snooze event migration was incomplete; retained entries can retry on attachment")
+        }
         eventQueue =
             WarmAlarmEventQueue(eventQueueStore) { event, callback ->
                 mainHandler.post { eventsApi.emitEvent(event, callback) }
@@ -529,10 +532,14 @@ class WarmAlarmPlugin :
             event: WarmAlarmEventWire,
         ) {
             val plugin = pluginInstance
-            if (plugin == null) {
-                WarmAlarmEventQueueStore.create(context).enqueue(event)
-            } else {
-                plugin.eventQueue.enqueue(event)
+            val persisted =
+                if (plugin == null) {
+                    WarmAlarmEventQueueStore.create(context).enqueue(event)
+                } else {
+                    plugin.eventQueue.enqueue(event)
+                }
+            if (!persisted) {
+                Log.e("WarmAlarm", "Failed to persist ${event.type} event for alarm ${event.alarmId}")
             }
         }
 
