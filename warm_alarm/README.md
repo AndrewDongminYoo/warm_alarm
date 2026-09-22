@@ -35,7 +35,7 @@ Add `warm_alarm` to your Flutter app.
 
 ```yaml
 dependencies:
-  warm_alarm: ^0.1.4
+  warm_alarm: ^0.1.5
 ```
 
 Then run:
@@ -160,7 +160,8 @@ The oldest event is dropped when the queue reaches capacity.
 Unreadable root data is replaced with an empty queue, while malformed records in a readable queue are discarded individually.
 Android imports pending Snooze events from the previous store.
 
-Events received before the first stream listener are buffered in Dart, also up to 64 entries.
+Events received while no stream listener is attached are buffered in Dart, also up to 64 entries.
+The native callback remains pending until a listener attaches, unless the oldest event is evicted by the buffer limit.
 Subscribe before initialization when possible, and keep the subscription active for the session.
 Delivery is at least once across a crash between a successful callback and persistent acknowledgement, so consumers should tolerate repeated events.
 Atomic file replacement protects against process termination after a completed write; it does not promise recovery from hardware failure or power loss before filesystem buffers are flushed.
@@ -171,7 +172,7 @@ The queue cannot reconstruct events that the operating system never delivered wh
 Configured iOS hosts can call `startLiveActivity`, `updateLiveActivity`, and `endLiveActivity`.
 These operations display alarm status without changing the alarm schedule or starting audio.
 The host must register an ActivityKit adapter and supply a Widget Extension that shares the activity attributes with the app.
-See the [iOS setup and complete Swift sample](../warm_alarm_ios/example/live_activity/README.md).
+See the [iOS setup and complete Swift sample](https://github.com/AndrewDongminYoo/warm_alarm/blob/warm_alarm_ios-v0.1.10/warm_alarm_ios/example/live_activity/README.md).
 The API returns `unsupported` on Android, macOS, older iOS versions, and unconfigured hosts, or `disabled` when the user has disabled Live Activities.
 Custom activities use a separate opt-in from AlarmKit countdown presentation.
 
@@ -179,25 +180,28 @@ Custom activities use a separate opt-in from AlarmKit countdown presentation.
 
 ### `WarmAlarm` — static entry point
 
-| Method                            | Returns                      | Description                                                 |
-| --------------------------------- | ---------------------------- | ----------------------------------------------------------- |
-| `init()`                          | `Future<void>`               | Rehydrate native alarm state after a process restart        |
-| `prepareSystemSound(...)`         | `Future<String?>`            | Prepare an AlarmKit sound; return null if unsupported       |
-| `getCapabilities()`               | `WarmAlarmCapabilities`      | Per-feature support status for the current platform         |
-| `getPermissionState()`            | `WarmAlarmPermissionState`   | Current notification and exact-alarm permission grants      |
-| `getReadiness()`                  | `WarmAlarmReadiness`         | Overall system readiness with actionable reason codes       |
-| `requestNotificationPermission()` | `WarmAlarmRemediationResult` | Request notification authorization and return current state |
-| `openReadinessSettings(reason)`   | `WarmAlarmRemediationResult` | Open supported native settings and return current state     |
-| `scheduleAlarm(schedule)`         | `WarmAlarmScheduleResult`    | Schedule an alarm; returns the assigned ID and any warnings |
-| `cancelAlarm(id)`                 | `Future<void>`               | Cancel a specific alarm by ID                               |
-| `cancelAllAlarms()`               | `Future<void>`               | Cancel all scheduled alarms                                 |
-| `getScheduledAlarms()`            | `List<WarmAlarmSnapshot>`    | List all currently scheduled alarms                         |
-| `hasAlarm()`                      | `Future<bool>`               | Whether any future alarm is currently scheduled             |
-| `getAlarm(id)`                    | `Future<WarmAlarmSnapshot?>` | Fetch a single future scheduled alarm by ID                 |
-| `isRinging({id})`                 | `Future<bool>`               | Whether an alarm (or any alarm) is currently ringing        |
-| `setKillWarning(...)`             | `Future<void>`               | Post a persistent notification warning against force-quit   |
-| `clearKillWarning()`              | `Future<void>`               | Remove the kill-warning notification                        |
-| `events`                          | `Stream<WarmAlarmEvent>`     | Real-time alarm lifecycle event stream                      |
+| Method                            | Returns                               | Description                                                 |
+| --------------------------------- | ------------------------------------- | ----------------------------------------------------------- |
+| `init()`                          | `Future<void>`                        | Rehydrate native alarm state after a process restart        |
+| `startLiveActivity(state)`        | `Future<WarmAlarmLiveActivityResult>` | Start a custom activity on a configured iOS host            |
+| `updateLiveActivity(id, state)`   | `Future<WarmAlarmLiveActivityResult>` | Update activity content without rescheduling the alarm      |
+| `endLiveActivity(id)`             | `Future<WarmAlarmLiveActivityResult>` | End a custom activity by its identifier                     |
+| `prepareSystemSound(...)`         | `Future<String?>`                     | Prepare an AlarmKit sound; return null if unsupported       |
+| `getCapabilities()`               | `WarmAlarmCapabilities`               | Per-feature support status for the current platform         |
+| `getPermissionState()`            | `WarmAlarmPermissionState`            | Current notification and exact-alarm permission grants      |
+| `getReadiness()`                  | `WarmAlarmReadiness`                  | Overall system readiness with actionable reason codes       |
+| `requestNotificationPermission()` | `WarmAlarmRemediationResult`          | Request notification authorization and return current state |
+| `openReadinessSettings(reason)`   | `WarmAlarmRemediationResult`          | Open supported native settings and return current state     |
+| `scheduleAlarm(schedule)`         | `WarmAlarmScheduleResult`             | Schedule an alarm; returns the assigned ID and any warnings |
+| `cancelAlarm(id)`                 | `Future<void>`                        | Cancel a specific alarm by ID                               |
+| `cancelAllAlarms()`               | `Future<void>`                        | Cancel all scheduled alarms                                 |
+| `getScheduledAlarms()`            | `List<WarmAlarmSnapshot>`             | List all currently scheduled alarms                         |
+| `hasAlarm()`                      | `Future<bool>`                        | Whether any future alarm is currently scheduled             |
+| `getAlarm(id)`                    | `Future<WarmAlarmSnapshot?>`          | Fetch a single future scheduled alarm by ID                 |
+| `isRinging({id})`                 | `Future<bool>`                        | Whether an alarm (or any alarm) is currently ringing        |
+| `setKillWarning(...)`             | `Future<void>`                        | Post a persistent notification warning against force-quit   |
+| `clearKillWarning()`              | `Future<void>`                        | Remove the kill-warning notification                        |
+| `events`                          | `Stream<WarmAlarmEvent>`              | Real-time alarm lifecycle event stream                      |
 
 `openReadinessSettings(reason)` hands the user off to a system screen and returns as soon as the
 platform accepts the request, so its snapshot describes the state before the remediation — call

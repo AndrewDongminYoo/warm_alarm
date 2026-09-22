@@ -113,3 +113,20 @@ The final queue repair passed Android 54, iOS 249, and macOS 18 native tests wit
 Android evidence is `/tmp/warm-alarm-android-queue-race-green.log` and the JUnit XML; iOS evidence is `/tmp/warm-alarm-pr56-queue-final.xcresult`; macOS evidence is `/tmp/warm-alarm-macos-queue-race-green.log`.
 The final Sol review found no remaining defect in the six queue files or Apple delegate/plugin integration.
 The seven changed queue/evidence files passed scoped Trunk checks.
+
+## Release-stage update on 2026-09-22
+
+The preceding sections are historical checkpoints and are superseded by this release-stage update where they describe pending platform publication or the missing example Widget.
+PR #57 published interface 0.1.4.
+PR #58 merged as `af9a950117f6de0016092eb38975b0ff7efa7279` and published Android 0.1.3, iOS 0.1.10, and macOS 0.1.3 through successful runs 35684963547, 35684963489, and 35684963588.
+The pub.dev version endpoints confirm all three versions and their interface `^0.1.4` dependency.
+
+The configured example now embeds the Widget and package-local Swift sources.
+Simulator checks covered start, updates, end, unknown identifiers, permission-disabled rejection, and permission restoration.
+The operator approved the scheduled, ringing, and snoozed presentation, and that approval carried to the final platform head because visual inputs remained equivalent.
+The final platform head passed 249 iOS native tests and 18 macOS native tests; its Apple Dart acknowledgement repair passed 93 Dart tests.
+A native callback now stays pending while the Dart stream has no listener, including after the last listener cancels.
+
+PR #56 now carries the remaining facade forwarding, schedule validation, dependency floors, and contract documentation.
+No physical phone was changed; issue #19 final-build Schedule, Stop, and Snooze acceptance remains pending.
+No issue has been closed, and cleanup and durable memory recording were not requested.
