@@ -7,3 +7,4 @@ exifinterface
 ktlint
 podhelper
 widgetkit
+xcresulttool

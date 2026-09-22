@@ -1,3 +1,11 @@
+# 0.1.5
+
+- Expose opt-in Live Activity start, update, and end operations.
+- Require the published platform releases that retain native lifecycle events until Dart acknowledges delivery and replay pending events during initialization.
+- Reject one-time schedules whose `scheduledAt` is not strictly future at millisecond precision with `ArgumentError` named `schedule.scheduledAt`.
+- Reject audio fade steps with duplicate, decreasing, or same-millisecond timestamps with `ArgumentError` named `schedule.audio.fadeSteps.time`.
+- Clarify custom audio source precedence, native fallback sounds, looping, volume enforcement, fade controls, and Apple background-haptics limitations.
+
 # 0.1.4
 
 - Expose granular iOS notification settings through alarm readiness results.
