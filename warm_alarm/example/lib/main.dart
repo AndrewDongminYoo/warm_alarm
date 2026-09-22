@@ -220,7 +220,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         stopActionTitle: 'Stop',
                         snoozeActionTitle: 'Snooze',
                       ),
-                      audio: const WarmAlarmAudio(),
+                      audio: const WarmAlarmAudio(
+                        assetPath: 'assets/audio/alarm_ring.wav',
+                        loop: false,
+                      ),
                       snooze: const WarmAlarmSnooze(
                         duration: Duration(minutes: 5),
                       ),

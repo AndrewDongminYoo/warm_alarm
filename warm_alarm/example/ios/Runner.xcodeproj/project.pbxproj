@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D22000000000000000000002 /* alarm_ring.caf in Resources */ = {isa = PBXBuildFile; fileRef = D22000000000000000000001 /* alarm_ring.caf */; };
 		091CBDDD526E406B8CBF65DC /* WarmAlarmSoundRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F45E0E343CE496AB364F01C /* WarmAlarmSoundRendererTests.swift */; };
 		0E2CAAC1A373D7C6B5EB4710 /* WarmAlarmLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DD67B29E07FAE9D131E9611 /* WarmAlarmLiveActivityWidget.swift */; };
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
@@ -79,6 +80,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		D22000000000000000000001 /* alarm_ring.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = alarm_ring.caf; sourceTree = "<group>"; };
 		0BADE68ED29E687F28B98BC2 /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
 		109E51BED23F0B96E0307E3B /* WarmAlarmRecurrenceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmRecurrenceTests.swift; sourceTree = "<group>"; };
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
@@ -231,6 +233,7 @@
 		97C146F01CF9000F007C117D /* Runner */ = {
 			isa = PBXGroup;
 			children = (
+				D22000000000000000000001 /* alarm_ring.caf */,
 				97C146FA1CF9000F007C117D /* Main.storyboard */,
 				97C146FD1CF9000F007C117D /* Assets.xcassets */,
 				97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */,
@@ -387,6 +390,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D22000000000000000000002 /* alarm_ring.caf in Resources */,
 				97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */,
 				3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */,
 				97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */,
