@@ -67,6 +67,18 @@ macOS emits the same subset of events as iOS:
 
 Wake-check events are not supported on macOS.
 
+Events are written to an app-scoped Application Support queue before dispatch and replayed during `WarmAlarm.init()`.
+Only a successful Dart callback removes an event.
+The queue retains 64 entries, drops the oldest on overflow, and discards malformed records while preserving valid neighbors.
+The Dart wrapper buffers up to 64 events before the first stream listener.
+
+### Audio limitations
+
+Custom playback selects a nonempty file path before an asset path.
+`volumeEnforced` affects only `AVAudioPlayer.volume`; it does not change or guarantee the system output volume.
+`vibrate` has no macOS background-haptic equivalent.
+Use `fadeSteps` for fades because `fadeInDuration` is currently a serialized hint with no playback effect.
+
 ---
 
 ## Pigeon wire layer

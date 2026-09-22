@@ -4,6 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:warm_alarm_macos/src/messages.g.dart';
 import 'package:warm_alarm_platform_interface/warm_alarm_platform_interface.dart';
 
+typedef _PendingWarmAlarmEvent = ({
+  WarmAlarmEvent event,
+  Completer<void> delivered,
+});
+
 /// {@template warm_alarm_macos}
 /// The MacOS implementation of [WarmAlarmPlatform].
 /// {@endtemplate}
@@ -11,14 +16,23 @@ class WarmAlarmMacOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   /// {@macro warm_alarm_macos}
   WarmAlarmMacOS({
     @visibleForTesting WarmAlarmApi? api,
-  }) : api = api ?? WarmAlarmApi();
+  }) : api = api ?? WarmAlarmApi() {
+    _events = StreamController<WarmAlarmEvent>.broadcast(
+      onListen: _handleFirstEventListener,
+      onCancel: _handleLastEventListenerCancelled,
+    );
+  }
+
+  static const int _pendingEventLimit = 64;
 
   /// The API used to interact with the native platform.
   final WarmAlarmApi api;
 
   bool _eventsApiSetUp = false;
 
-  final StreamController<WarmAlarmEvent> _events = StreamController<WarmAlarmEvent>.broadcast();
+  late final StreamController<WarmAlarmEvent> _events;
+  final List<_PendingWarmAlarmEvent> _pendingEvents = [];
+  bool _hasEventListener = false;
 
   /// Registers this class as the default instance of [WarmAlarmPlatform].
   static void registerWith() {
@@ -32,7 +46,10 @@ class WarmAlarmMacOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   }
 
   @override
-  Future<void> init() => api.initialize();
+  Future<void> init() async {
+    _ensureEventsApiSetUp();
+    await api.initialize();
+  }
 
   @override
   Future<void> cancelAlarm(int id) => api.cancelAlarm(id);
@@ -89,7 +106,32 @@ class WarmAlarmMacOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
 
   @override
   Future<void> emitEvent(WarmAlarmEventWire event) async {
-    _events.add(_eventFromWire(event));
+    final mappedEvent = _eventFromWire(event);
+    if (!_hasEventListener) {
+      final delivered = Completer<void>();
+      if (_pendingEvents.length == _pendingEventLimit) {
+        _pendingEvents.removeAt(0).delivered.complete();
+      }
+      _pendingEvents.add((event: mappedEvent, delivered: delivered));
+      await delivered.future;
+      return;
+    }
+    _events.add(mappedEvent);
+  }
+
+  void _handleFirstEventListener() {
+    if (_hasEventListener) return;
+    _hasEventListener = true;
+    final pendingEvents = List<_PendingWarmAlarmEvent>.of(_pendingEvents);
+    _pendingEvents.clear();
+    for (final pending in pendingEvents) {
+      _events.add(pending.event);
+      pending.delivered.complete();
+    }
+  }
+
+  void _handleLastEventListenerCancelled() {
+    _hasEventListener = false;
   }
 }
 

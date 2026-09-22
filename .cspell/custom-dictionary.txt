@@ -2,6 +2,8 @@
 393JTTV68D
 Autoresizing
 dedupe
+dongminyu
 exifinterface
 ktlint
 podhelper
+widgetkit

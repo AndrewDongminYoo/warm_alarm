@@ -1,3 +1,10 @@
+# 0.1.3
+
+- Persist native alarm events until Dart acknowledges delivery, with bounded replay and corrupt-record recovery.
+- Recover malformed schedule storage by replacing unreadable root data or removing unreadable records while retaining and persisting valid schedules.
+- Honor Android alarm vibration and stop it with every playback teardown path.
+- Select a single audio source with local-file precedence, apply `loop` to files and assets, and change system alarm volume only when `volumeEnforced` is enabled.
+
 # 0.1.2
 
 - Give a wake-check retrigger its own `PendingIntent` identity. It shared the regular alarm's, so arming a retrigger re-targeted the pending next occurrence and dismissing a wake check cancelled it.

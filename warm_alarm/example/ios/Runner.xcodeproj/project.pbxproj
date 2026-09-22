@@ -7,8 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		091CBDDD526E406B8CBF65DC /* WarmAlarmSoundRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F45E0E343CE496AB364F01C /* WarmAlarmSoundRendererTests.swift */; };
+		0E2CAAC1A373D7C6B5EB4710 /* WarmAlarmLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DD67B29E07FAE9D131E9611 /* WarmAlarmLiveActivityWidget.swift */; };
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
+		2E811A9AC7FF1D9A51F128B0 /* WarmAlarmLiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A55769C5005DBB0F382B586 /* WarmAlarmLiveActivityAttributes.swift */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
+		48D698B134406520E72F9C5A /* LiveActivityWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C9163C90C1AA8CC518DD4566 /* LiveActivityWidget.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		550EEACF41D783F7B970EA15 /* WarmAlarmRequestRegistrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FC58045D2B9E8F22EF1930C /* WarmAlarmRequestRegistrationTests.swift */; };
 		5A0448E6CC51531A15EB7C26 /* WarmAlarmRecurrenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 109E51BED23F0B96E0307E3B /* WarmAlarmRecurrenceTests.swift */; };
 		6578EEA2C83B6388B886968C /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1D6986157739D9687AB6AFD6 /* Pods_Runner.framework */; };
@@ -21,11 +25,26 @@
 		97C147101CF9000F007C117D /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97C147111CF9000F007C117D /* SceneDelegate.swift */; };
 		A897DD86A2DB71364E3D3FBA /* WarmAlarmMutationQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F1E550AB0E9EF57A4333357 /* WarmAlarmMutationQueueTests.swift */; };
 		AC9BB2D3B3974B6122E372C3 /* WarmAlarmStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74D654FC1A129F7EB17C8E08 /* WarmAlarmStoreTests.swift */; };
-		091CBDDD526E406B8CBF65DC /* WarmAlarmSoundRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F45E0E343CE496AB364F01C /* WarmAlarmSoundRendererTests.swift */; };
 		AFBB24222795A1290FF50E54 /* WarmAlarmRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E713B65BD9501484EEB7A051 /* WarmAlarmRecoveryTests.swift */; };
+		C7F3F37F7B4922202C7F1F0D /* WarmAlarmLiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A55769C5005DBB0F382B586 /* WarmAlarmLiveActivityAttributes.swift */; };
+		CCE2E16B68981B46D875AE69 /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0BADE68ED29E687F28B98BC2 /* ActivityKit.framework */; };
+		CEA15BF1289CBC4F62B48653 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 399B59320BA37EF516F0B63A /* WidgetKit.framework */; };
+		D21000000000000000000002 /* WarmAlarmEventQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D21000000000000000000001 /* WarmAlarmEventQueueTests.swift */; };
+		D21000000000000000000004 /* WarmAlarmLiveActivityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D21000000000000000000003 /* WarmAlarmLiveActivityTests.swift */; };
+		D21000000000000000000006 /* WarmAlarmAudioSourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D21000000000000000000005 /* WarmAlarmAudioSourceTests.swift */; };
+		E9B0700D66AE76F75CB98B1D /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C79963D8D2C3AB322DDFBEBD /* SwiftUI.framework */; };
+		F0F91448759B01BE660F206B /* WarmAlarmActivityKitAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5442F8A5329C66392CA1BCEE /* WarmAlarmActivityKitAdapter.swift */; };
+		FE8DFBF84224A45FA37EFCC4 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 34A57D4457F74C2FA2EB865D /* Foundation.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		34BE0D9545E743E8BF9F2A0E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B7F197871B9ABCC890570A55;
+			remoteInfo = LiveActivityWidget;
+		};
 		EC19100683B70D2768DE6543 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
@@ -36,6 +55,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		2144D82F1C43132B32ABF580 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				48D698B134406520E72F9C5A /* LiveActivityWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9705A1C41CF9048500538489 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -49,18 +79,24 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0BADE68ED29E687F28B98BC2 /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
 		109E51BED23F0B96E0307E3B /* WarmAlarmRecurrenceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmRecurrenceTests.swift; sourceTree = "<group>"; };
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
 		1D6986157739D9687AB6AFD6 /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		2F45E0E343CE496AB364F01C /* WarmAlarmSoundRendererTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmSoundRendererTests.swift; sourceTree = "<group>"; };
+		34A57D4457F74C2FA2EB865D /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
+		399B59320BA37EF516F0B63A /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		3A13C189E3A8AD75CE0D2581 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = AppFrameworkInfo.plist; path = Flutter/AppFrameworkInfo.plist; sourceTree = "<group>"; };
 		3FC58045D2B9E8F22EF1930C /* WarmAlarmRequestRegistrationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmRequestRegistrationTests.swift; sourceTree = "<group>"; };
+		5442F8A5329C66392CA1BCEE /* WarmAlarmActivityKitAdapter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmActivityKitAdapter.swift; sourceTree = "<group>"; };
+		5DD67B29E07FAE9D131E9611 /* WarmAlarmLiveActivityWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmLiveActivityWidget.swift; sourceTree = "<group>"; };
+		6A55769C5005DBB0F382B586 /* WarmAlarmLiveActivityAttributes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmLiveActivityAttributes.swift; sourceTree = "<group>"; };
 		6F1E550AB0E9EF57A4333357 /* WarmAlarmMutationQueueTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmMutationQueueTests.swift; sourceTree = "<group>"; };
 		74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Runner-Bridging-Header.h"; sourceTree = "<group>"; };
 		74858FAE1ED2DC5600515810 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		74D654FC1A129F7EB17C8E08 /* WarmAlarmStoreTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmStoreTests.swift; sourceTree = "<group>"; };
-		2F45E0E343CE496AB364F01C /* WarmAlarmSoundRendererTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmSoundRendererTests.swift; sourceTree = "<group>"; };
 		78E0A7A72DC9AD7400C4905E /* FlutterGeneratedPluginSwiftPackage */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = FlutterGeneratedPluginSwiftPackage; path = Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage; sourceTree = "<group>"; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Flutter/Release.xcconfig; sourceTree = "<group>"; };
 		92B43DD0AD58E6356D15892C /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
@@ -74,11 +110,29 @@
 		97C147111CF9000F007C117D /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		BB750F38CF6190D10EFBAC17 /* WarmAlarmPlatformReplyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmPlatformReplyTests.swift; sourceTree = "<group>"; };
 		C32DC939DE75A0BDF7B647A4 /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
+		C79963D8D2C3AB322DDFBEBD /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		C9163C90C1AA8CC518DD4566 /* LiveActivityWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LiveActivityWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		D21000000000000000000001 /* WarmAlarmEventQueueTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmEventQueueTests.swift; sourceTree = "<group>"; };
+		D21000000000000000000003 /* WarmAlarmLiveActivityTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmLiveActivityTests.swift; sourceTree = "<group>"; };
+		D21000000000000000000005 /* WarmAlarmAudioSourceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmAudioSourceTests.swift; sourceTree = "<group>"; };
+		D21000000000000000000007 /* Widget.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Widget.xcconfig; sourceTree = "<group>"; };
+		D6CF975C427F92EF2C5CC756 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E713B65BD9501484EEB7A051 /* WarmAlarmRecoveryTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmRecoveryTests.swift; sourceTree = "<group>"; };
 		FC95DB849BF641CAD26B8123 /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		27A59FD04142D8D95C78BB1C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FE8DFBF84224A45FA37EFCC4 /* Foundation.framework in Frameworks */,
+				CCE2E16B68981B46D875AE69 /* ActivityKit.framework in Frameworks */,
+				E9B0700D66AE76F75CB98B1D /* SwiftUI.framework in Frameworks */,
+				CEA15BF1289CBC4F62B48653 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		97C146EB1CF9000F007C117D /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -98,10 +152,32 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		194C5FFA12F00F44DB46F141 /* LiveActivityHost */ = {
+			isa = PBXGroup;
+			children = (
+				6A55769C5005DBB0F382B586 /* WarmAlarmLiveActivityAttributes.swift */,
+				5442F8A5329C66392CA1BCEE /* WarmAlarmActivityKitAdapter.swift */,
+				5DD67B29E07FAE9D131E9611 /* WarmAlarmLiveActivityWidget.swift */,
+			);
+			name = LiveActivityHost;
+			path = LiveActivityHost;
+			sourceTree = "<group>";
+		};
+		2F9F6027AFAE8DD19625AA03 /* LiveActivityWidget */ = {
+			isa = PBXGroup;
+			children = (
+				D6CF975C427F92EF2C5CC756 /* Info.plist */,
+				D21000000000000000000007 /* Widget.xcconfig */,
+			);
+			name = LiveActivityWidget;
+			path = LiveActivityWidget;
+			sourceTree = "<group>";
+		};
 		71A9A1607E036E391BA6A301 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
 				1D6986157739D9687AB6AFD6 /* Pods_Runner.framework */,
+				9D1B7CED2623F4176F37B394 /* iOS */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -137,6 +213,8 @@
 				9567CFDD8F7714B0D403105A /* Pods */,
 				71A9A1607E036E391BA6A301 /* Frameworks */,
 				C48EBD53CF2BF6C8F5CF3DDA /* RunnerTests */,
+				194C5FFA12F00F44DB46F141 /* LiveActivityHost */,
+				2F9F6027AFAE8DD19625AA03 /* LiveActivityWidget */,
 			);
 			sourceTree = "<group>";
 		};
@@ -145,6 +223,7 @@
 			children = (
 				97C146EE1CF9000F007C117D /* Runner.app */,
 				3A13C189E3A8AD75CE0D2581 /* RunnerTests.xctest */,
+				C9163C90C1AA8CC518DD4566 /* LiveActivityWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -165,9 +244,23 @@
 			path = Runner;
 			sourceTree = "<group>";
 		};
+		9D1B7CED2623F4176F37B394 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				34A57D4457F74C2FA2EB865D /* Foundation.framework */,
+				0BADE68ED29E687F28B98BC2 /* ActivityKit.framework */,
+				C79963D8D2C3AB322DDFBEBD /* SwiftUI.framework */,
+				399B59320BA37EF516F0B63A /* WidgetKit.framework */,
+			);
+			name = iOS;
+			sourceTree = "<group>";
+		};
 		C48EBD53CF2BF6C8F5CF3DDA /* RunnerTests */ = {
 			isa = PBXGroup;
 			children = (
+				D21000000000000000000001 /* WarmAlarmEventQueueTests.swift */,
+				D21000000000000000000003 /* WarmAlarmLiveActivityTests.swift */,
+				D21000000000000000000005 /* WarmAlarmAudioSourceTests.swift */,
 				6F1E550AB0E9EF57A4333357 /* WarmAlarmMutationQueueTests.swift */,
 				BB750F38CF6190D10EFBAC17 /* WarmAlarmPlatformReplyTests.swift */,
 				E713B65BD9501484EEB7A051 /* WarmAlarmRecoveryTests.swift */,
@@ -193,11 +286,13 @@
 				97C146EB1CF9000F007C117D /* Frameworks */,
 				97C146EC1CF9000F007C117D /* Resources */,
 				9705A1C41CF9048500538489 /* Embed Frameworks */,
+				2144D82F1C43132B32ABF580 /* Embed Foundation Extensions */,
 				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				BFEAE1B69E1E7B6A97FB25F4 /* PBXTargetDependency */,
 			);
 			name = Runner;
 			packageProductDependencies = (
@@ -206,6 +301,23 @@
 			productName = Runner;
 			productReference = 97C146EE1CF9000F007C117D /* Runner.app */;
 			productType = "com.apple.product-type.application";
+		};
+		B7F197871B9ABCC890570A55 /* LiveActivityWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C9DB2A3C0AA10C5CB2CB712B /* Build configuration list for PBXNativeTarget "LiveActivityWidget" */;
+			buildPhases = (
+				800B98C80DE731DD461ABF60 /* Sources */,
+				27A59FD04142D8D95C78BB1C /* Frameworks */,
+				D43DA19E07641E6654115ED4 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LiveActivityWidget;
+			productName = LiveActivityWidget;
+			productReference = C9163C90C1AA8CC518DD4566 /* LiveActivityWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		E92665AA088122B816840F04 /* RunnerTests */ = {
 			isa = PBXNativeTarget;
@@ -258,6 +370,7 @@
 			targets = (
 				97C146ED1CF9000F007C117D /* Runner */,
 				E92665AA088122B816840F04 /* RunnerTests */,
+				B7F197871B9ABCC890570A55 /* LiveActivityWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -278,6 +391,13 @@
 				3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */,
 				97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */,
 				97C146FC1CF9000F007C117D /* Main.storyboard in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D43DA19E07641E6654115ED4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -340,10 +460,22 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		800B98C80DE731DD461ABF60 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2E811A9AC7FF1D9A51F128B0 /* WarmAlarmLiveActivityAttributes.swift in Sources */,
+				0E2CAAC1A373D7C6B5EB4710 /* WarmAlarmLiveActivityWidget.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		96B4FF2D7584F127D31F25DB /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D21000000000000000000002 /* WarmAlarmEventQueueTests.swift in Sources */,
+				D21000000000000000000004 /* WarmAlarmLiveActivityTests.swift in Sources */,
+				D21000000000000000000006 /* WarmAlarmAudioSourceTests.swift in Sources */,
 				A897DD86A2DB71364E3D3FBA /* WarmAlarmMutationQueueTests.swift in Sources */,
 				909ACAEC600DB48B13EE7D5E /* WarmAlarmPlatformReplyTests.swift in Sources */,
 				AFBB24222795A1290FF50E54 /* WarmAlarmRecoveryTests.swift in Sources */,
@@ -361,6 +493,8 @@
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
 				97C147101CF9000F007C117D /* SceneDelegate.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
+				C7F3F37F7B4922202C7F1F0D /* WarmAlarmLiveActivityAttributes.swift in Sources */,
+				F0F91448759B01BE660F206B /* WarmAlarmActivityKitAdapter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -372,6 +506,12 @@
 			name = Runner;
 			target = 97C146ED1CF9000F007C117D /* Runner */;
 			targetProxy = EC19100683B70D2768DE6543 /* PBXContainerItemProxy */;
+		};
+		BFEAE1B69E1E7B6A97FB25F4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = LiveActivityWidget;
+			target = B7F197871B9ABCC890570A55 /* LiveActivityWidget */;
+			targetProxy = 34BE0D9545E743E8BF9F2A0E /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -498,6 +638,34 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Runner.app/Runner";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Profile;
+		};
+		93A121AC6C1B1BC07ACA9AA8 /* Profile */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = D21000000000000000000007 /* Widget.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEVELOPMENT_TEAM = 393JTTV68D;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = LiveActivityWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.andrew.alarm.LiveActivityWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Profile;
@@ -656,6 +824,61 @@
 			};
 			name = Release;
 		};
+		BB7C37DCF50DD6FC249E8BF7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = D21000000000000000000007 /* Widget.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEVELOPMENT_TEAM = 393JTTV68D;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = LiveActivityWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.andrew.alarm.LiveActivityWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		E58E8D62B2D48EBCE93BBE14 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = D21000000000000000000007 /* Widget.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEVELOPMENT_TEAM = 393JTTV68D;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = LiveActivityWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.andrew.alarm.LiveActivityWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
 		EF04DEC27BFABF1A49E08585 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -701,6 +924,16 @@
 				97C147061CF9000F007C117D /* Debug */,
 				97C147071CF9000F007C117D /* Release */,
 				249021D4217E4FDB00AE95B9 /* Profile */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C9DB2A3C0AA10C5CB2CB712B /* Build configuration list for PBXNativeTarget "LiveActivityWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BB7C37DCF50DD6FC249E8BF7 /* Release */,
+				E58E8D62B2D48EBCE93BBE14 /* Debug */,
+				93A121AC6C1B1BC07ACA9AA8 /* Profile */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

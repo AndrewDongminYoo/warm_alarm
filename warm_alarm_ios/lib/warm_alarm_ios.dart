@@ -5,6 +5,11 @@ import 'package:flutter/foundation.dart';
 import 'package:warm_alarm_ios/src/messages.g.dart';
 import 'package:warm_alarm_platform_interface/warm_alarm_platform_interface.dart';
 
+typedef _PendingWarmAlarmEvent = ({
+  WarmAlarmEvent event,
+  Completer<void> delivered,
+});
+
 /// {@template warm_alarm_ios}
 /// The iOS implementation of [WarmAlarmPlatform].
 /// {@endtemplate}
@@ -13,7 +18,10 @@ class WarmAlarmIOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   WarmAlarmIOS({
     @visibleForTesting WarmAlarmApi? api,
   }) : api = api ?? WarmAlarmApi() {
-    _events = StreamController<WarmAlarmEvent>.broadcast(onListen: _handleFirstEventListener);
+    _events = StreamController<WarmAlarmEvent>.broadcast(
+      onListen: _handleFirstEventListener,
+      onCancel: _handleLastEventListenerCancelled,
+    );
   }
 
   static const int _pendingEventLimit = 64;
@@ -25,7 +33,7 @@ class WarmAlarmIOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   bool _eventsApiSetUp = false;
 
   late final StreamController<WarmAlarmEvent> _events;
-  final List<WarmAlarmEvent> _pendingEvents = <WarmAlarmEvent>[];
+  final List<_PendingWarmAlarmEvent> _pendingEvents = [];
   bool _hasEventListener = false;
 
   /// Registers this class as the default instance of
@@ -44,7 +52,10 @@ class WarmAlarmIOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   }
 
   @override
-  Future<void> init() => api.initialize();
+  Future<void> init() async {
+    _ensureEventsApiSetUp();
+    await api.initialize();
+  }
 
   @override
   Future<String?> prepareSystemSound({
@@ -99,6 +110,43 @@ class WarmAlarmIOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   Future<void> clearKillWarning() => api.clearKillWarning();
 
   @override
+  Future<WarmAlarmLiveActivityResult> startLiveActivity(WarmAlarmLiveActivityState state) async =>
+      _liveActivityResultFromWire(await api.startLiveActivity(_liveActivityStateToWire(state)));
+
+  @override
+  Future<WarmAlarmLiveActivityResult> updateLiveActivity(
+    String activityId,
+    WarmAlarmLiveActivityState state,
+  ) async => _liveActivityResultFromWire(await api.updateLiveActivity(activityId, _liveActivityStateToWire(state)));
+
+  @override
+  Future<WarmAlarmLiveActivityResult> endLiveActivity(String activityId) async =>
+      _liveActivityResultFromWire(await api.endLiveActivity(activityId));
+
+  static WarmAlarmLiveActivityStateWire _liveActivityStateToWire(WarmAlarmLiveActivityState state) =>
+      WarmAlarmLiveActivityStateWire(
+        alarmId: state.alarmId,
+        title: state.title,
+        status: switch (state.status) {
+          WarmAlarmLiveActivityStatus.scheduled => WarmAlarmLiveActivityStatusWire.scheduled,
+          WarmAlarmLiveActivityStatus.ringing => WarmAlarmLiveActivityStatusWire.ringing,
+          WarmAlarmLiveActivityStatus.snoozed => WarmAlarmLiveActivityStatusWire.snoozed,
+        },
+        scheduledAtMillis: state.scheduledAt?.millisecondsSinceEpoch,
+      );
+
+  static WarmAlarmLiveActivityResult _liveActivityResultFromWire(WarmAlarmLiveActivityResultWire result) =>
+      WarmAlarmLiveActivityResult(
+        status: switch (result.status) {
+          WarmAlarmLiveActivityResultStatusWire.completed => WarmAlarmLiveActivityResultStatus.completed,
+          WarmAlarmLiveActivityResultStatusWire.unsupported => WarmAlarmLiveActivityResultStatus.unsupported,
+          WarmAlarmLiveActivityResultStatusWire.disabled => WarmAlarmLiveActivityResultStatus.disabled,
+          WarmAlarmLiveActivityResultStatusWire.notFound => WarmAlarmLiveActivityResultStatus.notFound,
+        },
+        activityId: result.activityId,
+      );
+
+  @override
   Future<WarmAlarmScheduleResult> scheduleAlarm(
     WarmAlarmSchedule schedule,
   ) async => _scheduleResultFromWire(
@@ -109,10 +157,12 @@ class WarmAlarmIOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   Future<void> emitEvent(WarmAlarmEventWire event) async {
     final mappedEvent = _eventFromWire(event);
     if (!_hasEventListener) {
+      final delivered = Completer<void>();
       if (_pendingEvents.length == _pendingEventLimit) {
-        _pendingEvents.removeAt(0);
+        _pendingEvents.removeAt(0).delivered.complete();
       }
-      _pendingEvents.add(mappedEvent);
+      _pendingEvents.add((event: mappedEvent, delivered: delivered));
+      await delivered.future;
       return;
     }
     _events.add(mappedEvent);
@@ -121,8 +171,16 @@ class WarmAlarmIOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   void _handleFirstEventListener() {
     if (_hasEventListener) return;
     _hasEventListener = true;
-    _pendingEvents.forEach(_events.add);
+    final pendingEvents = List<_PendingWarmAlarmEvent>.of(_pendingEvents);
     _pendingEvents.clear();
+    for (final pending in pendingEvents) {
+      _events.add(pending.event);
+      pending.delivered.complete();
+    }
+  }
+
+  void _handleLastEventListenerCancelled() {
+    _hasEventListener = false;
   }
 }
 

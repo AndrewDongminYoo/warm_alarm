@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -67,7 +68,7 @@ class WarmAlarmPlugin :
     private lateinit var alarmManager: AlarmManager
     private lateinit var notificationManager: NotificationManager
     private lateinit var eventsApi: WarmAlarmEventsApi
-    private lateinit var pendingSnoozeReplay: PendingSnoozeEventReplay
+    private lateinit var eventQueue: WarmAlarmEventQueue
     private val mainHandler = Handler(Looper.getMainLooper())
     private var activity: Activity? = null
     private var activityBinding: ActivityPluginBinding? = null
@@ -78,8 +79,12 @@ class WarmAlarmPlugin :
         alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         eventsApi = WarmAlarmEventsApi(binding.binaryMessenger)
-        pendingSnoozeReplay =
-            PendingSnoozeEventReplay(PendingSnoozeEventStore.create(context)) { event, callback ->
+        val eventQueueStore = WarmAlarmEventQueueStore.create(context)
+        if (!migratePendingSnoozeEvents(PendingSnoozeEventStore.create(context), eventQueueStore)) {
+            Log.w("WarmAlarm", "Pending snooze event migration was incomplete; retained entries can retry on attachment")
+        }
+        eventQueue =
+            WarmAlarmEventQueue(eventQueueStore) { event, callback ->
                 mainHandler.post { eventsApi.emitEvent(event, callback) }
             }
         WarmAlarmApi.setUp(binding.binaryMessenger, this)
@@ -143,7 +148,7 @@ class WarmAlarmPlugin :
                     alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pending)
                 }
             }
-        pendingSnoozeReplay.drain()
+        eventQueue.drain()
         callback(Result.success(Unit))
     }
 
@@ -329,6 +334,7 @@ class WarmAlarmPlugin :
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAtMillis, pending)
         }
         emitEventFromBackground(
+            context,
             WarmAlarmEventWire(
                 alarmId = schedule.id,
                 type = WarmAlarmEventTypeWire.SCHEDULED,
@@ -521,10 +527,19 @@ class WarmAlarmPlugin :
         private const val REQUEST_NOTIFICATION_PERMISSION = 39101
         private var pluginInstance: WarmAlarmPlugin? = null
 
-        fun emitEventFromBackground(event: WarmAlarmEventWire) {
-            val plugin = pluginInstance ?: return
-            plugin.mainHandler.post {
-                plugin.eventsApi.emitEvent(event) { /* ignore result */ }
+        fun emitEventFromBackground(
+            context: Context,
+            event: WarmAlarmEventWire,
+        ) {
+            val plugin = pluginInstance
+            val persisted =
+                if (plugin == null) {
+                    WarmAlarmEventQueueStore.create(context).enqueue(event)
+                } else {
+                    plugin.eventQueue.enqueue(event)
+                }
+            if (!persisted) {
+                Log.e("WarmAlarm", "Failed to persist ${event.type} event for alarm ${event.alarmId}")
             }
         }
 
@@ -532,15 +547,7 @@ class WarmAlarmPlugin :
             context: Context,
             event: WarmAlarmEventWire,
         ) {
-            val queued = PendingSnoozeEventStore.create(context).enqueue(event)
-            val plugin = pluginInstance ?: return
-            plugin.mainHandler.post {
-                if (queued) {
-                    plugin.pendingSnoozeReplay.drain()
-                } else {
-                    plugin.eventsApi.emitEvent(event) { _ -> }
-                }
-            }
+            emitEventFromBackground(context, event)
         }
 
         internal fun rescheduleAlarm(

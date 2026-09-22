@@ -8,6 +8,38 @@ import UserNotifications
 @testable import warm_alarm_ios
 
 final class WarmAlarmRequestRegistrationTests: XCTestCase {
+    func testAlarmKitSnoozeRequiresBothLiveActivityHostKeys() {
+        XCTAssertFalse(WarmAlarmPlugin.alarmKitLiveActivityConfigured([
+            "WarmAlarmAlarmKitLiveActivityEnabled": true,
+        ]))
+        XCTAssertFalse(WarmAlarmPlugin.alarmKitLiveActivityConfigured([
+            "NSSupportsLiveActivities": true,
+        ]))
+        XCTAssertTrue(WarmAlarmPlugin.alarmKitLiveActivityConfigured([
+            "WarmAlarmAlarmKitLiveActivityEnabled": true,
+            "NSSupportsLiveActivities": true,
+        ]))
+    }
+
+    func testDeniedAlarmKitCapabilityMatchesNotificationFallback() {
+        let plugin = makeReadinessPlugin(
+            settings: .init(
+                authorizationStatus: .authorized,
+                alertsEnabled: true,
+                soundsEnabled: true,
+                timeSensitiveEnabled: true
+            ),
+            backend: RecordingAlarmKitBackend(scheduleError: nil, authorizationState: .denied)
+        )
+        plugin.getCapabilities { result in
+            guard case let .success(capabilities) = result else {
+                return XCTFail("Expected capabilities")
+            }
+            XCTAssertEqual(capabilities.exactScheduling, .limited)
+            XCTAssertEqual(capabilities.fullScreenPresentation, .unsupported)
+        }
+    }
+
     func testAlarmKitPlanPreservesTheRequestedRecordingForSystemPlayback() {
         let wire = WarmAlarmScheduleWire(
             id: 42,
