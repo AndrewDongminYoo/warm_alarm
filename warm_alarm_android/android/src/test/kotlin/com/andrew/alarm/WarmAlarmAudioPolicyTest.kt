@@ -109,6 +109,22 @@ class WarmAlarmAudioPolicyTest {
             )
 
         assertEquals(WarmAlarmAudioSource.DEFAULT_ALARM, selection.source)
+        assertEquals(true, selection.loop)
+    }
+
+    @Test
+    fun lockedFileFallbackKeepsTheDefaultAlarmLooping() {
+        val selection =
+            WarmAlarmAudioPolicy.select(
+                filePath = "/data/user/0/app/alarm.mp3",
+                assetPath = null,
+                loop = false,
+                canReadCredentialProtectedFiles = false,
+                fileReadableDuringDirectBoot = false,
+            )
+
+        assertEquals(WarmAlarmAudioSource.DEFAULT_ALARM, selection.source)
+        assertEquals(true, selection.loop)
     }
 
     @Test
