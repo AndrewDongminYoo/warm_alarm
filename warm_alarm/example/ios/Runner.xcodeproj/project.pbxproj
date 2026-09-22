@@ -160,7 +160,7 @@
 				5DD67B29E07FAE9D131E9611 /* WarmAlarmLiveActivityWidget.swift */,
 			);
 			name = LiveActivityHost;
-			path = ../../../warm_alarm_ios/example/live_activity;
+			path = LiveActivityHost;
 			sourceTree = "<group>";
 		};
 		2F9F6027AFAE8DD19625AA03 /* LiveActivityWidget */ = {

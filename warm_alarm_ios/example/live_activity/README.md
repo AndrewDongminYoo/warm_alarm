@@ -5,8 +5,16 @@ It uses local ActivityKit updates only and does not use an ActivityKit push toke
 
 ## Run the repository QA fixture
 
-The Flutter example app embeds a `LiveActivityWidget` extension and compiles the Swift files in this directory directly into the required targets.
-It does not copy the sample sources, so this directory remains the canonical host example.
+The Flutter example app embeds a `LiveActivityWidget` extension and compiles package-local copies of these Swift files from `warm_alarm/example/ios/LiveActivityHost`.
+This directory remains the canonical host example, and CI checks that the packaged copies match it byte for byte.
+After changing a canonical Swift file, refresh its copy from the repository root:
+
+```bash
+cp warm_alarm_ios/example/live_activity/WarmAlarmLiveActivityAttributes.swift warm_alarm/example/ios/LiveActivityHost/
+cp warm_alarm_ios/example/live_activity/WarmAlarmActivityKitAdapter.swift warm_alarm/example/ios/LiveActivityHost/
+cp warm_alarm_ios/example/live_activity/WarmAlarmLiveActivityWidget.swift warm_alarm/example/ios/LiveActivityHost/
+```
+
 The Widget Extension uses iOS 16.2 as its minimum deployment target.
 The Runner keeps the example app's existing deployment baseline and availability-gates registration on earlier systems.
 

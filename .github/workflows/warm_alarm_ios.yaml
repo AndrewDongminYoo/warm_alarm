@@ -38,6 +38,36 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Assert Live Activity sources stay inside the example package
+        run: |
+          python3 - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          root = Path.cwd()
+          package = root / "warm_alarm"
+          ios = package / "example/ios"
+          objects = json.loads(subprocess.check_output([
+              "plutil", "-convert", "json", "-o", "-",
+              str(ios / "Runner.xcodeproj/project.pbxproj"),
+          ]))["objects"]
+          groups = [value for value in objects.values()
+                    if value.get("isa") == "PBXGroup" and value.get("name") == "LiveActivityHost"]
+          assert len(groups) == 1, "Expected one LiveActivityHost source group"
+          group = groups[0]
+          source_directory = (ios / group["path"]).resolve()
+          assert source_directory.is_relative_to(package), "Live Activity sources escape the published package"
+          canonical = root / "warm_alarm_ios/example/live_activity"
+          names = {"WarmAlarmLiveActivityAttributes.swift", "WarmAlarmActivityKitAdapter.swift",
+                   "WarmAlarmLiveActivityWidget.swift"}
+          assert {objects[ref]["path"] for ref in group["children"]} == names, "Unexpected host source membership"
+          for name in names:
+              source = (source_directory / name).resolve()
+              assert source.is_relative_to(package), f"Source escapes the published package: {name}"
+              assert source.read_bytes() == (canonical / name).read_bytes(), f"Host source copy differs: {name}"
+          PY
+
       - name: Assert every Swift test belongs to RunnerTests
         run: |
           set -euo pipefail
