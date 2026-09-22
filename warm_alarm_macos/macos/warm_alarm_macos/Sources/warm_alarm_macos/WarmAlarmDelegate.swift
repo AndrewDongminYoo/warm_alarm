@@ -171,7 +171,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         case let .file(path):
             player = try? AVAudioPlayer(contentsOf: URL(fileURLWithPath: path))
         case let .asset(asset):
-            if let url = Bundle.main.url(forResource: "flutter_assets/\(asset)", withExtension: nil) {
+            if let url = WarmAlarmAudioSource.assetURL(for: asset) {
                 player = try? AVAudioPlayer(contentsOf: url)
             } else {
                 player = nil

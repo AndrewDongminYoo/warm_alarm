@@ -1,3 +1,7 @@
+# Unreleased
+
+- Resolve Flutter audio assets from the embedded App.framework while retaining the main-bundle fallback.
+
 # 0.1.3
 
 - Persist lifecycle events before Dart dispatch and retry acknowledged delivery during initialization.

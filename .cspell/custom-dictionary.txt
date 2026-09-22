@@ -8,3 +8,4 @@ ktlint
 podhelper
 widgetkit
 xcresulttool
+afconvert
