@@ -87,6 +87,49 @@ void main() {
   });
 
   group('WarmAlarmMacOS events', () {
+    test('preserves an event emitted after the last listener cancels', () async {
+      final platform = WarmAlarmMacOS(api: _MockWarmAlarmApi());
+      final firstSubscription = platform.events.listen((_) {});
+      await firstSubscription.cancel();
+
+      await platform.emitEvent(
+        WarmAlarmEventWire(
+          alarmId: 43,
+          type: WarmAlarmEventTypeWire.fired,
+          occurredAtMillis: DateTime.now().millisecondsSinceEpoch,
+        ),
+      );
+
+      final emitted = <WarmAlarmEvent>[];
+      final secondSubscription = platform.events.listen(emitted.add);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(emitted.single, isA<WarmAlarmFired>());
+      expect(emitted.single.alarmId, 43);
+      await secondSubscription.cancel();
+    });
+
+    test('keeps delivering while another listener remains', () async {
+      final platform = WarmAlarmMacOS(api: _MockWarmAlarmApi());
+      final firstSubscription = platform.events.listen((_) {});
+      final emitted = <WarmAlarmEvent>[];
+      final secondSubscription = platform.events.listen(emitted.add);
+      await firstSubscription.cancel();
+
+      await platform.emitEvent(
+        WarmAlarmEventWire(
+          alarmId: 44,
+          type: WarmAlarmEventTypeWire.fired,
+          occurredAtMillis: DateTime.now().millisecondsSinceEpoch,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(emitted.single, isA<WarmAlarmFired>());
+      expect(emitted.single.alarmId, 44);
+      await secondSubscription.cancel();
+    });
+
     test('preserves events emitted before the first listener', () async {
       final platform = WarmAlarmMacOS(api: _MockWarmAlarmApi());
 

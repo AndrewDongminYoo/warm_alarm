@@ -12,7 +12,10 @@ class WarmAlarmMacOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   WarmAlarmMacOS({
     @visibleForTesting WarmAlarmApi? api,
   }) : api = api ?? WarmAlarmApi() {
-    _events = StreamController<WarmAlarmEvent>.broadcast(onListen: _handleFirstEventListener);
+    _events = StreamController<WarmAlarmEvent>.broadcast(
+      onListen: _handleFirstEventListener,
+      onCancel: _handleLastEventListenerCancelled,
+    );
   }
 
   static const int _pendingEventLimit = 64;
@@ -114,6 +117,10 @@ class WarmAlarmMacOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
     _hasEventListener = true;
     _pendingEvents.forEach(_events.add);
     _pendingEvents.clear();
+  }
+
+  void _handleLastEventListenerCancelled() {
+    _hasEventListener = false;
   }
 }
 
