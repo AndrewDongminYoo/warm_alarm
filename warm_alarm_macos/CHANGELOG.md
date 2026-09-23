@@ -1,3 +1,8 @@
+# 0.1.5
+
+- Report an unsupported wake-check request in the typed schedule warning while preserving native warning text.
+- Require platform interface 0.1.5 for the warning code.
+
 # 0.1.4
 
 - Resolve Flutter audio assets from the embedded App.framework while retaining the main-bundle fallback.
