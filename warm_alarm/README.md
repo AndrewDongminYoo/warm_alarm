@@ -203,6 +203,9 @@ Custom activities use a separate opt-in from AlarmKit countdown presentation.
 | `clearKillWarning()`              | `Future<void>`                        | Remove the kill-warning notification                        |
 | `events`                          | `Stream<WarmAlarmEvent>`              | Real-time alarm lifecycle event stream                      |
 
+On iOS and macOS, a schedule with `wakeCheck` returns `warning.code == WarmAlarmWarningCode.unsupportedWakeCheck` because wake-check cannot run there.
+The wake-check request is ignored, and `warning.message` also retains any native scheduling warning.
+
 `openReadinessSettings(reason)` hands the user off to a system screen and returns as soon as the
 platform accepts the request, so its snapshot describes the state before the remediation — call
 `getReadiness()` again once the app resumes to see the outcome.

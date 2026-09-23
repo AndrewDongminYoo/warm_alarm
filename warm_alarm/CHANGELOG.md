@@ -1,3 +1,8 @@
+# 0.1.6
+
+- Surface typed warnings when iOS or macOS ignores a requested wake-check while retaining native scheduling warnings.
+- Require the platform interface and implementations published for the wake-check warning contract.
+
 # 0.1.5
 
 - Expose opt-in Live Activity start, update, and end operations.
