@@ -1,9 +1,15 @@
 final class WarmAlarmWarning {
   const WarmAlarmWarning({
     required this.message,
+    this.code,
   });
 
   final String message;
+  final WarmAlarmWarningCode? code;
+}
+
+enum WarmAlarmWarningCode {
+  unsupportedWakeCheck,
 }
 
 final class WarmAlarmFailure {
