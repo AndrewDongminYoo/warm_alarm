@@ -16,5 +16,12 @@ afconvert -f caff -d LEI16 assets/audio/alarm_ring.wav ios/Runner/alarm_ring.caf
 ```
 
 Keep the notification sound below 30 seconds, as required by [Apple's notification sound documentation](https://developer.apple.com/documentation/usernotifications/unnotificationsound).
-This example still uses the User Notifications fallback on iOS; adding a sound does not enable AlarmKit or continuous ringing while locked.
 Schedule a new alarm after installing the sound-enabled build; an already pending notification may still reference the default sound.
+
+## AlarmKit device check
+
+The iOS host includes `NSAlarmKitUsageDescription` and an AlarmKit countdown presentation in its Widget Extension.
+The one-minute alarm button schedules a five-minute Snooze so the native Schedule, Stop, and Snooze flow can be checked on an iOS 26 or later device.
+If AlarmKit asks for authorization, allow it, then check that the alarm appears with system alarm controls rather than a notification banner.
+The UI displays `Schedule warning` when the plugin falls back to User Notifications; a fallback does not verify AlarmKit behavior.
+The separate custom Live Activity fixture remains available through `lib/live_activity_fixture.dart`.

@@ -24,6 +24,8 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>Allow alarms you schedule in Example to alert and snooze.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
@@ -70,6 +72,8 @@
 			</array>
 		</dict>
 	</dict>
+	<key>WarmAlarmAlarmKitLiveActivityEnabled</key>
+	<true/>
 	<key>WarmAlarmLiveActivityEnabled</key>
 	<true/>
 </dict>

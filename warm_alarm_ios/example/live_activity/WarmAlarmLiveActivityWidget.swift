@@ -1,11 +1,61 @@
 import ActivityKit
+import AlarmKit
 import SwiftUI
 import WidgetKit
+
+@available(iOS 26.0, *)
+extension Never: @retroactive AlarmMetadata {}
 
 @main
 struct WarmAlarmWidgetBundle: WidgetBundle {
     var body: some Widget {
         WarmAlarmLiveActivityWidget()
+        if #available(iOS 26.0, *) {
+            WarmAlarmAlarmKitWidget()
+        }
+    }
+}
+
+@available(iOS 26.0, *)
+struct WarmAlarmAlarmKitWidget: Widget {
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: AlarmAttributes<Never>.self) { context in
+            HStack(spacing: 12) {
+                Image(systemName: "alarm")
+                    .accessibilityHidden(true)
+                WarmAlarmAlarmKitStatusView(mode: context.state.mode)
+            }
+            .padding()
+        } dynamicIsland: { context in
+            DynamicIsland {
+                DynamicIslandExpandedRegion(.center) {
+                    WarmAlarmAlarmKitStatusView(mode: context.state.mode)
+                }
+            } compactLeading: {
+                Image(systemName: "alarm")
+            } compactTrailing: {
+                WarmAlarmAlarmKitStatusView(mode: context.state.mode)
+            } minimal: {
+                Image(systemName: "alarm")
+            }
+        }
+    }
+}
+
+@available(iOS 26.0, *)
+private struct WarmAlarmAlarmKitStatusView: View {
+    let mode: AlarmPresentationState.Mode
+
+    var body: some View {
+        switch mode {
+        case .countdown(let countdown):
+            Text(countdown.fireDate, style: .timer)
+                .monospacedDigit()
+        case .paused:
+            Text("Paused")
+        case .alert:
+            Text("Alarm")
+        }
     }
 }
 
