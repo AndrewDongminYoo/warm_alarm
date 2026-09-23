@@ -1,3 +1,7 @@
+# 0.1.5
+
+- Add an optional warning code for wake-check requests that a platform cannot honor.
+
 # 0.1.4
 
 - Add opt-in Live Activity content and operation result models.
