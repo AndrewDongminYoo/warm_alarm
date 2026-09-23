@@ -1,3 +1,8 @@
+# 0.1.11
+
+- Report an unsupported wake-check request in the typed schedule warning while preserving native warning text.
+- Require platform interface 0.1.5 for the warning code.
+
 # 0.1.10
 
 - Persist native alarm events until Dart acknowledges delivery, including retry after acknowledgement storage failures.

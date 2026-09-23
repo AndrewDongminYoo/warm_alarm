@@ -1,3 +1,7 @@
+# 0.1.4
+
+- Require platform interface 0.1.5 for the coordinated wake-check warning release.
+
 # 0.1.3
 
 - Persist native alarm events until Dart acknowledges delivery, with bounded replay and corrupt-record recovery.

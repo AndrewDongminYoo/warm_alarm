@@ -102,6 +102,7 @@ class WarmAlarmMacOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
     WarmAlarmSchedule schedule,
   ) async => _scheduleResultFromWire(
     await api.scheduleAlarm(_scheduleToWire(schedule)),
+    wakeCheckRequested: schedule.wakeCheck != null,
   );
 
   @override
@@ -358,12 +359,23 @@ WarmAlarmRecurrenceWire? _recurrenceToWire(WarmAlarmRecurrence? recurrence) {
 }
 
 WarmAlarmScheduleResult _scheduleResultFromWire(
-  WarmAlarmScheduleResultWire wire,
-) {
+  WarmAlarmScheduleResultWire wire, {
+  required bool wakeCheckRequested,
+}) {
+  WarmAlarmWarning? warning;
+  if (wakeCheckRequested) {
+    const message = 'Wake-check is not supported on macOS.';
+    warning = WarmAlarmWarning(
+      code: WarmAlarmWarningCode.unsupportedWakeCheck,
+      message: wire.warning == null ? message : '$message ${wire.warning!.message}',
+    );
+  } else if (wire.warning case final nativeWarning?) {
+    warning = WarmAlarmWarning(message: nativeWarning.message);
+  }
   return WarmAlarmScheduleResult(
     alarmId: wire.alarmId,
     readiness: _readinessFromWire(wire.readiness),
-    warning: wire.warning == null ? null : WarmAlarmWarning(message: wire.warning!.message),
+    warning: warning,
   );
 }
 

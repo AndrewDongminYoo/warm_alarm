@@ -487,6 +487,55 @@ void main() {
       expect(result.readiness.notificationSettings?.timeSensitiveEnabled, isFalse);
     });
 
+    test('scheduleAlarm warns when wake-check is ignored and preserves the native warning', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmIOS(api: api);
+      when(() => api.scheduleAlarm(any())).thenAnswer(
+        (_) async => WarmAlarmScheduleResultWire(
+          alarmId: 20,
+          readiness: WarmAlarmReadinessWire(level: WarmAlarmReadinessLevelWire.ready, reasons: []),
+          warning: WarmAlarmWarningWire(message: 'Native warning.'),
+        ),
+      );
+
+      final result = await platform.scheduleAlarm(
+        WarmAlarmSchedule(
+          id: 20,
+          scheduledAt: DateTime(2026, 5, 1, 8),
+          notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+          audio: const WarmAlarmAudio(),
+          wakeCheck: const WarmAlarmWakeCheck(checkDelay: Duration(minutes: 1)),
+        ),
+      );
+
+      expect(result.warning?.message, 'Wake-check is not supported on iOS. Native warning.');
+      expect(result.warning?.code, WarmAlarmWarningCode.unsupportedWakeCheck);
+    });
+
+    test('scheduleAlarm preserves the native warning without wake-check', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmIOS(api: api);
+      when(() => api.scheduleAlarm(any())).thenAnswer(
+        (_) async => WarmAlarmScheduleResultWire(
+          alarmId: 20,
+          readiness: WarmAlarmReadinessWire(level: WarmAlarmReadinessLevelWire.ready, reasons: []),
+          warning: WarmAlarmWarningWire(message: 'Native warning.'),
+        ),
+      );
+
+      final result = await platform.scheduleAlarm(
+        WarmAlarmSchedule(
+          id: 20,
+          scheduledAt: DateTime(2026, 5, 1, 8),
+          notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+          audio: const WarmAlarmAudio(),
+        ),
+      );
+
+      expect(result.warning?.message, 'Native warning.');
+      expect(result.warning?.code, isNull);
+    });
+
     test('system sound override crosses the wire without replacing legacy audio', () async {
       final api = _MockWarmAlarmApi();
       final platform = WarmAlarmIOS(api: api);

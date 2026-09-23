@@ -750,6 +750,54 @@ void main() {
       expect(captured.single.payload, 'mac-sched-payload');
     });
 
+    test('scheduleAlarm warns when wake-check is ignored', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmMacOS(api: api);
+      when(() => api.scheduleAlarm(any())).thenAnswer(
+        (_) async => WarmAlarmScheduleResultWire(
+          alarmId: 70,
+          readiness: WarmAlarmReadinessWire(level: WarmAlarmReadinessLevelWire.ready, reasons: []),
+        ),
+      );
+
+      final result = await platform.scheduleAlarm(
+        WarmAlarmSchedule(
+          id: 70,
+          scheduledAt: DateTime(2026, 5, 1, 8),
+          notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+          audio: const WarmAlarmAudio(),
+          wakeCheck: const WarmAlarmWakeCheck(checkDelay: Duration(minutes: 1)),
+        ),
+      );
+
+      expect(result.warning?.message, 'Wake-check is not supported on macOS.');
+      expect(result.warning?.code, WarmAlarmWarningCode.unsupportedWakeCheck);
+    });
+
+    test('scheduleAlarm preserves the native warning without wake-check', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmMacOS(api: api);
+      when(() => api.scheduleAlarm(any())).thenAnswer(
+        (_) async => WarmAlarmScheduleResultWire(
+          alarmId: 70,
+          readiness: WarmAlarmReadinessWire(level: WarmAlarmReadinessLevelWire.ready, reasons: []),
+          warning: WarmAlarmWarningWire(message: 'Native warning.'),
+        ),
+      );
+
+      final result = await platform.scheduleAlarm(
+        WarmAlarmSchedule(
+          id: 70,
+          scheduledAt: DateTime(2026, 5, 1, 8),
+          notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+          audio: const WarmAlarmAudio(),
+        ),
+      );
+
+      expect(result.warning?.message, 'Native warning.');
+      expect(result.warning?.code, isNull);
+    });
+
     test('scheduleAlarm with recurrence passes weekdays to wire', () async {
       final api = _MockWarmAlarmApi();
       final platform = WarmAlarmMacOS(api: api);
