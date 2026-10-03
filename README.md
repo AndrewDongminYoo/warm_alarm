@@ -13,10 +13,10 @@
 
 - **Durable lifecycle events** — bounded native replay when the Dart engine reconnects.
 - **Opt-in iOS Live Activities** — host-provided widgets with explicit start, update, and end operations.
-- **Capability-first design** — each platform reports exactly what it can do; no silent no-ops
+- **Capability-first design** — feature support is reported at runtime, with platform-specific limits documented below
 - **Three-level system inspection** — `getCapabilities()`, `getPermissionState()`, and `getReadiness()` before you schedule
 - **Reactive event stream** — sealed `WarmAlarmEvent` types for every alarm lifecycle transition
-- **Custom audio** — local file, asset, or platform default with fade-in, looping, and vibration control
+- **Custom audio** — local file, asset, or platform default with fade steps, looping, and platform-specific vibration control
 - **Wake-check flow** (Android) — verifies the user is actually awake after dismissal and retriggers when they are not
 - **Snooze and recurrence** — built-in snooze duration and weekly recurrence by weekday
 - **Federated plugin** — independent implementations for Android, iOS, and macOS
@@ -29,7 +29,7 @@ Add `warm_alarm` to your Flutter app.
 
 ```yaml
 dependencies:
-  warm_alarm: ^0.1.5
+  warm_alarm: ^0.1.6
 ```
 
 Then run:
@@ -72,13 +72,16 @@ final schedule = WarmAlarmSchedule(
 
 final result = await WarmAlarm.scheduleAlarm(schedule);
 print('Scheduled: alarm ${result.alarmId}, readiness: ${result.readiness.level}');
+if (result.warning case final warning?) {
+  print('Warning (${warning.code?.name ?? 'unclassified'}): ${warning.message}');
+}
 
 // 3. React to alarm lifecycle events.
 WarmAlarm.events.listen((event) {
   switch (event) {
     case WarmAlarmFired():   print('Alarm ${event.alarmId} fired');
     case WarmAlarmStopped(): print('Alarm ${event.alarmId} stopped');
-    case WarmAlarmSnoozed(): print('Snoozed for ${event.snoozeDuration}');
+    case WarmAlarmSnoozed(): print('Snoozed for ${event.duration}');
     default: break;
   }
 });
@@ -100,12 +103,15 @@ await WarmAlarm.cancelAlarm(1);
 | Wake-check                | ✅ Full        | ❌ Unsupported          | ❌ Unsupported |
 | Custom Live Activities    | ❌ Unsupported | Opt-in host integration | ❌ Unsupported |
 
-**⚠️ Limited** means the native implementation reports conditional support. Call `getReadiness()` before you schedule an alarm.
+**⚠️ Limited** means the native implementation reports conditional support.
+Capabilities are runtime snapshots: iOS exact scheduling also depends on host configuration and AlarmKit authorization.
+Call `getReadiness()` before scheduling; neither a supported capability nor a ready snapshot guarantees future alarm delivery.
 
 See the [audio contract and durable event delivery](warm_alarm/README.md) for source precedence, platform limits, validation, and replay semantics.
 Custom Live Activities require the [iOS host adapter and Widget Extension](warm_alarm_ios/example/live_activity/README.md).
 
-Call `getReadiness()` at runtime and surface the reasons to your users so they can take corrective action (grant permissions, disable battery optimization, etc.).
+Call `getReadiness()` at runtime and surface the reasons to your users so they can address the permissions or platform limits that were detected.
+Not every reason has a settings action, and granting notification permission does not remove the background-execution limit of Apple's User Notifications backend.
 
 ### iOS 26 AlarmKit setup
 
@@ -144,6 +150,10 @@ See the [`warm_alarm_ios` host requirements][warm_alarm_ios_requirements] for th
 | `isRinging({id})`                 | `Future<bool>`               | Whether any alarm — or a specific alarm by ID — is ringing  |
 | `setKillWarning({title, body})`   | `Future<void>`               | Set the notification shown if the app is force-killed       |
 | `clearKillWarning()`              | `Future<void>`               | Clear the app-kill warning notification                     |
+
+On iOS and macOS, scheduling with `wakeCheck` returns `WarmAlarmWarningCode.unsupportedWakeCheck` while retaining any native warning in the message.
+Other native warnings can have a null code.
+Warnings do not cover every ignored option; see the [audio contract](warm_alarm/README.md#audio-contract) for reserved fields and platform-specific behavior.
 
 `openReadinessSettings(reason)` hands the user off to a system screen and returns as soon as the
 platform accepts the request, so its snapshot describes the state before the remediation — call

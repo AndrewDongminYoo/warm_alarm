@@ -19,13 +19,13 @@ melos run generate       # regenerate all Pigeon platform-channel bindings
 melos run test           # run unit tests across all packages
 melos run test:ci        # run tests with coverage output (concurrency 4)
 melos run format         # format Dart code + apply dart fixes (120-col)
-melos run format:ci      # check formatting without modifying files
+melos run format:ci      # format and exit nonzero if files changed
 ```
 
-**Non-Dart checks**
+**Quality checks**
 
 ```bash
-trunk check              # spelling, Markdown, YAML, Kotlin linting
+trunk check              # Dart formatting, spelling, Markdown, YAML, Kotlin linting
 ```
 
 **Integration tests** (requires `fluttium_cli` installed globally)
@@ -66,15 +66,16 @@ via `static void registerWith(Registrar)`, (3) delegates to the Pigeon-generated
 
 ## Before committing
 
-Run these commands in order before every commit:
+For scoped changes, pass the changed paths explicitly:
 
 ```bash
-melos run generate   # if any pigeons/messages.dart was changed
-melos run format     # dart fix + dart format (120-col) across all packages
-trunk fmt            # format non-Dart files (Kotlin, YAML, Markdown, etc.)
+dart format <changed-dart-files>
+trunk fmt <changed-files>
 ```
 
-`melos run generate` is only required when a `pigeons/messages.dart` file changed; when in doubt, run it anyway.
+Run `melos run generate` when a Pigeon schema or generator version changes.
+The workspace-wide `melos run format` also applies Dart fixes, so use it only when that broader scope is intended.
+For a read-only Dart format check, use `dart format --output=none --set-exit-if-changed <changed-dart-files>`.
 
 ## Key constraints
 

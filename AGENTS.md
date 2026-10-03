@@ -41,7 +41,8 @@ pubspec.yaml                         # Melos config lives HERE (no melos.yaml)
 - Lints: `very_good_analysis` everywhere, with these errors set to `ignore` in each `analysis_options.yaml`: `lines_longer_than_80_chars`, `one_member_abstracts`, `public_member_api_docs`. The three platform packages additionally exclude `**/*.g.dart` from analysis.
 - `melos.yaml` does **not** exist; Melos config lives under the `melos:` key in root `pubspec.yaml`.
 - `pubspec.lock` is `.gitignore`d (do not commit).
-- Trunk runs `cspell`, `actionlint`, `checkov`, `git-diff-check`, `ktlint`, `markdownlint`, `oxipng`, `prettier`, `svgo`, `trufflehog`, `yamllint`. Trunk's `dart` linter is **disabled** (Dart goes through `melos run format` / `format:ci` instead).
+- Trunk runs `cspell`, `actionlint`, `checkov`, `git-diff-check`, `ktlint`, `markdownlint`, `oxipng`, `prettier`, `svgo`, `trufflehog`, `yamllint`.
+  Trunk's `dart@SYSTEM` formatter is enabled; Dart analysis and tests remain separate checks.
 - Pre-commit/pre-push hooks come from Trunk (`trunk-fmt-pre-commit`, `trunk-check-pre-push`); there is no `.husky` / `lefthook` / `.pre-commit-config.yaml`.
 - PR titles must be Conventional Commits (`feat:`, `fix:`, `chore:`, `ci:`, …); enforced by `.github/workflows/ci.yaml` (semantic_pull_request).
 - Mocks: `mocktail` only. Do **not** introduce `mockito`.
@@ -71,8 +72,8 @@ melos run generate                             # regenerate Pigeon for packages 
 melos run test                                 # flutter test --coverage --test-randomize-ordering-seed random (per package)
 melos run test:ci                              # same, --concurrency 4
 melos run format                               # dart fix --apply ; dart format .
-melos run format:ci                            # check-only (--set-exit-if-changed)
-trunk check                                    # cspell / markdownlint / ktlint / yamllint / actionlint / etc.
+melos run format:ci                            # format and exit nonzero if files changed
+trunk check                                    # Dart formatting + cspell / markdownlint / ktlint / etc.
 
 # E2E (per platform)
 cd warm_alarm/example && fluttium test flows/test_readiness.yaml -d android
@@ -95,5 +96,7 @@ cd warm_alarm/example && fluttium test flows/test_readiness.yaml -d macos
 
 - Each platform package has its **own** Pigeon schema (`<pkg>/pigeons/messages.dart`). They can diverge intentionally — keep semantically-shared enum/class names aligned across the three to avoid model-mapping drift.
 - `warm_alarm_macos` ships a separate copy of the iOS Swift implementation (not a symlink). Behavioral changes meant for both Apple platforms must be applied twice.
-- The example app under `warm_alarm/example/` is part of the Dart workspace. The nested Fluttium action package at `warm_alarm/example/actions/check_readiness/` is **excluded** from Melos scripts but included in the workspace by root `pubspec.yaml`.
+- The example app and its nested Fluttium action package at `warm_alarm/example/actions/check_readiness/` are part of the root Dart workspace.
+  Melos discovers both packages from that workspace, so its test commands include the custom action tests.
+  Use `melos list` to inspect the resolved package set.
 - See per-package `AGENTS.md` (`warm_alarm/`, `warm_alarm_platform_interface/`, `warm_alarm_<android|ios|macos>/`, `warm_alarm/example/`) for package-local rules.
