@@ -27,7 +27,8 @@ android/, ios/, macos/                       # default Flutter native shells (re
 
 - `pubspec.yaml` path-depends on `warm_alarm` AND directly on `warm_alarm_android`. The direct Android pin is intentional (E2E reproducibility); do not mirror it in real consumer apps.
 - This package is part of the root Dart workspace (declared in root `pubspec.yaml`) **and** is included in Melos's package list, so Melos scripts (`format`, `test`, `generate`-if-applicable) target it.
-- The nested `actions/check_readiness/` package is in the workspace (root `pubspec.yaml`) but is **excluded** from Melos's `packages:` list — Melos scripts skip it. Run its tests directly with `flutter test` from inside the action dir.
+- The nested `actions/check_readiness/` package is in the root Dart workspace and is discovered by Melos even though it is absent from the `melos.packages` list.
+  Melos test commands include it; use `melos list` to inspect the resolved package set.
 - CI runs the readiness flow on Android (API 29 emulator), iPhone simulator, and macOS-15 — see `.github/workflows/warm_alarm.yaml`. New flows must work on all three.
 - `lib/main.dart` is a State-driven `MaterialApp` with no routing/DI. Keep it minimal — this is a smoke target, not a showcase app.
 

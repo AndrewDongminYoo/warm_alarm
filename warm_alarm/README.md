@@ -19,10 +19,10 @@ It is maintained as an independent Flutter plugin and does not require the WarmW
 
 ## Features
 
-- **Capability-first design** — each platform reports exactly what it can do; no silent no-ops
+- **Capability-first design** — feature support is reported at runtime, with platform-specific limits documented below
 - **Three-level system inspection** — `getCapabilities()`, `getPermissionState()`, and `getReadiness()` before you schedule
 - **Reactive event stream** — sealed `WarmAlarmEvent` types covering every alarm lifecycle transition
-- **Custom audio** — local file, asset, or platform default with optional fade-in, looping, and vibration
+- **Custom audio** — local file, asset, or platform default with fade steps, looping, and platform-specific vibration
 - **Wake-check flow** (Android only) — verifies the user is awake after dismissal and retriggers if not
 - **Snooze and recurrence** — built-in snooze duration and weekly recurrence by weekday
 - **Federated plugin** — independent implementations for Android, iOS, and macOS
@@ -35,7 +35,7 @@ Add `warm_alarm` to your Flutter app.
 
 ```yaml
 dependencies:
-  warm_alarm: ^0.1.5
+  warm_alarm: ^0.1.6
 ```
 
 Then run:
@@ -78,6 +78,9 @@ final result = await WarmAlarm.scheduleAlarm(
   ),
 );
 print('Scheduled alarm ${result.alarmId}, readiness: ${result.readiness.level}');
+if (result.warning case final warning?) {
+  print('Warning (${warning.code?.name ?? 'unclassified'}): ${warning.message}');
+}
 
 // 3. React to alarm lifecycle events.
 WarmAlarm.events.listen((event) {
@@ -97,19 +100,24 @@ await WarmAlarm.cancelAlarm(1);
 
 ## Platform Capabilities
 
-| Feature                   | Android    | iOS                     | macOS      |
-| ------------------------- | ---------- | ----------------------- | ---------- |
-| Notification scheduling   | ✅ Full    | ✅ Full                 | ✅ Full    |
-| Exact alarm scheduling    | ✅ Full    | ✅ or ⚠️                | ⚠️ Limited |
-| Background audio playback | ⚠️ Limited | ⚠️ Limited              | ⚠️ Limited |
-| Full-screen presentation  | ✅ Full    | ❌ None                 | ❌ None    |
-| Wake-check                | ✅ Full    | ❌ None                 | ❌ None    |
-| Custom Live Activities    | ❌ None    | Opt-in host integration | ❌ None    |
+| Feature                   | Android    | iOS                     | macOS          |
+| ------------------------- | ---------- | ----------------------- | -------------- |
+| Notification scheduling   | ✅ Full    | ✅ Full                 | ✅ Full        |
+| Exact alarm scheduling    | ✅ Full    | ✅ or ⚠️                | ❌ Unsupported |
+| Background audio playback | ⚠️ Limited | ⚠️ Limited              | ⚠️ Limited     |
+| Full-screen presentation  | ✅ Full    | ❌ None                 | ❌ None        |
+| Wake-check                | ✅ Full    | ❌ None                 | ❌ None        |
+| Custom Live Activities    | ❌ None    | Opt-in host integration | ❌ None        |
 
-**⚠️ Limited** means the native implementation reports conditional support. Call `getReadiness()` before you schedule an alarm.
+**⚠️ Limited** means the native implementation reports conditional support.
+Capabilities are runtime snapshots: iOS exact scheduling also depends on host configuration and AlarmKit authorization.
+Call `getReadiness()` before scheduling; neither a supported capability nor a ready snapshot guarantees future alarm delivery.
 
-Call `getReadiness()` at runtime and surface the `reasons` list to your users so they can take
-corrective action (grant permissions, disable battery optimization, etc.).
+Surface the `reasons` list so users can address detected permissions or platform limits.
+Android reports `limited` when notification, exact-alarm, or full-screen permission is missing, and `ready` when all three are granted.
+Apple's User Notifications backend reports `blocked` without notification permission and `limited` with it because background execution remains constrained.
+An authorized iOS AlarmKit backend can report `ready` without notification permission; active User Notifications fallback schedules still require notification permission.
+Not every reason has a supported settings action.
 
 ### iOS User Notifications setup
 
@@ -205,6 +213,8 @@ Custom activities use a separate opt-in from AlarmKit countdown presentation.
 
 On iOS and macOS, a schedule with `wakeCheck` returns `warning.code == WarmAlarmWarningCode.unsupportedWakeCheck` because wake-check cannot run there.
 The wake-check request is ignored, and `warning.message` also retains any native scheduling warning.
+`unsupportedWakeCheck` is currently the only structured warning code; other native warnings can have a null code.
+Warnings do not cover every ignored option; see the [audio contract](#audio-contract) for reserved fields and platform-specific behavior.
 
 `openReadinessSettings(reason)` hands the user off to a system screen and returns as soon as the
 platform accepts the request, so its snapshot describes the state before the remediation — call
