@@ -774,6 +774,31 @@ void main() {
       expect(result.warning?.code, WarmAlarmWarningCode.unsupportedWakeCheck);
     });
 
+    test('scheduleAlarm warns when wake-check is ignored and preserves the native warning', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmMacOS(api: api);
+      when(() => api.scheduleAlarm(any())).thenAnswer(
+        (_) async => WarmAlarmScheduleResultWire(
+          alarmId: 70,
+          readiness: WarmAlarmReadinessWire(level: WarmAlarmReadinessLevelWire.limited, reasons: []),
+          warning: WarmAlarmWarningWire(message: 'Native warning.'),
+        ),
+      );
+
+      final result = await platform.scheduleAlarm(
+        WarmAlarmSchedule(
+          id: 70,
+          scheduledAt: DateTime(2026, 5, 1, 8),
+          notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+          audio: const WarmAlarmAudio(),
+          wakeCheck: const WarmAlarmWakeCheck(checkDelay: Duration(minutes: 1)),
+        ),
+      );
+
+      expect(result.warning?.message, 'Wake-check is not supported on macOS. Native warning.');
+      expect(result.warning?.code, WarmAlarmWarningCode.unsupportedWakeCheck);
+    });
+
     test('scheduleAlarm preserves the native warning without wake-check', () async {
       final api = _MockWarmAlarmApi();
       final platform = WarmAlarmMacOS(api: api);

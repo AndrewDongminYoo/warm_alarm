@@ -52,10 +52,10 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   WarmAlarmReadiness? _readiness;
-  String? _exactScheduling;
+  WarmAlarmCapabilities? _capabilities;
   String? _remediationStatus;
   int? _lastScheduledAlarmId;
-  String? _scheduleWarning;
+  WarmAlarmWarning? _scheduleWarning;
   final List<String> _events = <String>[];
   StreamSubscription<WarmAlarmEvent>? _eventsSubscription;
 
@@ -83,15 +83,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // Opening a settings screen returns before the user changes anything, so the outcome only
     // becomes visible once they come back.
     if (state == AppLifecycleState.resumed && _readiness != null) {
-      unawaited(_refreshReadiness());
+      unawaited(_refreshInspection());
     }
   }
 
-  Future<void> _refreshReadiness() async {
+  Future<void> _refreshInspection() async {
     try {
       final readiness = await WarmAlarm.getReadiness();
+      final capabilities = await WarmAlarm.getCapabilities();
       if (!mounted) return;
-      setState(() => _readiness = readiness);
+      setState(() {
+        _readiness = readiness;
+        _capabilities = capabilities;
+      });
     } on Exception catch (error) {
       // Nothing awaits this on resume, so an uncaught failure would surface as a Flutter error
       // rather than reaching the user the way the button actions do.
@@ -148,7 +152,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
                     const SizedBox(height: 8),
-                    Text('Exact scheduling: $_exactScheduling'),
+                    Text(
+                      'Readiness reasons: ${_readiness!.reasons.isEmpty ? 'none' : _readiness!.reasons.map((reason) => reason.name).join(', ')}',
+                    ),
+                    if (_capabilities case final capabilities?) ...[
+                      const SizedBox(height: 8),
+                      Text('Exact scheduling: ${capabilities.exactScheduling.name}'),
+                      Text('Notification scheduling: ${capabilities.notificationScheduling.name}'),
+                      Text('Background audio: ${capabilities.backgroundAudioPlayback.name}'),
+                      Text('Full-screen presentation: ${capabilities.fullScreenPresentation.name}'),
+                      Text('Wake-check: ${capabilities.wakeCheck.name}'),
+                      Text('Live Activity: ${capabilities.liveActivity.name}'),
+                    ],
                     if (_remediationStatus != null) ...[
                       const SizedBox(height: 8),
                       Text('Remediation: $_remediationStatus'),
@@ -156,34 +171,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     if (_lastScheduledAlarmId != null) ...[
                       const SizedBox(height: 8),
                       Text('Scheduled alarm id: $_lastScheduledAlarmId'),
-                    ],
-                    if (_scheduleWarning != null) ...[
                       const SizedBox(height: 8),
-                      Text('Schedule warning: $_scheduleWarning'),
+                      Text(
+                        'Schedule warning code: ${_scheduleWarning?.code?.name ?? (_scheduleWarning == null ? 'none' : 'unclassified')}',
+                      ),
+                      Text('Schedule warning: ${_scheduleWarning?.message ?? 'none'}'),
                     ],
                   ],
                 ),
               const SizedBox(height: 16),
               ElevatedButton(
-                onPressed: () async {
-                  if (!context.mounted) return;
-                  try {
-                    final readiness = await WarmAlarm.getReadiness();
-                    final capabilities = await WarmAlarm.getCapabilities();
-                    setState(() {
-                      _readiness = readiness;
-                      _exactScheduling = capabilities.exactScheduling.name;
-                    });
-                  } on Exception catch (error) {
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        backgroundColor: Theme.of(context).primaryColor,
-                        content: Text('$error'),
-                      ),
-                    );
-                  }
-                },
+                onPressed: _refreshInspection,
                 child: const Text('Inspect Alarm API'),
               ),
               const SizedBox(height: 16),
@@ -235,7 +233,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     final result = await WarmAlarm.scheduleAlarm(schedule);
                     setState(() {
                       _lastScheduledAlarmId = result.alarmId;
-                      _scheduleWarning = result.warning?.message;
+                      _scheduleWarning = result.warning;
                       _readiness = result.readiness;
                     });
                   } on Exception catch (error) {
