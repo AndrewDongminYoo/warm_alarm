@@ -44,7 +44,7 @@ class CheckReadiness extends Action {
 
   String get _expectedExactScheduling {
     if (_isAndroid()) return 'supported';
-    if (_isIOS()) return 'limited';
+    if (_isIOS()) return '(limited|supported)';
     if (_isMacOS()) return 'unsupported';
     if (_isWeb || _isLinux() || _isWindows()) return 'unsupported';
     throw UnsupportedError('Unsupported platform ${Platform.operatingSystem}');

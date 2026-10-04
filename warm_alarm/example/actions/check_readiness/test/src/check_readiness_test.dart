@@ -1,5 +1,6 @@
 import 'package:check_readiness/check_readiness.dart';
 import 'package:flutter/semantics.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluttium/fluttium.dart';
 import 'package:mocktail/mocktail.dart';
@@ -52,6 +53,47 @@ void main() {
       ).called(1);
     });
 
+    for (final (support, expected) in [
+      ('limited', true),
+      ('supported', true),
+      ('unsupported', false),
+      ('unknown', false),
+    ]) {
+      testWidgets('iOS exact scheduling $support returns $expected', (widgetTester) async {
+        final flowTester = Tester(widgetTester.binding, Registry());
+        try {
+          await widgetTester.pumpWidget(
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: Column(
+                children: [
+                  const Text('Readiness: ready'),
+                  Text('Exact scheduling: $support'),
+                ],
+              ),
+            ),
+          );
+          final action = CheckReadiness(
+            isAndroid: () => false,
+            isIOS: () => true,
+            isMacOS: () => false,
+            isWeb: false,
+            isWindows: () => false,
+            isLinux: () => false,
+          );
+
+          final result = action.execute(flowTester);
+          await widgetTester.pump();
+          // Advance past Fluttium's default ten-second lookup timeout for missing labels.
+          await widgetTester.pump(const Duration(seconds: 11));
+
+          expect(await result, expected);
+        } finally {
+          flowTester.dispose();
+        }
+      });
+    }
+
     test('show correct description for every platform', () {
       bool isTrue() => true;
       bool isFalse() => false;
@@ -69,7 +111,7 @@ void main() {
           ),
         ),
         (
-          'Check alarm inspection state: readiness="(ready|limited|blocked|unsupported)", exactScheduling="limited"',
+          'Check alarm inspection state: readiness="(ready|limited|blocked|unsupported)", exactScheduling="(limited|supported)"',
           CheckReadiness(
             isAndroid: isFalse,
             isIOS: isTrue,
