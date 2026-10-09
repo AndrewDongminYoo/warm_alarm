@@ -12,6 +12,8 @@ on:
     paths:
       - .github/workflows/pana.yaml
       - .github/workflows/warm_alarm.yaml
+      - pubspec.yaml
+      - pubspec.lock
       - warm_alarm/**
   push:
     branches:
@@ -21,6 +23,8 @@ on:
     paths:
       - .github/workflows/pana.yaml
       - .github/workflows/warm_alarm.yaml
+      - pubspec.yaml
+      - pubspec.lock
       - warm_alarm/**
 
 jobs:
@@ -40,6 +44,7 @@ jobs:
       flutter_version: 3.47.7
       coverage_excludes: "**/*.g.dart"
       format_line_length: 120
+      format_directories: lib test example/lib example/test example/actions/check_readiness/lib example/actions/check_readiness/test
       working_directory: warm_alarm
 
   pana:
