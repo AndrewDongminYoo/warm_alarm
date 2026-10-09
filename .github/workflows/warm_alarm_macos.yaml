@@ -27,6 +27,7 @@ jobs:
       flutter_version: 3.47.7
       coverage_excludes: "**/*.g.dart"
       format_line_length: 120
+      format_directories: lib test pigeons
       working_directory: warm_alarm_macos
 
   native-host-build:
