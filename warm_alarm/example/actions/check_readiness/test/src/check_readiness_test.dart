@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluttium/fluttium.dart';
 import 'package:mocktail/mocktail.dart';
 
-class _MockTester extends Mock implements Tester {}
+class _MockTester extends Mock implements Tester;
 
 class _MockSemanticsNode extends Mock implements SemanticsNode {
   @override
