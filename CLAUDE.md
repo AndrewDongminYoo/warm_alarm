@@ -25,7 +25,7 @@ melos run format:ci      # format and exit nonzero if files changed
 **Quality checks**
 
 ```bash
-trunk check              # Dart formatting, spelling, Markdown, YAML, Kotlin linting
+trunk check              # Spelling, Markdown, YAML, Kotlin linting; Dart uses project commands
 ```
 
 **Integration tests** (requires `fluttium_cli` installed globally)
