@@ -42,7 +42,7 @@ pubspec.yaml                         # Melos config lives HERE (no melos.yaml)
 - `melos.yaml` does **not** exist; Melos config lives under the `melos:` key in root `pubspec.yaml`.
 - `pubspec.lock` is `.gitignore`d (do not commit).
 - Trunk runs `cspell`, `actionlint`, `checkov`, `git-diff-check`, `ktlint`, `markdownlint`, `oxipng`, `prettier`, `svgo`, `trufflehog`, `yamllint`.
-  Trunk's `dart@SYSTEM` formatter is enabled; Dart analysis and tests remain separate checks.
+  Trunk's Dart linter is disabled; project commands and pinned Flutter CI own Dart formatting, analysis, and tests.
 - Pre-commit/pre-push hooks come from Trunk (`trunk-fmt-pre-commit`, `trunk-check-pre-push`); there is no `.husky` / `lefthook` / `.pre-commit-config.yaml`.
 - PR titles must be Conventional Commits (`feat:`, `fix:`, `chore:`, `ci:`, …); enforced by `.github/workflows/ci.yaml` (semantic_pull_request).
 - Mocks: `mocktail` only. Do **not** introduce `mockito`.
@@ -73,7 +73,7 @@ melos run test                                 # flutter test --coverage --test-
 melos run test:ci                              # same, --concurrency 4
 melos run format                               # dart fix --apply ; dart format .
 melos run format:ci                            # format and exit nonzero if files changed
-trunk check                                    # Dart formatting + cspell / markdownlint / ktlint / etc.
+trunk check                                    # non-Dart cspell / markdownlint / ktlint / etc.
 
 # E2E (per platform)
 cd warm_alarm/example && fluttium test flows/test_readiness.yaml -d android

@@ -28,6 +28,7 @@ jobs:
   build:
     uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/flutter_package.yml@61d25935870f12a1f2c23f2a04d5f193c83f4e5d # v1.21.1
     with:
+      flutter_version: 3.47.7
       coverage_excludes: "**/*.g.dart"
       format_line_length: 120
       working_directory: warm_alarm_ios
@@ -132,6 +133,7 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
+          flutter-version: 3.47.7
           cache: true
 
       - name: Enable Swift Package Manager
