@@ -9,12 +9,14 @@ concurrency:
 on:
   pull_request:
     paths:
+      - .github/workflows/pana.yaml
       - .github/workflows/warm_alarm_platform_interface.yaml
       - warm_alarm_platform_interface/**
   push:
     branches:
       - main
     paths:
+      - .github/workflows/pana.yaml
       - .github/workflows/warm_alarm_platform_interface.yaml
       - warm_alarm_platform_interface/**
 
@@ -22,11 +24,12 @@ jobs:
   build:
     uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/flutter_package.yml@61d25935870f12a1f2c23f2a04d5f193c83f4e5d # v1.21.1
     with:
+      flutter_version: 3.47.7
       coverage_excludes: "**/*.g.dart"
       format_line_length: 120
       working_directory: warm_alarm_platform_interface
 
   pana:
-    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/pana.yml@61d25935870f12a1f2c23f2a04d5f193c83f4e5d # v1.21.1
+    uses: ./.github/workflows/pana.yaml
     with:
       working_directory: warm_alarm_platform_interface

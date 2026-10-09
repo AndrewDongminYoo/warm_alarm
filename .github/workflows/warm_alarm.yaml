@@ -10,7 +10,10 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - .github/workflows/pana.yaml
       - .github/workflows/warm_alarm.yaml
+      - pubspec.yaml
+      - pubspec.lock
       - warm_alarm/**
   push:
     branches:
@@ -18,7 +21,10 @@ on:
     tags:
       - v*
     paths:
+      - .github/workflows/pana.yaml
       - .github/workflows/warm_alarm.yaml
+      - pubspec.yaml
+      - pubspec.lock
       - warm_alarm/**
 
 jobs:
@@ -35,12 +41,14 @@ jobs:
   build:
     uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/flutter_package.yml@61d25935870f12a1f2c23f2a04d5f193c83f4e5d # v1.21.1
     with:
+      flutter_version: 3.47.7
       coverage_excludes: "**/*.g.dart"
       format_line_length: 120
+      format_directories: lib test example/lib example/test example/integration_test example/test_driver example/actions/check_readiness/lib example/actions/check_readiness/test ../tool
       working_directory: warm_alarm
 
   pana:
-    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/pana.yml@61d25935870f12a1f2c23f2a04d5f193c83f4e5d # v1.21.1
+    uses: ./.github/workflows/pana.yaml
     with:
       working_directory: warm_alarm
 
@@ -65,6 +73,9 @@ jobs:
           java-version: "17"
 
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: 3.47.7
 
       - name: Install Fluttium
         run: flutter pub global activate fluttium_cli
@@ -115,6 +126,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: 3.47.7
 
       - name: Install Fluttium
         run: flutter pub global activate fluttium_cli

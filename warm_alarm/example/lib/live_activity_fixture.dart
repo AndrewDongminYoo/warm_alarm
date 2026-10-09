@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-// ignore: depend_on_referenced_packages, QA-only entrypoint intentionally uses the interface dev dependency.
 import 'package:warm_alarm_platform_interface/warm_alarm_platform_interface.dart';
 
 void main() {
@@ -8,7 +7,7 @@ void main() {
 }
 
 class LiveActivityFixtureApp extends StatelessWidget {
-  const LiveActivityFixtureApp({super.key});
+  const new({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +19,7 @@ class LiveActivityFixtureApp extends StatelessWidget {
 }
 
 class LiveActivityFixturePage extends StatefulWidget {
-  const LiveActivityFixturePage({super.key});
+  const new({super.key});
 
   @override
   State<LiveActivityFixturePage> createState() => _LiveActivityFixturePageState();
@@ -252,7 +251,7 @@ class _LiveActivityFixturePageState extends State<LiveActivityFixturePage> {
 }
 
 class _FixtureButton extends StatelessWidget {
-  const _FixtureButton({required this.label, required this.onPressed, super.key});
+  const new({required this.label, required this.onPressed, super.key});
 
   final String label;
   final VoidCallback? onPressed;

@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluttium/fluttium.dart';
 import 'package:mocktail/mocktail.dart';
 
-class _MockRegister extends Mock implements Registry {}
+class _MockRegister extends Mock implements Registry;
 
 void main() {
   test('can be registered', () {
