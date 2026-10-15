@@ -38,6 +38,61 @@ final class WarmAlarmAudioSourceTests: XCTestCase {
         XCTAssertEqual(delegate.currentlyPlayingAlarmId, 7_070_002)
     }
 
+    func testForegroundReplacementRejectsPreviousNotificationContent() {
+        let (delegate, previousContent) = foregroundAudioFixture()
+        let (_, currentContent) = foregroundAudioFixture()
+
+        XCTAssertTrue(delegate.handleForegroundDelivery(content: previousContent).isEmpty)
+        XCTAssertEqual(delegate.handleForegroundDelivery(content: currentContent), [.alert, .sound])
+    }
+
+    func testUnrelatedNotificationWithUnknownAlarmIdRetainsPresentation() throws {
+        let (delegate, originalContent) = foregroundAudioFixture()
+        let content = try XCTUnwrap(originalContent.mutableCopy() as? UNMutableNotificationContent)
+        content.categoryIdentifier = "HOST_NOTIFICATION"
+        content.userInfo = ["alarmId": "-7070002"]
+
+        XCTAssertEqual(delegate.handleForegroundDelivery(content: content), [.alert, .sound])
+    }
+
+    func testLegacyForegroundNotificationRemainsValidUntilScheduleReplacement() throws {
+        let (delegate, currentContent) = foregroundAudioFixture()
+        let schedule = try XCTUnwrap(WarmAlarmStore.shared.load(id: 7_070_002))
+        let encoded = try JSONEncoder().encode(schedule)
+        var legacyJSON = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        legacyJSON.removeValue(forKey: "occurrenceSeriesToken")
+        let legacy = try JSONDecoder().decode(
+            WarmAlarmScheduleData.self, from: JSONSerialization.data(withJSONObject: legacyJSON)
+        )
+        WarmAlarmStore.shared.save(legacy)
+        let legacyContent = delegate.makeContent(from: legacy)
+
+        XCTAssertEqual(delegate.handleForegroundDelivery(content: legacyContent), [.alert, .sound])
+        WarmAlarmStore.shared.save(schedule)
+        XCTAssertTrue(delegate.handleForegroundDelivery(content: legacyContent).isEmpty)
+        XCTAssertEqual(delegate.handleForegroundDelivery(content: currentContent), [.alert, .sound])
+    }
+
+    func testScheduleCopiesPreserveForegroundNotificationGeneration() throws {
+        let (delegate, content) = foregroundAudioFixture()
+        let schedule = try XCTUnwrap(WarmAlarmStore.shared.load(id: 7_070_002))
+        WarmAlarmStore.shared.save(
+            schedule.withActiveSnooze(untilMillis: 1_900_000_060_000).withRecurrenceTime(hour: 8, minute: 30)
+        )
+
+        XCTAssertEqual(delegate.handleForegroundDelivery(content: content), [.alert, .sound])
+    }
+
+    func testUnrelatedNotificationWithMatchingAlarmIdDoesNotStartPlayer() throws {
+        let file = try makeAudioFile()
+        let (delegate, originalContent) = foregroundAudioFixture(filePath: file.path)
+        let content = try XCTUnwrap(originalContent.mutableCopy() as? UNMutableNotificationContent)
+        content.categoryIdentifier = "HOST_NOTIFICATION"
+
+        XCTAssertEqual(delegate.handleForegroundDelivery(content: content), [.alert, .sound])
+        XCTAssertNil(delegate.currentlyPlayingAlarmId)
+    }
+
     func testForegroundCustomAssetDoesNotRequestDuplicateNotificationSound() {
         let (delegate, content) = foregroundAudioFixture(assetPath: "assets/custom-alarm.caf")
 
@@ -72,6 +127,7 @@ final class WarmAlarmAudioSourceTests: XCTestCase {
         )
         WarmAlarmStore.shared.save(schedule)
         addTeardownBlock {
+            WarmAlarmStore.shared.save(schedule)
             delegate.handleStop(alarmId: wire.id)
             WarmAlarmStore.shared.remove(id: wire.id)
             if FileManager.default.fileExists(atPath: directory.path) {

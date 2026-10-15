@@ -4,6 +4,7 @@
 
 Implement [the approved issue contract](https://github.com/AndrewDongminYoo/warm_alarm/issues/70) and [the spec](../specs/2026-10-15-apple-foreground-default-sound.md) on `fix/apple-foreground-default-sound` in the main workspace.
 The root owns both Apple `WarmAlarmDelegate.swift` files, their existing native test files, these two documents, and any strictly necessary native test fixture wiring.
+The hosted-review repair also owns macOS `WarmAlarmStore.swift` and the schedule construction in `WarmAlarmPlugin.swift` to persist one notification generation per registration.
 No dependency or generated-file changes are planned.
 
 ## Steps and checks
@@ -16,6 +17,13 @@ No dependency or generated-file changes are planned.
 6. Check actual foreground delivery on macOS and the iOS simulator → record notification delivery and audio evidence separately from callback assertions; retain a named manual acceptance blocker if sound cannot be observed.
 7. Review the complete candidate, commit by concern, push, and open a PR closing #70 → verify current-head CI, Codex, CodeRabbit, and all review threads under the PR-loop budget.
 8. Request operator merge when the applicable gates pass; merge, branch cleanup, and memory recording are not delegated.
+
+## Hosted-review repairs
+
+Reject macOS deliveries after cancellation, validate the stored notification generation before foreground presentation, and exclude unrelated notification categories from alarm handling.
+Use the same stored schedule object when constructing notification content.
+Decode missing generation metadata as a legacy schedule and preserve it through snooze and recurrence copies.
+Verify stale delivery and unrelated-category regressions fail before the fix, then run the full native suite and scoped project gates.
 
 ## Review limits
 

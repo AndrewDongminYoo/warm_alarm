@@ -27,6 +27,7 @@ struct WarmAlarmScheduleData: Codable {
     let fadeSteps: [FadeStep]?
     let keepNotificationAfterAlarmEnds: Bool?
     let activeSnoozeUntilMillis: Int64?
+    let occurrenceSeriesToken: String?
 
     // Explicit CodingKeys lets the synthesized encode(to:) work while we
     // override init(from:) in the extension below to add migration defaults.
@@ -36,6 +37,7 @@ struct WarmAlarmScheduleData: Codable {
         case loop, volume, vibrate, fadeInDurationMillis
         case recurrenceWeekdays, recurrenceHour, recurrenceMinute, snoozeDurationMillis, payload
         case volumeEnforced, fadeSteps, keepNotificationAfterAlarmEnds, activeSnoozeUntilMillis
+        case occurrenceSeriesToken
     }
 }
 
@@ -92,6 +94,7 @@ extension WarmAlarmScheduleData {
         keepNotificationAfterAlarmEnds = try c.decodeIfPresent(
             Bool.self, forKey: .keepNotificationAfterAlarmEnds)
         activeSnoozeUntilMillis = try c.decodeIfPresent(Int64.self, forKey: .activeSnoozeUntilMillis)
+        occurrenceSeriesToken = try c.decodeIfPresent(String.self, forKey: .occurrenceSeriesToken)
     }
 
     static func from(
@@ -127,7 +130,8 @@ extension WarmAlarmScheduleData {
             volumeEnforced: wire.audio.volumeEnforced,
             fadeSteps: wire.audio.fadeSteps?.map { FadeStep(timeMillis: $0.timeMillis, volume: $0.volume) },
             keepNotificationAfterAlarmEnds: wire.notification.keepNotificationAfterAlarmEnds,
-            activeSnoozeUntilMillis: nil
+            activeSnoozeUntilMillis: nil,
+            occurrenceSeriesToken: UUID().uuidString
         )
     }
 
@@ -167,7 +171,8 @@ extension WarmAlarmScheduleData {
             volumeEnforced: volumeEnforced,
             fadeSteps: fadeSteps,
             keepNotificationAfterAlarmEnds: keepNotificationAfterAlarmEnds,
-            activeSnoozeUntilMillis: activeSnoozeUntilMillis
+            activeSnoozeUntilMillis: activeSnoozeUntilMillis,
+            occurrenceSeriesToken: occurrenceSeriesToken
         )
     }
 }

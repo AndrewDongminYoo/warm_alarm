@@ -49,11 +49,13 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     }
 
     func handleForegroundDelivery(content: UNNotificationContent) -> UNNotificationPresentationOptions {
+        guard content.categoryIdentifier == Self.categoryIdentifier else { return [.alert, .sound] }
         guard let alarmIdString = content.userInfo["alarmId"] as? String,
               let alarmId = Int64(alarmIdString) else {
             return [.alert, .sound]
         }
         guard let schedule = WarmAlarmStore.shared.load(id: alarmId) else { return [] }
+        guard content.userInfo["occurrenceSeriesToken"] as? String == schedule.occurrenceSeriesToken else { return [] }
         startAudio(alarmId: alarmId, for: schedule)
         emitEvent(WarmAlarmEventWire(
             alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis(), payload: schedule.payload))
@@ -146,6 +148,9 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         content.body = schedule.notificationBody
         content.sound = UNNotificationSound.default
         content.userInfo = ["alarmId": String(schedule.id)]
+        if let token = schedule.occurrenceSeriesToken {
+            content.userInfo["occurrenceSeriesToken"] = token
+        }
         content.categoryIdentifier = Self.categoryIdentifier
         return content
     }

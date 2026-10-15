@@ -10,6 +10,8 @@ The default audio configuration has no file or asset, so the delegate creates no
 Request notification sound when an accepted foreground alarm has no custom file or asset source.
 Retain player-only sound for custom sources to avoid duplicate playback.
 Preserve iOS occurrence validation and duplicate suppression.
+Suppress cancelled and replaced macOS deliveries before starting audio or emitting events.
+Keep unrelated notification categories on their existing presentation path.
 Use the sound already attached to the notification content.
 
 ## Non-goals
@@ -22,8 +24,9 @@ Do not expand playback recovery for invalid custom audio files or implement the 
 1. Native delegate callback tests request `.sound` for the default and empty-source configurations on both platforms.
 2. A custom audio source suppresses notification sound while preserving the existing player path.
 3. Cancelled, replaced, and duplicate iOS occurrences remain suppressed.
-4. Native suites, Flutter analysis and tests, and scoped formatting and lint checks pass.
-5. Foreground execution on both platforms confirms audible default delivery; callback options alone do not establish physical audibility.
+4. macOS rejects cancelled or replaced deliveries, preserves unrelated notifications, and accepts legacy stored schedules until they are replaced.
+5. Native suites, Flutter analysis and tests, and scoped formatting and lint checks pass.
+6. Foreground execution on both platforms confirms audible default delivery; callback options alone do not establish physical audibility.
 
 ## Constraints and precedent
 
