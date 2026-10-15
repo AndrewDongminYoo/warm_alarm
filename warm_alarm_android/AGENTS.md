@@ -36,6 +36,9 @@ test/
 
 ## CONVENTIONS
 
+- Native Kotlin JVM tests may reuse the existing `org.mockito:mockito-core` dependency for Android platform boundaries while executing the real service logic.
+  This is the Android-native exception to the root mocking rule.
+  Dart tests must use `mocktail`; do not introduce Dart `mockito`.
 - Native package is `com.andrew.alarm` (set in `pubspec.yaml`, `build.gradle`, `Pigeon` options, `AndroidManifest.xml` namespace, and intent action prefix `com.andrew.alarm.ACTION_*`). Keep all five in lockstep when renaming.
 - Source root is `android/src/main/kotlin/` (declared in `build.gradle` `sourceSets`). Don't add a `src/main/java/` tree.
 - Plugin class registration is via `dartPluginClass: WarmAlarmAndroid` (set in `pubspec.yaml`'s `flutter.plugin.platforms.android` block); the Kotlin `WarmAlarmPlugin` is the channel side. Both must exist.
