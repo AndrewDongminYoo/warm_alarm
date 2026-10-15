@@ -513,9 +513,10 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             }
             center.removePendingNotificationRequests(withIdentifiers: staleIdentifiers)
 
-            WarmAlarmStore.shared.save(.from(wire: schedule))
+            let data = WarmAlarmScheduleData.from(wire: schedule)
+            WarmAlarmStore.shared.save(data)
 
-            let content = self.delegate.makeContent(from: .from(wire: schedule))
+            let content = self.delegate.makeContent(from: data)
             let requests = Self.makeRequests(for: schedule, content: content)
             Self.addRequestsAtomically(
                 requests,

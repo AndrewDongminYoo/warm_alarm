@@ -210,10 +210,9 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             alarmId: alarmId,
             identifier: notification.request.identifier,
             content: notification.request.content,
-            deliveredAtMillis: Int64(notification.date.timeIntervalSince1970 * 1_000)
-        ) { didHandle in
-            completionHandler(didHandle ? [.alert] : [])
-        }
+            deliveredAtMillis: Int64(notification.date.timeIntervalSince1970 * 1_000),
+            completion: completionHandler
+        )
     }
 
     func handleForegroundDelivery(
@@ -221,11 +220,11 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         identifier: String,
         content: UNNotificationContent,
         deliveredAtMillis: Int64,
-        completion: @escaping (Bool) -> Void
+        completion: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         notificationMutationQueue.enqueueOnMain { [weak self] finish in
             guard let self else {
-                completion(false)
+                completion([])
                 finish()
                 return
             }
@@ -244,10 +243,10 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         identifier: String,
         content: UNNotificationContent,
         deliveredAtMillis: Int64
-    ) -> Bool {
+    ) -> UNNotificationPresentationOptions {
         guard let schedule = WarmAlarmStore.shared.load(id: alarmId),
               WarmAlarmPlugin.notificationContent(schedule, matches: content) else {
-            return false
+            return []
         }
         let occurrenceToken = WarmAlarmPlugin.foregroundOccurrenceToken(
             content: content,
@@ -256,7 +255,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             deliveredAtMillis: deliveredAtMillis,
             schedule: schedule
         )
-        return foregroundOccurrenceTracker.handleIfAllowed(
+        let didHandle = foregroundOccurrenceTracker.handleIfAllowed(
             alarmId: alarmId,
             occurrenceToken: occurrenceToken,
             perform: {
@@ -269,6 +268,9 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
                 ))
             }
         )
+        guard didHandle else { return [] }
+        let source = WarmAlarmAudioSource.select(filePath: schedule.filePath, assetPath: schedule.assetPath)
+        return source == .none ? [.alert, .sound] : [.alert]
     }
 
     func userNotificationCenter(

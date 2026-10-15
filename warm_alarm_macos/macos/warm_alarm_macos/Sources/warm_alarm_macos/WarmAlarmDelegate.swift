@@ -45,16 +45,22 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        guard let alarmIdString = notification.request.content.userInfo["alarmId"] as? String,
+        completionHandler(handleForegroundDelivery(content: notification.request.content))
+    }
+
+    func handleForegroundDelivery(content: UNNotificationContent) -> UNNotificationPresentationOptions {
+        guard content.categoryIdentifier == Self.categoryIdentifier else { return [.alert, .sound] }
+        guard let alarmIdString = content.userInfo["alarmId"] as? String,
               let alarmId = Int64(alarmIdString) else {
-            completionHandler([.alert, .sound])
-            return
+            return [.alert, .sound]
         }
-        let schedule = WarmAlarmStore.shared.load(id: alarmId)
+        guard let schedule = WarmAlarmStore.shared.load(id: alarmId) else { return [] }
+        guard content.userInfo["occurrenceSeriesToken"] as? String == schedule.occurrenceSeriesToken else { return [] }
         startAudio(alarmId: alarmId, for: schedule)
         emitEvent(WarmAlarmEventWire(
-            alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis(), payload: schedule?.payload))
-        completionHandler([.alert])
+            alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis(), payload: schedule.payload))
+        let source = WarmAlarmAudioSource.select(filePath: schedule.filePath, assetPath: schedule.assetPath)
+        return source == .none ? [.alert, .sound] : [.alert]
     }
 
     func userNotificationCenter(
@@ -142,6 +148,9 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         content.body = schedule.notificationBody
         content.sound = UNNotificationSound.default
         content.userInfo = ["alarmId": String(schedule.id)]
+        if let token = schedule.occurrenceSeriesToken {
+            content.userInfo["occurrenceSeriesToken"] = token
+        }
         content.categoryIdentifier = Self.categoryIdentifier
         return content
     }
