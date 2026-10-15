@@ -114,13 +114,26 @@ enum WarmAlarmRecovery {
 }
 
 public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
+    typealias PendingNotificationReader = (@escaping ([UNNotificationRequest]) -> Void) -> Void
     private let delegate: WarmAlarmDelegate
+    private let pendingNotificationReader: PendingNotificationReader
+    private let pendingNotificationRemover: ([String]) -> Void
     private static let killWarningNotifId = "warm_alarm_kill_warning_notif"
     // ponytail: serializes all Apple notification mutations; split by alarm ID only if contention is measured.
     private let notificationMutationQueue = WarmAlarmMutationQueue(label: "warm_alarm.notification_mutation")
 
-    init(delegate: WarmAlarmDelegate) {
+    init(
+        delegate: WarmAlarmDelegate,
+        pendingNotificationReader: @escaping PendingNotificationReader = { completion in
+            UNUserNotificationCenter.current().getPendingNotificationRequests(completionHandler: completion)
+        },
+        pendingNotificationRemover: @escaping ([String]) -> Void = { identifiers in
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
+        }
+    ) {
         self.delegate = delegate
+        self.pendingNotificationReader = pendingNotificationReader
+        self.pendingNotificationRemover = pendingNotificationRemover
     }
 
     public static func register(with registrar: FlutterPluginRegistrar) {
@@ -573,9 +586,15 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 finish()
                 return
             }
-            WarmAlarmStore.shared.clear()
-            UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
-            WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
+            self.pendingNotificationReader { pendingRequests in
+                let identifiers = pendingRequests.filter {
+                    $0.content.categoryIdentifier == WarmAlarmDelegate.categoryIdentifier
+                        || $0.identifier == Self.killWarningNotifId
+                }.map(\.identifier)
+                WarmAlarmStore.shared.clear()
+                self.pendingNotificationRemover(identifiers)
+                WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
+            }
         }
     }
 
