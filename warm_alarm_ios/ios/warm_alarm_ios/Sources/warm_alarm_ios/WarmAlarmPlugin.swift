@@ -671,6 +671,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
     private let soundPreparationQueue = WarmAlarmMutationQueue(label: "warm_alarm.sound_preparation")
     private let notificationCenter: UNUserNotificationCenter
     private let pendingNotificationReader: PendingNotificationReader
+    private let pendingNotificationRemover: ([String]) -> Void
     private let notificationSettingsReader: NotificationSettingsReader
     private let notificationAuthorizationRequester: NotificationAuthorizationRequester
     private let timeSensitiveAuthorizationAvailable: TimeSensitiveAuthorizationAvailability
@@ -720,6 +721,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         notificationCenter: UNUserNotificationCenter,
         notificationCenterDelegate: WarmAlarmNotificationCenterDelegate,
         pendingNotificationReader: PendingNotificationReader? = nil,
+        pendingNotificationRemover: (([String]) -> Void)? = nil,
         notificationSettingsReader: NotificationSettingsReader? = nil,
         notificationAuthorizationRequester: NotificationAuthorizationRequester? = nil,
         timeSensitiveAuthorizationAvailable: TimeSensitiveAuthorizationAvailability? = nil,
@@ -735,6 +737,9 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         self.notificationCenter = notificationCenter
         self.pendingNotificationReader = pendingNotificationReader ?? { completion in
             notificationCenter.getPendingNotificationRequests(completionHandler: completion)
+        }
+        self.pendingNotificationRemover = pendingNotificationRemover ?? { identifiers in
+            notificationCenter.removePendingNotificationRequests(withIdentifiers: identifiers)
         }
         self.notificationSettingsReader = notificationSettingsReader ?? { completion in
             notificationCenter.getNotificationSettings { settings in
@@ -3086,35 +3091,41 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                 return
             }
             self.delegate.stopAllIfPlaying()
-            let cleanupLocalState = {
-                WarmAlarmStore.shared.clear()
-                self.notificationCenter.removeAllPendingNotificationRequests()
-            }
-            let hasAlarmKitManagedSchedule = WarmAlarmStore.shared.loadAll().values.contains {
-                $0.alarmKitManaged
-            }
-            guard let alarmKitBackend = self.alarmKitBackend,
-                  hasAlarmKitManagedSchedule || alarmKitBackend.authorizationState == .authorized else {
-                cleanupLocalState()
-                WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
-                return
-            }
-            let alarmKitIDs = WarmAlarmStore.shared.loadAll().values
-                .filter(\.alarmKitManaged)
-                .map { WarmAlarmAlarmKitPlan.id(for: $0.id) }
-            self.beginAlarmKitMutation(ids: alarmKitIDs)
-            WarmAlarmNativeCancellation.perform(
-                cancelNative: alarmKitBackend.cancelAll,
-                cleanupLocalState: cleanupLocalState,
-                completion: { error in
-                    self.finishAlarmKitMutation(ids: alarmKitIDs)
-                    if let error {
-                        WarmAlarmPlatformReply.complete(.failure(error), completion: completion, finish: finish)
-                    } else {
-                        WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
-                    }
+            self.pendingNotificationReader { pendingRequests in
+                let identifiers = pendingRequests.filter {
+                    $0.content.categoryIdentifier == WarmAlarmDelegate.categoryIdentifier
+                        || $0.identifier == Self.killWarningNotifId
+                }.map(\.identifier)
+                let cleanupLocalState = {
+                    WarmAlarmStore.shared.clear()
+                    self.pendingNotificationRemover(identifiers)
                 }
-            )
+                let hasAlarmKitManagedSchedule = WarmAlarmStore.shared.loadAll().values.contains {
+                    $0.alarmKitManaged
+                }
+                guard let alarmKitBackend = self.alarmKitBackend,
+                      hasAlarmKitManagedSchedule || alarmKitBackend.authorizationState == .authorized else {
+                    cleanupLocalState()
+                    WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
+                    return
+                }
+                let alarmKitIDs = WarmAlarmStore.shared.loadAll().values
+                    .filter(\.alarmKitManaged)
+                    .map { WarmAlarmAlarmKitPlan.id(for: $0.id) }
+                self.beginAlarmKitMutation(ids: alarmKitIDs)
+                WarmAlarmNativeCancellation.perform(
+                    cancelNative: alarmKitBackend.cancelAll,
+                    cleanupLocalState: cleanupLocalState,
+                    completion: { error in
+                        self.finishAlarmKitMutation(ids: alarmKitIDs)
+                        if let error {
+                            WarmAlarmPlatformReply.complete(.failure(error), completion: completion, finish: finish)
+                        } else {
+                            WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
+                        }
+                    }
+                )
+            }
         }
     }
 

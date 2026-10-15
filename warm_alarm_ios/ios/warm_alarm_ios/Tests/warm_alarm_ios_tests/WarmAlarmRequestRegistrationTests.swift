@@ -1360,6 +1360,160 @@ final class WarmAlarmRequestTests: XCTestCase {
         XCTAssertTrue(backend.scheduledPlans.isEmpty)
     }
 
+    func testCancelAllPreservesHostNotificationsAndRemovesOwnedOrphans() {
+        let previous = Array(WarmAlarmStore.shared.loadAll().values)
+        WarmAlarmStore.shared.clear()
+        defer {
+            WarmAlarmStore.shared.clear()
+            previous.forEach { WarmAlarmStore.shared.save($0) }
+        }
+        for backend in [nil, RecordingAlarmKitBackend(scheduleError: nil)] {
+            let queue = WarmAlarmMutationQueue(label: "warm_alarm_tests.cancel_all_ownership")
+            let delegate = WarmAlarmDelegate(eventsApi: RecordingWarmAlarmEventsApi(), notificationMutationQueue: queue)
+            let oneShot = makeWireSchedule(id: 7_760_001, scheduledAtMillis: 1_900_000_000_000)
+            let recurring = makeWireSchedule(
+                id: 7_760_002, scheduledAtMillis: 1_900_000_000_000, recurrenceWeekdays: [1, 5]
+            )
+            let snoozed = WarmAlarmScheduleData.from(wire: makeWireSchedule(
+                id: 7_760_003, scheduledAtMillis: 1_900_000_000_000
+            ))
+            var pending = [oneShot, recurring].flatMap { schedule in
+                WarmAlarmPlugin.makeRequests(
+                    for: schedule,
+                    content: delegate.makeContent(from: .from(wire: schedule)),
+                    fallbackAnchorMillis: schedule.scheduledAtMillis
+                )
+            }
+            pending += WarmAlarmPlugin.makeSnoozeRequests(
+                for: snoozed, fireAtMillis: 1_900_000_060_000, nowMillis: 1_900_000_000_000,
+                content: delegate.makeContent(from: snoozed)
+            )
+            let hostIDs = ["host-reminder", "42", "warm_alarm_host_notice", "warm_alarm_kill_warning_notif-copy"]
+            let hostContent = UNMutableNotificationContent()
+            hostContent.categoryIdentifier = "HOST_NOTIFICATION"
+            hostContent.userInfo = ["alarmId": "7760001"]
+            pending += hostIDs.map { UNNotificationRequest(identifier: $0, content: hostContent, trigger: nil) }
+            pending.append(UNNotificationRequest(
+                identifier: "warm_alarm_kill_warning_notif", content: UNMutableNotificationContent(), trigger: nil
+            ))
+            let plugin = WarmAlarmPlugin(
+                delegate: delegate, notificationMutationQueue: queue,
+                notificationCenter: UNUserNotificationCenter.current(),
+                notificationCenterDelegate: WarmAlarmNotificationCenterDelegate(warmAlarmDelegate: delegate, forwardingDelegate: nil),
+                pendingNotificationReader: { $0(pending) },
+                pendingNotificationRemover: { identifiers in
+                    pending.removeAll { identifiers.contains($0.identifier) }
+                },
+                alarmKitBackend: backend
+            )
+            let completed = expectation(description: "scoped cancellation completes")
+
+            plugin.cancelAllAlarms { result in
+                if case let .failure(error) = result { XCTFail("Cancellation failed: \(error)") }
+                XCTAssertTrue(Thread.isMainThread)
+                completed.fulfill()
+            }
+
+            wait(for: [completed], timeout: 2)
+            XCTAssertEqual(Set(pending.map(\.identifier)), Set(hostIDs))
+            XCTAssertTrue(WarmAlarmStore.shared.loadAll().isEmpty)
+            withExtendedLifetime(plugin) {}
+        }
+    }
+
+    func testCancelAllWaitsForPendingReadBeforeReleasingMutationQueue() throws {
+        let previous = Array(WarmAlarmStore.shared.loadAll().values)
+        defer {
+            WarmAlarmStore.shared.clear()
+            previous.forEach { WarmAlarmStore.shared.save($0) }
+        }
+        let queue = WarmAlarmMutationQueue(label: "warm_alarm_tests.cancel_all_delayed_read")
+        let delegate = WarmAlarmDelegate(eventsApi: RecordingWarmAlarmEventsApi(), notificationMutationQueue: queue)
+        let readStarted = expectation(description: "pending read starts")
+        var readCompletion: (([UNNotificationRequest]) -> Void)?
+        let plugin = WarmAlarmPlugin(
+            delegate: delegate, notificationMutationQueue: queue,
+            notificationCenter: UNUserNotificationCenter.current(),
+            notificationCenterDelegate: WarmAlarmNotificationCenterDelegate(warmAlarmDelegate: delegate, forwardingDelegate: nil),
+            pendingNotificationReader: { completion in
+                readCompletion = completion
+                readStarted.fulfill()
+            },
+            pendingNotificationRemover: { _ in },
+            alarmKitBackend: nil
+        )
+        var didComplete = false
+        let completed = expectation(description: "cancellation completes after read")
+        plugin.cancelAllAlarms { _ in
+            didComplete = true
+            completed.fulfill()
+        }
+        wait(for: [readStarted], timeout: 2)
+        let nextMutation = expectation(description: "later mutation must wait")
+        nextMutation.isInverted = true
+        let nextMutationCompleted = expectation(description: "later mutation completes after read")
+        var didReleaseRead = false
+        queue.enqueue { finish in
+            if !didReleaseRead { nextMutation.fulfill() }
+            nextMutationCompleted.fulfill()
+            finish()
+        }
+        wait(for: [nextMutation], timeout: 0.05)
+        XCTAssertFalse(didComplete)
+        didReleaseRead = true
+
+        try XCTUnwrap(readCompletion)([])
+
+        wait(for: [completed, nextMutationCompleted], timeout: 2)
+        drainMutationQueue(queue)
+        withExtendedLifetime(plugin) {}
+    }
+
+    func testCancelAllAlarmKitFailurePreservesPendingNotificationsAndStore() {
+        let previous = Array(WarmAlarmStore.shared.loadAll().values)
+        WarmAlarmStore.shared.clear()
+        defer {
+            WarmAlarmStore.shared.clear()
+            previous.forEach { WarmAlarmStore.shared.save($0) }
+        }
+        let schedule = WarmAlarmScheduleData.from(wire: makeWireSchedule(
+            id: 7_760_004, scheduledAtMillis: 1_900_000_000_000
+        )).withAlarmKitManaged(true)
+        WarmAlarmStore.shared.save(schedule)
+        let queue = WarmAlarmMutationQueue(label: "warm_alarm_tests.cancel_all_failure")
+        let delegate = WarmAlarmDelegate(eventsApi: RecordingWarmAlarmEventsApi(), notificationMutationQueue: queue)
+        var pending = [
+            UNNotificationRequest(identifier: "7760004", content: delegate.makeContent(from: schedule), trigger: nil),
+            UNNotificationRequest(identifier: "host-reminder", content: UNMutableNotificationContent(), trigger: nil)
+        ]
+        let failure = NSError(domain: "CancelAllFailure", code: 76)
+        let backend = RecordingAlarmKitBackend(scheduleError: nil, cancelError: failure)
+        let plugin = WarmAlarmPlugin(
+            delegate: delegate, notificationMutationQueue: queue,
+            notificationCenter: UNUserNotificationCenter.current(),
+            notificationCenterDelegate: WarmAlarmNotificationCenterDelegate(warmAlarmDelegate: delegate, forwardingDelegate: nil),
+            pendingNotificationReader: { $0(pending) },
+            pendingNotificationRemover: { identifiers in pending.removeAll { identifiers.contains($0.identifier) } },
+            alarmKitBackend: backend
+        )
+        let completed = expectation(description: "native cancellation failure returns")
+
+        plugin.cancelAllAlarms { result in
+            switch result {
+            case .success: XCTFail("Native cancellation failure must be returned")
+            case let .failure(error): XCTAssertEqual((error as NSError).domain, failure.domain)
+            }
+            completed.fulfill()
+        }
+
+        wait(for: [completed], timeout: 2)
+        XCTAssertEqual(Set(pending.map(\.identifier)), ["7760004", "host-reminder"])
+        XCTAssertNotNil(WarmAlarmStore.shared.load(id: schedule.id))
+        XCTAssertEqual(backend.cancelAllCount, 1)
+        drainMutationQueue(queue)
+        withExtendedLifetime(plugin) {}
+    }
+
     func testCancelAllCleansAuthorizedOrphansWithoutRequiringLocalRecords() {
         let previous = Array(WarmAlarmStore.shared.loadAll().values)
         WarmAlarmStore.shared.clear()
