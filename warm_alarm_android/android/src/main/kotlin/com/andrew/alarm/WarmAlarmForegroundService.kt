@@ -70,8 +70,16 @@ class WarmAlarmForegroundService : Service() {
         flags: Int,
         startId: Int,
     ): Int {
-        val action = intent?.action
-        val alarmId = intent?.getLongExtra(EXTRA_ALARM_ID, -1L) ?: -1L
+        if (intent == null || !intent.hasExtra(EXTRA_ALARM_ID)) {
+            if (!isRinging) stopSelf()
+            return START_NOT_STICKY
+        }
+        val action = intent.action
+        val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
+        if (WarmAlarmIds.rejectUnsupported(this, alarmId)) {
+            if (!isRinging) stopSelf()
+            return START_NOT_STICKY
+        }
 
         when (action) {
             ACTION_STOP -> handleStop(alarmId)
@@ -83,10 +91,6 @@ class WarmAlarmForegroundService : Service() {
     }
 
     private fun handleFire(alarmId: Long) {
-        if (alarmId == -1L) {
-            stopSelf()
-            return
-        }
         val schedule = WarmAlarmStore.load(this, alarmId)
         // The newest alarm replaces playback, without performing Stop or Snooze on the old schedule.
         stopAudio()
@@ -134,7 +138,7 @@ class WarmAlarmForegroundService : Service() {
     }
 
     private fun handleCancelCurrentAlarm(alarmId: Long) {
-        if (alarmId == -1L || currentAlarmId != alarmId) return
+        if (currentAlarmId != alarmId) return
         isRinging = false
         currentAlarmId = null
         currentSchedule = null
@@ -237,21 +241,19 @@ class WarmAlarmForegroundService : Service() {
             if (audio?.volumeEnforced == true) startVolumeEnforcer()
         } catch (e: Exception) {
             stopAudio()
-            if (alarmId != -1L) {
-                WarmAlarmPlugin.emitEventFromBackground(
-                    this,
-                    WarmAlarmEventWire(
-                        alarmId = alarmId,
-                        type = WarmAlarmEventTypeWire.FAILED,
-                        occurredAtMillis = System.currentTimeMillis(),
-                        failure =
-                            WarmAlarmFailureWire(
-                                code = WarmAlarmFailureCodeWire.AUDIO_PLAYBACK_FAILED,
-                                message = e.message ?: "Unable to start media player.",
-                            ),
-                    ),
-                )
-            }
+            WarmAlarmPlugin.emitEventFromBackground(
+                this,
+                WarmAlarmEventWire(
+                    alarmId = alarmId,
+                    type = WarmAlarmEventTypeWire.FAILED,
+                    occurredAtMillis = System.currentTimeMillis(),
+                    failure =
+                        WarmAlarmFailureWire(
+                            code = WarmAlarmFailureCodeWire.AUDIO_PLAYBACK_FAILED,
+                            message = e.message ?: "Unable to start media player.",
+                        ),
+                ),
+            )
             @Suppress("DEPRECATION")
             stopForeground(true)
             stopSelf()
@@ -313,14 +315,11 @@ class WarmAlarmForegroundService : Service() {
         val snoozeTitle = schedule?.notification?.snoozeActionTitle
 
         val stopPendingIntent =
-            PendingIntent.getService(
+            WarmAlarmPendingIntents.serviceAction(
                 this,
-                (alarmId * 10 + 1).toInt(),
-                Intent(this, WarmAlarmForegroundService::class.java).apply {
-                    action = ACTION_STOP
-                    putExtra(EXTRA_ALARM_ID, alarmId)
-                },
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                alarmId,
+                ACTION_STOP,
+                PendingIntent.FLAG_UPDATE_CURRENT,
             )
 
         val iconResId =
@@ -343,14 +342,11 @@ class WarmAlarmForegroundService : Service() {
 
         if (snoozeTitle != null) {
             val snoozePendingIntent =
-                PendingIntent.getService(
+                WarmAlarmPendingIntents.serviceAction(
                     this,
-                    (alarmId * 10 + 2).toInt(),
-                    Intent(this, WarmAlarmForegroundService::class.java).apply {
-                        action = ACTION_SNOOZE
-                        putExtra(EXTRA_ALARM_ID, alarmId)
-                    },
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    alarmId,
+                    ACTION_SNOOZE,
+                    PendingIntent.FLAG_UPDATE_CURRENT,
                 )
             builder.addAction(0, snoozeTitle, snoozePendingIntent)
         }

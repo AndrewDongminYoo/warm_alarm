@@ -2,6 +2,7 @@ package com.andrew.alarm
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 
@@ -10,6 +11,29 @@ import kotlin.test.assertNull
 // JVM test here can reach it; WarmAlarmPendingIntentsInstrumentedTest asserts it
 // against the real framework registry and runs on an emulator in CI.
 class WarmAlarmPendingIntentsTest {
+    @Test
+    fun signedIntBoundariesKeepTheirLegacyRegularIdentity() {
+        val ids = listOf(Int.MIN_VALUE.toLong(), -1L, 0L, Int.MAX_VALUE.toLong())
+        for (id in ids) {
+            assertNull(WarmAlarmPendingIntents.identityUri("com.example.app", id, WarmAlarmIntentKind.REGULAR))
+        }
+        assertEquals(ids.size, ids.map(WarmAlarmPendingIntents::wakeCheckRequestCode).toSet().size)
+        assertEquals(ids.size, ids.map(WarmAlarmPendingIntents::wakeCheckNotificationId).toSet().size)
+    }
+
+    @Test
+    fun unsupportedIdsCannotCreateAnyAlarmIdentity() {
+        val ids = listOf(Int.MIN_VALUE.toLong() - 1, Int.MAX_VALUE.toLong() + 1, 4_294_967_296L, Long.MIN_VALUE, Long.MAX_VALUE)
+        for (id in ids) {
+            for (kind in WarmAlarmIntentKind.entries) {
+                val error = assertFailsWith<FlutterError> { WarmAlarmPendingIntents.identityUri("com.example.app", id, kind) }
+                assertEquals("INVALID_ALARM_ID", error.code)
+            }
+            assertFailsWith<FlutterError> { WarmAlarmPendingIntents.wakeCheckRequestCode(id) }
+            assertFailsWith<FlutterError> { WarmAlarmPendingIntents.wakeCheckNotificationId(id) }
+        }
+    }
+
     @Test
     fun regularAlarmsKeepTheIdentityTheyHadBeforeTheSplit() {
         val uri = WarmAlarmPendingIntents.identityUri("com.example.app", 7, WarmAlarmIntentKind.REGULAR)

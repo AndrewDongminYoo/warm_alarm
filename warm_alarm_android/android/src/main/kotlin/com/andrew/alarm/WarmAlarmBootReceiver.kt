@@ -35,6 +35,7 @@ class WarmAlarmBootReceiver : BroadcastReceiver() {
             .loadAll(storeContext)
             .values
             .mapNotNull { schedule ->
+                if (WarmAlarmIds.rejectUnsupported(storeContext, schedule.id)) return@mapNotNull null
                 val activeSnoozeUntilMillis = WarmAlarmStore.activeSnoozeUntilMillis(storeContext, schedule.id)
                 if (activeSnoozeUntilMillis != null && activeSnoozeUntilMillis <= now) {
                     WarmAlarmStore.clearActiveSnooze(storeContext, schedule.id)
@@ -52,13 +53,13 @@ class WarmAlarmBootReceiver : BroadcastReceiver() {
                 }
                 schedule.id to fireAt
             }.forEach { (alarmId, fireAt) ->
-                val fireIntent =
-                    Intent(context, WarmAlarmReceiver::class.java).apply {
-                        action = WarmAlarmReceiver.ACTION_FIRE
-                        putExtra(WarmAlarmReceiver.EXTRA_ALARM_ID, alarmId)
-                    }
-                val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                val pending = PendingIntent.getBroadcast(context, alarmId.toInt(), fireIntent, flags)
+                val pending =
+                    WarmAlarmPendingIntents.broadcast(
+                        context,
+                        alarmId,
+                        WarmAlarmIntentKind.REGULAR,
+                        PendingIntent.FLAG_UPDATE_CURRENT,
+                    )!!
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
                     alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pending)

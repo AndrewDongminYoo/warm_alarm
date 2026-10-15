@@ -44,8 +44,9 @@ class WarmAlarmReceiver : BroadcastReceiver() {
         context: Context,
         intent: Intent,
     ) {
+        if (!intent.hasExtra(EXTRA_ALARM_ID)) return
         val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
-        if (alarmId == -1L) return
+        if (WarmAlarmIds.rejectUnsupported(context, alarmId)) return
         val isRetrigger = intent.getBooleanExtra(EXTRA_IS_RETRIGGER, false)
         val schedule = WarmAlarmStore.load(context, alarmId)
         val payload = schedule?.payload
@@ -110,8 +111,9 @@ class WarmAlarmReceiver : BroadcastReceiver() {
         context: Context,
         intent: Intent,
     ) {
+        if (!intent.hasExtra(EXTRA_ALARM_ID)) return
         val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
-        if (alarmId == -1L) return
+        if (WarmAlarmIds.rejectUnsupported(context, alarmId)) return
         val schedule = WarmAlarmStore.load(context, alarmId) ?: return
 
         WarmAlarmPlugin.emitEventFromBackground(
@@ -185,8 +187,9 @@ class WarmAlarmReceiver : BroadcastReceiver() {
         context: Context,
         intent: Intent,
     ) {
+        if (!intent.hasExtra(EXTRA_ALARM_ID)) return
         val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
-        if (alarmId == -1L) return
+        if (WarmAlarmIds.rejectUnsupported(context, alarmId)) return
 
         finishWakeCheck(context, alarmId, WarmAlarmStore.load(context, alarmId))
         WarmAlarmPlugin.emitEventFromBackground(

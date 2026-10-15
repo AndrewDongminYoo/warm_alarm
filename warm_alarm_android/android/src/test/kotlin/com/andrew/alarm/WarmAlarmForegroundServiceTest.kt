@@ -22,6 +22,66 @@ import kotlin.test.assertTrue
 
 class WarmAlarmForegroundServiceTest {
     @Test
+    fun missingIdDoesNotStopOrReplaceCurrentPlayback() {
+        PlaybackHarness().use { harness ->
+            harness.fire(71)
+            val player = harness.players.single()
+
+            harness.service.onStartCommand(Mockito.mock(Intent::class.java), 0, 1)
+
+            assertTrue(player.isPlaying)
+            assertEquals(71L, WarmAlarmForegroundService.currentAlarmId)
+            Mockito.verify(player, Mockito.never()).release()
+            Mockito.verify(harness.service, Mockito.never()).stopSelf()
+        }
+    }
+
+    @Test
+    fun minusOnePlaybackFailureStillEmitsTheFailureEvent() {
+        assertInitializationFailure(alarmId = -1) { player ->
+            Mockito.doThrow(IllegalStateException("Initialization failed")).`when`(player).prepare()
+        }
+    }
+
+    @Test
+    fun minusOneIsAPlayableAndCancellableAlarmId() {
+        PlaybackHarness().use { harness ->
+            harness.fire(-1)
+            assertEquals(1, harness.players.size, "An explicit -1 ID must start playback")
+            val player = harness.players.single()
+            assertTrue(player.isPlaying)
+            assertEquals(-1L, WarmAlarmForegroundService.currentAlarmId)
+
+            harness.command(WarmAlarmForegroundService.ACTION_CANCEL_CURRENT, -1)
+
+            Mockito.verify(player).release()
+            assertFalse(WarmAlarmForegroundService.isRinging)
+        }
+    }
+
+    @Test
+    fun unsupportedCommandDoesNotReplaceCurrentPlayback() {
+        PlaybackHarness().use { harness ->
+            harness.fire(71)
+            val player = harness.players.single()
+
+            harness.fire(4_294_967_296L)
+
+            assertEquals(1, harness.players.size)
+            Mockito.verify(player, Mockito.never()).release()
+            assertTrue(player.isPlaying)
+            assertEquals(71L, WarmAlarmForegroundService.currentAlarmId)
+            val event =
+                WarmAlarmEventQueueStore
+                    .create(harness.service)
+                    .loadAll()
+                    .single()
+                    .event
+            assertEquals(WarmAlarmFailureCodeWire.INVALID_ARGUMENTS, event.failure?.code)
+        }
+    }
+
+    @Test
     fun replacingLoopingAlarmThenStoppingLeavesNoPlayerActive() {
         PlaybackHarness().use { harness ->
             harness.fire(71)
@@ -136,9 +196,12 @@ class WarmAlarmForegroundServiceTest {
         }
     }
 
-    private fun assertInitializationFailure(configurePlayer: (MediaPlayer) -> Unit) {
+    private fun assertInitializationFailure(
+        alarmId: Long = 71,
+        configurePlayer: (MediaPlayer) -> Unit,
+    ) {
         PlaybackHarness(configurePlayer).use { harness ->
-            harness.fire(71)
+            harness.fire(alarmId)
 
             val player = harness.players.single()
             Mockito.verify(player).release()
@@ -154,7 +217,7 @@ class WarmAlarmForegroundServiceTest {
                     .loadAll()
                     .single()
                     .event
-            assertEquals(71L, event.alarmId)
+            assertEquals(alarmId, event.alarmId)
             assertEquals(WarmAlarmEventTypeWire.FAILED, event.type)
             assertEquals(WarmAlarmFailureCodeWire.AUDIO_PLAYBACK_FAILED, event.failure?.code)
             assertEquals("Initialization failed", event.failure?.message)
@@ -206,7 +269,14 @@ private class PlaybackHarness(
 
         val preferences = Mockito.mock(SharedPreferences::class.java)
         val editor = Mockito.mock(SharedPreferences.Editor::class.java, Mockito.RETURNS_SELF)
-        val schedules = JSONArray().put(WarmAlarmStore.encode(schedule(71))).put(WarmAlarmStore.encode(schedule(72)))
+        val schedules =
+            JSONArray()
+                .put(
+                    WarmAlarmStore.encode(schedule(71)),
+                ).put(
+                    WarmAlarmStore.encode(schedule(72)),
+                ).put(WarmAlarmStore.encode(schedule(-1)))
+                .put(WarmAlarmStore.encode(schedule(4_294_967_296L)))
         val storedStrings = mutableMapOf("schedules" to schedules.toString())
         Mockito.doReturn(preferences).`when`(service).getSharedPreferences(Mockito.anyString(), Mockito.anyInt())
         Mockito.`when`(preferences.getString(Mockito.anyString(), Mockito.nullable(String::class.java))).thenAnswer {
@@ -256,6 +326,7 @@ private class PlaybackHarness(
     ) {
         val intent = Mockito.mock(Intent::class.java)
         Mockito.`when`(intent.action).thenReturn(action)
+        Mockito.`when`(intent.hasExtra(WarmAlarmForegroundService.EXTRA_ALARM_ID)).thenReturn(true)
         Mockito.`when`(intent.getLongExtra(WarmAlarmForegroundService.EXTRA_ALARM_ID, -1L)).thenReturn(id)
         service.onStartCommand(intent, 0, 1)
     }

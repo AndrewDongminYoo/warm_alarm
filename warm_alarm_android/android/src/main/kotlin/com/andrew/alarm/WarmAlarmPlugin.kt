@@ -119,6 +119,7 @@ class WarmAlarmPlugin :
         val now = System.currentTimeMillis()
         val recoverableAlarms =
             WarmAlarmStore.loadAll(context).values.mapNotNull { schedule ->
+                if (WarmAlarmIds.rejectUnsupported(context, schedule.id)) return@mapNotNull null
                 val activeSnoozeUntilMillis = WarmAlarmStore.activeSnoozeUntilMillis(context, schedule.id)
                 if (activeSnoozeUntilMillis != null && activeSnoozeUntilMillis <= now) {
                     WarmAlarmStore.clearActiveSnooze(context, schedule.id)
@@ -291,6 +292,10 @@ class WarmAlarmPlugin :
         schedule: WarmAlarmScheduleWire,
         callback: (Result<WarmAlarmScheduleResultWire>) -> Unit,
     ) {
+        if (!WarmAlarmIds.isSupported(schedule.id)) {
+            callback(Result.failure(WarmAlarmIds.error(schedule.id)))
+            return
+        }
         // A recurring alarm fires at the next matching weekday (AlarmManager is
         // single-shot; the fire receiver re-arms the following occurrence).
         val weekdays = schedule.recurrence?.weekdays
@@ -361,6 +366,10 @@ class WarmAlarmPlugin :
         id: Long,
         callback: (Result<Unit>) -> Unit,
     ) {
+        if (!WarmAlarmIds.isSupported(id)) {
+            callback(Result.failure(WarmAlarmIds.error(id)))
+            return
+        }
         WarmAlarmStore.remove(context, id)
         cancelScheduledAlarms(id)
         WarmAlarmForegroundService.requestCancelCurrentAlarm(context, id)
@@ -371,7 +380,11 @@ class WarmAlarmPlugin :
     }
 
     override fun cancelAllAlarms(callback: (Result<Unit>) -> Unit) {
-        WarmAlarmStore.loadAll(context).keys.forEach { id -> cancelScheduledAlarms(id) }
+        WarmAlarmStore
+            .loadAll(context)
+            .keys
+            .filter(WarmAlarmIds::isSupported)
+            .forEach { id -> cancelScheduledAlarms(id) }
         WarmAlarmStore.clear(context)
         WarmAlarmKillWarningService.stop(context)
         WarmAlarmForegroundService.currentAlarmId?.let { id ->
@@ -556,6 +569,7 @@ class WarmAlarmPlugin :
             fireAtMillis: Long,
             isRetrigger: Boolean = false,
         ) {
+            WarmAlarmIds.requireSupported(alarmId)
             scheduleAlarm(
                 backend = AndroidAlarmSchedulingBackend(context, alarmId, isRetrigger),
                 fireAtMillis = fireAtMillis,
