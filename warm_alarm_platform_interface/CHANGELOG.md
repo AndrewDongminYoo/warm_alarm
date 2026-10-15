@@ -1,3 +1,8 @@
+# 0.1.6
+
+- Document readiness reasons and scheduling warning semantics in the public models.
+- Clarify that a null warning code still represents a warning, and that a null scheduling warning does not guarantee every platform-specific option was applied.
+
 # 0.1.5
 
 - Add an optional warning code for wake-check requests that a platform cannot honor.
