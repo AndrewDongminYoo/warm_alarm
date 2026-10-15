@@ -45,7 +45,7 @@ final class WarmAlarmCancellationTests: XCTestCase {
         withExtendedLifetime(plugin) {}
     }
 
-    func testCancelAllWaitsForPendingReadBeforeClearingStoreAndCompleting() throws {
+    func testCancelAllSuppressesForegroundDeliveryWhileWaitingForPendingRead() throws {
         let previous = Array(WarmAlarmStore.shared.loadAll().values)
         WarmAlarmStore.shared.clear()
         defer {
@@ -54,13 +54,15 @@ final class WarmAlarmCancellationTests: XCTestCase {
         }
         let schedule = makeSchedule()
         WarmAlarmStore.shared.save(schedule)
+        let delegate = makeDelegate()
+        let content = delegate.makeContent(from: schedule)
         let readStarted = expectation(description: "pending read starts")
         let secondRead = expectation(description: "later cancellation must wait")
         secondRead.isInverted = true
         var didReleaseRead = false
         var readCompletion: (([UNNotificationRequest]) -> Void)?
         let plugin = WarmAlarmPlugin(
-            delegate: makeDelegate(),
+            delegate: delegate,
             pendingNotificationReader: { completion in
                 if readCompletion == nil {
                     readCompletion = completion
@@ -85,7 +87,9 @@ final class WarmAlarmCancellationTests: XCTestCase {
         wait(for: [secondRead], timeout: 0.05)
 
         XCTAssertFalse(didComplete)
-        XCTAssertNotNil(WarmAlarmStore.shared.load(id: schedule.id))
+        XCTAssertNil(WarmAlarmStore.shared.load(id: schedule.id))
+        XCTAssertTrue(delegate.handleForegroundDelivery(content: content).isEmpty)
+        XCTAssertNil(delegate.currentlyPlayingAlarmId)
         didReleaseRead = true
         try XCTUnwrap(readCompletion)([])
 

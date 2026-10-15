@@ -586,12 +586,13 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 finish()
                 return
             }
+            // Invalidate foreground delivery before the asynchronous pending-request read.
+            WarmAlarmStore.shared.clear()
             self.pendingNotificationReader { pendingRequests in
                 let identifiers = pendingRequests.filter {
                     $0.content.categoryIdentifier == WarmAlarmDelegate.categoryIdentifier
                         || $0.identifier == Self.killWarningNotifId
                 }.map(\.identifier)
-                WarmAlarmStore.shared.clear()
                 self.pendingNotificationRemover(identifiers)
                 WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
             }

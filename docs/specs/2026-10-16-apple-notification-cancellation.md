@@ -13,6 +13,7 @@ Also remove the exact reserved `warm_alarm_kill_warning_notif` identifier, which
 Do not infer ownership from a numeric identifier, identifier prefix, or an `alarmId` payload alone.
 Keep the mutation queue occupied until the pending-request read, scoped removal submission, and platform reply finish.
 On iOS, a failed AlarmKit cancellation must retain notification requests and stored schedules as before.
+On macOS, clear stored schedules before the asynchronous read, preserving the prior foreground-delivery invalidation timing while cancellation remains pending.
 Delivered notifications and playback behavior retain their current contract.
 
 ## Verification
