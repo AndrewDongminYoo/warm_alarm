@@ -50,6 +50,11 @@ broadcast and starts `WarmAlarmForegroundService`. The service:
 - Posts the alarm notification with configurable Stop/Snooze actions
 - Boosts and periodically enforces the maximum alarm stream volume only when `volumeEnforced` is enabled
 
+Only one alarm plays at a time.
+A newly fired alarm replaces the current playback, including another fire of the same alarm ID.
+Replacement releases the previous player and clears its fade callbacks, vibration, and volume-enforcement timer before the next playback starts.
+It does not perform a Stop or Snooze action on the replaced alarm's stored schedule.
+
 ### Wake-check
 
 When `WarmAlarmWakeCheck` is configured, a secondary alarm is scheduled for `checkDelay` after the
