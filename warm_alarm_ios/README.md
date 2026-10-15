@@ -25,6 +25,17 @@ This package is [endorsed][endorsed_link], which means you do **not** add it dir
 guaranteed to launch automatically in the background — audio plays only after the user interacts
 with the notification (or if the app is already in the foreground).
 
+## Privacy manifest
+
+SwiftPM and CocoaPods both bundle this plugin's `PrivacyInfo.xcprivacy`.
+It declares app-local `UserDefaults` access (`CA92.1`) for schedules, handled occurrences, and process-termination warning settings, and file timestamp access (`C617.1`) for cleaning generated audio inside the app container.
+The plugin declares no tracking or collected data types.
+The consuming app remains responsible for its own behavior and the declarations of other dependencies.
+
+After archiving a host, inspect its plugin resource bundle and generate a privacy report from Xcode Organizer.
+The report summarizes collected data and tracking; inspect the bundled manifest for the required-reason API declarations.
+The package's `tool/verify_privacy_manifest.py` checks those declarations in a built app with `--app-bundle <Runner.app> --packaging swiftpm` or `--packaging cocoapods`.
+
 ## User Notifications host setup
 
 `requestNotificationPermission()` requests User Notifications authorization only.

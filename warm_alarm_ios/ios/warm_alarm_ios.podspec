@@ -13,6 +13,9 @@ Pod::Spec.new do |s|
   s.author           = { 'Com Andrew Alarm' => 'email@example.com' }
   s.source           = { :path => '.' }  
   s.source_files = 'warm_alarm_ios/Sources/**/*.swift'
+  s.resource_bundles = {
+    'warm_alarm_ios_privacy' => ['warm_alarm_ios/Sources/warm_alarm_ios/PrivacyInfo.xcprivacy']
+  }
   s.dependency 'Flutter'
   s.platform = :ios, '13.0'
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }

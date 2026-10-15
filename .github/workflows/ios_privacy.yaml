@@ -1,0 +1,95 @@
+name: ios_privacy
+
+permissions: read-all
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/ios_privacy.yaml
+      - warm_alarm_ios/**
+      - warm_alarm_platform_interface/**
+      - warm_alarm/pubspec.yaml
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/ios_privacy.yaml
+      - warm_alarm_ios/**
+      - warm_alarm_platform_interface/**
+      - warm_alarm/pubspec.yaml
+
+jobs:
+  privacy-packaging:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        packaging: [swiftpm, cocoapods]
+    env:
+      PACKAGING: ${{ matrix.packaging }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: 3.47.7
+          cache: true
+
+      - name: Create a host using the selected package manager
+        run: |
+          set -euo pipefail
+          if [ "$PACKAGING" = swiftpm ]; then
+            flutter config --enable-swift-package-manager
+          else
+            flutter config --no-enable-swift-package-manager
+          fi
+          flutter create --platforms ios --project-name privacy_host --no-pub "$RUNNER_TEMP/privacy_host"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["GITHUB_WORKSPACE"])
+          host = Path(os.environ["RUNNER_TEMP"]) / "privacy_host"
+          packages = ("warm_alarm_platform_interface", "warm_alarm_android", "warm_alarm_ios", "warm_alarm_macos")
+          content = [
+              "name: privacy_host",
+              "publish_to: none",
+              "environment:",
+              "  sdk: '>=3.10.0 <4.0.0'",
+              "dependencies:",
+              "  flutter:",
+              "    sdk: flutter",
+              "  warm_alarm:",
+              f"    path: {json.dumps(str(root / 'warm_alarm'))}",
+              "dependency_overrides:",
+          ]
+          for package in packages:
+              content.extend([f"  {package}:", f"    path: {json.dumps(str(root / package))}"])
+          (host / "pubspec.yaml").write_text("\n".join(content) + "\n")
+          PY
+
+      - name: Archive and verify the plugin privacy resource
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/privacy_host"
+          flutter pub get
+          flutter build ipa --release --no-codesign
+          python3 "$GITHUB_WORKSPACE/warm_alarm_ios/tool/verify_privacy_manifest.py" \
+            --app-bundle build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app \
+            --packaging "$PACKAGING"
+          tar -czf "$RUNNER_TEMP/privacy-$PACKAGING.xcarchive.tar.gz" -C build/ios/archive Runner.xcarchive
+
+      - name: Retain the archive for Xcode privacy report inspection
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: privacy-${{ matrix.packaging }}
+          path: ${{ runner.temp }}/privacy-${{ matrix.packaging }}.xcarchive.tar.gz
+          if-no-files-found: error
+          retention-days: 7
