@@ -8,6 +8,109 @@ import UserNotifications
 @testable import warm_alarm_ios
 
 final class WarmAlarmRequestRegistrationTests: XCTestCase {
+    func testForegroundDefaultAudioRequestsNotificationSound() throws {
+        let (delegate, notification) = try foregroundAudioFixture()
+        let options = foregroundOptions(delegate: delegate, notification: notification)
+
+        XCTAssertEqual(options, [.alert, .sound])
+        XCTAssertNil(delegate.currentlyPlayingAlarmId)
+        XCTAssertNotNil(notification.request.content.sound)
+    }
+
+    func testForegroundEmptyAudioSourcesRequestNotificationSound() throws {
+        let (delegate, notification) = try foregroundAudioFixture(filePath: "", assetPath: "")
+
+        XCTAssertEqual(foregroundOptions(delegate: delegate, notification: notification), [.alert, .sound])
+    }
+
+    func testForegroundCustomFileDoesNotRequestDuplicateNotificationSound() throws {
+        let file = try foregroundAudioFile()
+        let (delegate, notification) = try foregroundAudioFixture(filePath: file.path)
+
+        XCTAssertEqual(foregroundOptions(delegate: delegate, notification: notification), [.alert])
+        XCTAssertEqual(delegate.currentlyPlayingAlarmId, 7_070_001)
+    }
+
+    func testForegroundCustomAssetDoesNotRequestDuplicateNotificationSound() throws {
+        let (delegate, notification) = try foregroundAudioFixture(assetPath: "assets/custom-alarm.caf")
+
+        XCTAssertEqual(foregroundOptions(delegate: delegate, notification: notification), [.alert])
+    }
+
+    func testDuplicateForegroundDefaultAudioDoesNotReplayNotificationSound() throws {
+        let (delegate, notification) = try foregroundAudioFixture()
+        _ = foregroundOptions(delegate: delegate, notification: notification)
+
+        XCTAssertTrue(foregroundOptions(delegate: delegate, notification: notification).isEmpty)
+    }
+
+    private func foregroundAudioFixture(
+        filePath: String? = nil,
+        assetPath: String? = nil
+    ) throws -> (WarmAlarmDelegate, UNNotification) {
+        let wire = WarmAlarmScheduleWire(
+            id: 7_070_001,
+            scheduledAtMillis: 1_900_000_000_000,
+            notification: WarmAlarmNotificationWire(
+                title: "Foreground audio", body: "Alarm", keepNotificationAfterAlarmEnds: true
+            ),
+            audio: WarmAlarmAudioWire(
+                filePath: filePath, assetPath: assetPath, loop: false, vibrate: false, volumeEnforced: false
+            )
+        )
+        let schedule = WarmAlarmScheduleData.from(wire: wire)
+        let delegate = WarmAlarmDelegate(
+            eventsApi: RecordingWarmAlarmEventsApi(),
+            notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.foreground_audio")
+        )
+        delegate.clearHandledForegroundOccurrence(alarmId: wire.id)
+        WarmAlarmStore.shared.save(schedule)
+        addTeardownBlock {
+            delegate.stopIfPlaying(alarmId: wire.id)
+            WarmAlarmStore.shared.remove(id: wire.id)
+        }
+        let request = WarmAlarmPlugin.makeRequests(
+            for: wire,
+            content: delegate.makeContent(from: schedule),
+            fallbackAnchorMillis: wire.scheduledAtMillis,
+            occurrenceSeriesToken: schedule.occurrenceSeriesToken
+        )[0]
+        let coder = NSKeyedArchiver(requiringSecureCoding: true)
+        coder.encode(request, forKey: "request")
+        coder.encode(Date(timeIntervalSince1970: 1_900_000_000), forKey: "date")
+        coder.finishEncoding()
+        let decoder = try NSKeyedUnarchiver(forReadingFrom: coder.encodedData)
+        let notification = try XCTUnwrap(UNNotification(coder: decoder))
+        decoder.finishDecoding()
+        return (delegate, notification)
+    }
+
+    private func foregroundOptions(
+        delegate: WarmAlarmDelegate,
+        notification: UNNotification
+    ) -> UNNotificationPresentationOptions {
+        let completed = expectation(description: "foreground presentation completed")
+        var options: UNNotificationPresentationOptions = []
+        delegate.userNotificationCenter(.current(), willPresent: notification) { result in
+            options = result
+            completed.fulfill()
+        }
+        wait(for: [completed], timeout: 2)
+        return options
+    }
+
+    private func foregroundAudioFile() throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).caf")
+        let format = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: 8_000, channels: 1))
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 8_000))
+        buffer.frameLength = 8_000
+        buffer.floatChannelData![0].initialize(repeating: 0, count: 8_000)
+        let file = try AVAudioFile(forWriting: url, settings: format.settings)
+        try file.write(from: buffer)
+        addTeardownBlock { try FileManager.default.removeItem(at: url) }
+        return url
+    }
+
     func testAlarmKitSnoozeRequiresBothLiveActivityHostKeys() {
         XCTAssertFalse(WarmAlarmPlugin.alarmKitLiveActivityConfigured([
             "WarmAlarmAlarmKitLiveActivityEnabled": true,
@@ -5390,7 +5493,7 @@ final class WarmAlarmRequestTests: XCTestCase {
         }
         let replacementCompleted = expectation(description: "replacement completes")
         let deliveryCompleted = expectation(description: "delivery completes")
-        var didHandle = true
+        var presentationOptions: UNNotificationPresentationOptions = [.alert]
 
         mutationQueue.enqueueOnMain { finish in
             WarmAlarmStore.shared.save(replacement)
@@ -5402,13 +5505,13 @@ final class WarmAlarmRequestTests: XCTestCase {
             identifier: String(alarmId),
             content: oldContent,
             deliveredAtMillis: occurrenceMillis
-        ) { handled in
-            didHandle = handled
+        ) { options in
+            presentationOptions = options
             deliveryCompleted.fulfill()
         }
 
         wait(for: [replacementCompleted, deliveryCompleted], timeout: 1)
-        XCTAssertFalse(didHandle)
+        XCTAssertTrue(presentationOptions.isEmpty)
         XCTAssertTrue(eventsApi.events.isEmpty)
     }
 
@@ -5541,7 +5644,7 @@ final class WarmAlarmRequestTests: XCTestCase {
         }
         let cancellationCompleted = expectation(description: "cancellation completes")
         let deliveryCompleted = expectation(description: "delivery completes")
-        var didHandle = true
+        var presentationOptions: UNNotificationPresentationOptions = [.alert]
 
         mutationQueue.enqueueOnMain { finish in
             WarmAlarmStore.shared.remove(id: alarmId)
@@ -5553,13 +5656,13 @@ final class WarmAlarmRequestTests: XCTestCase {
             identifier: "\(alarmId)#fallback#1",
             content: content,
             deliveredAtMillis: occurrenceMillis
-        ) { handled in
-            didHandle = handled
+        ) { options in
+            presentationOptions = options
             deliveryCompleted.fulfill()
         }
 
         wait(for: [cancellationCompleted, deliveryCompleted], timeout: 1)
-        XCTAssertFalse(didHandle)
+        XCTAssertTrue(presentationOptions.isEmpty)
         XCTAssertTrue(eventsApi.events.isEmpty)
     }
 

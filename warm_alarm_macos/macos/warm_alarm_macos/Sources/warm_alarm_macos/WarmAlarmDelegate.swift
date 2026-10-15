@@ -45,16 +45,20 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        guard let alarmIdString = notification.request.content.userInfo["alarmId"] as? String,
+        completionHandler(handleForegroundDelivery(content: notification.request.content))
+    }
+
+    func handleForegroundDelivery(content: UNNotificationContent) -> UNNotificationPresentationOptions {
+        guard let alarmIdString = content.userInfo["alarmId"] as? String,
               let alarmId = Int64(alarmIdString) else {
-            completionHandler([.alert, .sound])
-            return
+            return [.alert, .sound]
         }
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
         startAudio(alarmId: alarmId, for: schedule)
         emitEvent(WarmAlarmEventWire(
             alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis(), payload: schedule?.payload))
-        completionHandler([.alert])
+        let source = WarmAlarmAudioSource.select(filePath: schedule?.filePath, assetPath: schedule?.assetPath)
+        return source == .none ? [.alert, .sound] : [.alert]
     }
 
     func userNotificationCenter(
