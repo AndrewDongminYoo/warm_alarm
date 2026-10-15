@@ -264,19 +264,24 @@ class WarmAlarmForegroundService : Service() {
         configure: MediaPlayer.() -> Unit,
     ): MediaPlayer {
         val player = MediaPlayer()
-        player.configure()
-        player.setAudioAttributes(
-            AudioAttributes
-                .Builder()
-                .setUsage(AudioAttributes.USAGE_ALARM)
-                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                .build(),
-        )
-        player.isLooping = loop
-        player.setVolume(volume, volume)
-        player.prepare()
-        player.start()
-        return player
+        try {
+            player.configure()
+            player.setAudioAttributes(
+                AudioAttributes
+                    .Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build(),
+            )
+            player.isLooping = loop
+            player.setVolume(volume, volume)
+            player.prepare()
+            player.start()
+            return player
+        } catch (e: Exception) {
+            runCatching { player.release() }
+            throw e
+        }
     }
 
     private fun boostAlarmVolume() {

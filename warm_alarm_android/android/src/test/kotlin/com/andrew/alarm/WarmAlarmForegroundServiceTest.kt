@@ -103,9 +103,68 @@ class WarmAlarmForegroundServiceTest {
             assertTrue(harness.players.last().isPlaying)
         }
     }
+
+    @Test
+    fun dataSourceFailureReleasesPlayer() {
+        assertInitializationFailure { player ->
+            Mockito
+                .doThrow(IllegalArgumentException("Initialization failed"))
+                .`when`(player)
+                .setDataSource(Mockito.any(Context::class.java), Mockito.nullable(Uri::class.java))
+        }
+    }
+
+    @Test
+    fun prepareFailureReleasesPlayer() {
+        assertInitializationFailure { player ->
+            Mockito.doThrow(IllegalStateException("Initialization failed")).`when`(player).prepare()
+        }
+    }
+
+    @Test
+    fun startFailureReleasesPlayer() {
+        assertInitializationFailure { player ->
+            Mockito.doThrow(IllegalStateException("Initialization failed")).`when`(player).start()
+        }
+    }
+
+    @Test
+    fun releaseFailurePreservesInitializationFailure() {
+        assertInitializationFailure { player ->
+            Mockito.doThrow(IllegalStateException("Initialization failed")).`when`(player).prepare()
+            Mockito.doThrow(IllegalStateException("Release failed")).`when`(player).release()
+        }
+    }
+
+    private fun assertInitializationFailure(configurePlayer: (MediaPlayer) -> Unit) {
+        PlaybackHarness(configurePlayer).use { harness ->
+            harness.fire(71)
+
+            val player = harness.players.single()
+            Mockito.verify(player).release()
+            Mockito.verify(player, Mockito.never()).stop()
+            assertFalse(player.isPlaying)
+            assertFalse(harness.vibration.active)
+            assertTrue(harness.fadeCallbacks.isEmpty())
+            assertTrue(harness.enforcementCallbacks.isEmpty())
+            Mockito.verify(harness.service).stopSelf()
+            val event =
+                WarmAlarmEventQueueStore
+                    .create(harness.service)
+                    .loadAll()
+                    .single()
+                    .event
+            assertEquals(71L, event.alarmId)
+            assertEquals(WarmAlarmEventTypeWire.FAILED, event.type)
+            assertEquals(WarmAlarmFailureCodeWire.AUDIO_PLAYBACK_FAILED, event.failure?.code)
+            assertEquals("Initialization failed", event.failure?.message)
+        }
+    }
 }
 
-private class PlaybackHarness : AutoCloseable {
+private class PlaybackHarness(
+    configurePlayer: (MediaPlayer) -> Unit = {},
+) : AutoCloseable {
     val service = Mockito.mock(WarmAlarmForegroundService::class.java, Mockito.CALLS_REAL_METHODS)
     val fadeCallbacks = mutableListOf<Runnable>()
     val enforcementCallbacks = mutableListOf<Runnable>()
@@ -134,6 +193,7 @@ private class PlaybackHarness : AutoCloseable {
                     }.`when`(player)
                     .release()
                 Mockito.`when`(player.isPlaying).thenAnswer { playing }
+                configurePlayer(player)
             }.also { resources += it }
     val players: List<MediaPlayer> get() = constructedPlayers.constructed()
 
@@ -147,11 +207,16 @@ private class PlaybackHarness : AutoCloseable {
         val preferences = Mockito.mock(SharedPreferences::class.java)
         val editor = Mockito.mock(SharedPreferences.Editor::class.java, Mockito.RETURNS_SELF)
         val schedules = JSONArray().put(WarmAlarmStore.encode(schedule(71))).put(WarmAlarmStore.encode(schedule(72)))
+        val storedStrings = mutableMapOf("schedules" to schedules.toString())
         Mockito.doReturn(preferences).`when`(service).getSharedPreferences(Mockito.anyString(), Mockito.anyInt())
         Mockito.`when`(preferences.getString(Mockito.anyString(), Mockito.nullable(String::class.java))).thenAnswer {
-            if (it.getArgument<String>(0) == "schedules") schedules.toString() else it.getArgument<String?>(1)
+            storedStrings[it.getArgument<String>(0)] ?: it.getArgument<String?>(1)
         }
         Mockito.`when`(preferences.edit()).thenReturn(editor)
+        Mockito.`when`(editor.putString(Mockito.anyString(), Mockito.anyString())).thenAnswer {
+            storedStrings[it.getArgument<String>(0)] = it.getArgument<String>(1)
+            editor
+        }
         Mockito.`when`(editor.commit()).thenReturn(true)
         Mockito.doReturn("com.andrew.alarm").`when`(service).getPackageName()
         Mockito.doNothing().`when`(service).startForeground(Mockito.anyInt(), Mockito.any(Notification::class.java))
@@ -241,7 +306,7 @@ private class PlaybackHarness : AutoCloseable {
         )
 
     override fun close() {
-        players.forEach { it.release() }
+        players.forEach { runCatching { it.release() } }
         resources.asReversed().forEach { it.close() }
         WarmAlarmForegroundService.isRinging = false
         WarmAlarmForegroundService.currentAlarmId = null
