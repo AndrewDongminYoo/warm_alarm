@@ -1,3 +1,9 @@
+# 0.1.7
+
+- Publish expanded API documentation for capabilities, readiness, and scheduling warnings.
+- Show readiness reasons, warning codes, and full warning messages in the example, distinguishing unclassified warnings from no warning.
+- Require platform interface 0.1.6 so re-exported model documentation includes the null-code and null-warning semantics.
+
 # 0.1.6
 
 - Surface typed warnings when iOS or macOS ignores a requested wake-check while retaining native scheduling warnings.
