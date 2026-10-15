@@ -11,8 +11,9 @@ pigeons/{messages.dart,copyright.txt}                    # Pigeon source of trut
 ios/
   warm_alarm_ios.podspec                                 # CocoaPods: Flutter dep, iOS 13.0, Swift 6.1
   warm_alarm_ios/
-    Package.swift                                        # SwiftPM manifest (PrivacyInfo.xcprivacy is a TODO placeholder)
+    Package.swift                                        # SwiftPM manifest with privacy resource processing
     Sources/warm_alarm_ios/
+      PrivacyInfo.xcprivacy                              # app-local defaults and generated-audio file timestamps
       WarmAlarmPlugin.swift                              # plugin entry; lifecycle observers; startup reschedule
       WarmAlarmDelegate.swift                            # UNUserNotificationCenter delegate; Stop/Snooze; AVAudioPlayer; fade; snooze reschedule
       WarmAlarmStore.swift                               # UserDefaults-backed Codable schedule store
@@ -47,5 +48,5 @@ test/
 ## NOTES
 
 - iOS does **not** emit wake-check events (`WarmAlarmWakeCheckShown` / `Dismissed` / `Expired` / `WarmAlarmRetriggered`). Keep `getCapabilities().wakeCheck = unsupported`.
-- The `Package.swift` privacy-manifest comment is a TODO; if you ship a `PrivacyInfo.xcprivacy`, also wire it into `s.resource_bundles` in the podspec.
+- `PrivacyInfo.xcprivacy` ships through SwiftPM resources and the podspec's `warm_alarm_ios_privacy` resource bundle. Keep both paths covered by `tool/verify_privacy_manifest.py` against built host apps when changing privacy declarations or packaging.
 - Behavioral changes intended for both Apple platforms must be applied to `warm_alarm_macos` separately — it's a copy, not a symlink. Diff the two implementations after any non-trivial change.
