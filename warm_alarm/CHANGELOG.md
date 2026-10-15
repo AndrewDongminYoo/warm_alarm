@@ -2,6 +2,7 @@
 
 - Publish expanded API documentation for capabilities, readiness, and scheduling warnings.
 - Show readiness reasons, warning codes, and full warning messages in the example, distinguishing unclassified warnings from no warning.
+- Update the example and readiness action SDK requirements to Dart `^3.13.5` and Flutter `^3.47.7`.
 - Require platform interface 0.1.6 so re-exported model documentation includes the null-code and null-warning semantics.
 
 # 0.1.6
