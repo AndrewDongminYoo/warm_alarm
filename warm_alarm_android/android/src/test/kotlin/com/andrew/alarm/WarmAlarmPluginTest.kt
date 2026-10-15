@@ -1,12 +1,49 @@
 package com.andrew.alarm
 
+import android.content.Context
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import org.mockito.Mockito
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertSame
 
 class WarmAlarmPluginTest {
+    @Test
+    fun invalidScheduleAndCancellationFailBeforeTouchingAndroid() {
+        val ids = listOf(Int.MIN_VALUE.toLong() - 1, Int.MAX_VALUE.toLong() + 1, 4_294_967_296L, Long.MIN_VALUE, Long.MAX_VALUE)
+        for (id in ids) {
+            val context = Mockito.mock(Context::class.java) { throw AssertionError("Invalid ID reached Android: ${it.method.name}") }
+            val plugin = Mockito.mock(WarmAlarmPlugin::class.java, Mockito.CALLS_REAL_METHODS)
+            setPrivateField(plugin, "context", context)
+            val schedule =
+                WarmAlarmScheduleWire(
+                    id = id,
+                    scheduledAtMillis = 1_234,
+                    notification = WarmAlarmNotificationWire(title = "Alarm", body = "ID", keepNotificationAfterAlarmEnds = false),
+                    audio = WarmAlarmAudioWire(loop = true, vibrate = false, volumeEnforced = false),
+                    androidFullScreenIntent = false,
+                )
+            var scheduleError: Throwable? = null
+            plugin.scheduleAlarm(schedule) { scheduleError = it.exceptionOrNull() }
+            assertEquals("INVALID_ALARM_ID", assertIs<FlutterError>(scheduleError).code)
+
+            var cancelError: Throwable? = null
+            plugin.cancelAlarm(id) { cancelError = it.exceptionOrNull() }
+            assertEquals("INVALID_ALARM_ID", assertIs<FlutterError>(cancelError).code)
+            Mockito.verifyNoInteractions(context)
+        }
+    }
+
+    @Test
+    fun invalidRescheduleDoesNotCreateABackend() {
+        val context = Mockito.mock(Context::class.java) { throw AssertionError("Invalid reschedule reached Android: ${it.method.name}") }
+        val error = assertFailsWith<FlutterError> { WarmAlarmPlugin.rescheduleAlarm(context, 4_294_967_296L, 1_234) }
+        assertEquals("INVALID_ALARM_ID", error.code)
+        Mockito.verifyNoInteractions(context)
+    }
+
     @Test
     fun androidReportsWakeCheckAsSupported() {
         val plugin = Mockito.mock(WarmAlarmPlugin::class.java, Mockito.CALLS_REAL_METHODS)

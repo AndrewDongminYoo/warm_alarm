@@ -35,17 +35,41 @@ internal object WarmAlarmPendingIntents {
         packageName: String,
         alarmId: Long,
         kind: WarmAlarmIntentKind,
-    ): String? =
-        when (kind) {
+    ): String? {
+        WarmAlarmIds.requireSupported(alarmId)
+        return when (kind) {
             WarmAlarmIntentKind.REGULAR -> null
             WarmAlarmIntentKind.RETRIGGER -> "warm-alarm://$packageName/alarm/$alarmId/retrigger"
         }
+    }
 
     /** Request code of the pending wake check for [alarmId]. */
-    fun wakeCheckRequestCode(alarmId: Long): Int = (alarmId + WAKE_CHECK_PENDING_OFFSET).toInt()
+    fun wakeCheckRequestCode(alarmId: Long): Int {
+        WarmAlarmIds.requireSupported(alarmId)
+        return (alarmId + WAKE_CHECK_PENDING_OFFSET).toInt()
+    }
 
     /** Notification id of the wake-check prompt for [alarmId]. */
-    fun wakeCheckNotificationId(alarmId: Long): Int = (alarmId + WAKE_CHECK_NOTIF_OFFSET).toInt()
+    fun wakeCheckNotificationId(alarmId: Long): Int {
+        WarmAlarmIds.requireSupported(alarmId)
+        return (alarmId + WAKE_CHECK_NOTIF_OFFSET).toInt()
+    }
+
+    fun serviceAction(
+        context: Context,
+        alarmId: Long,
+        action: String,
+        extraFlags: Int,
+    ): PendingIntent? {
+        WarmAlarmIds.requireSupported(alarmId)
+        val intent =
+            Intent(context, WarmAlarmForegroundService::class.java).apply {
+                this.action = action
+                data = Uri.parse("warm-alarm://${context.packageName}/alarm/$alarmId/action")
+                putExtra(WarmAlarmForegroundService.EXTRA_ALARM_ID, alarmId)
+            }
+        return PendingIntent.getService(context, alarmId.toInt(), intent, extraFlags or PendingIntent.FLAG_IMMUTABLE)
+    }
 
     fun wakeCheckTrigger(
         context: Context,
@@ -72,6 +96,7 @@ internal object WarmAlarmPendingIntents {
         context: Context,
         alarmId: Long,
     ) {
+        WarmAlarmIds.requireSupported(alarmId)
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         wakeCheckTrigger(context, alarmId, PendingIntent.FLAG_NO_CREATE)?.let { alarmManager.cancel(it) }
         broadcast(context, alarmId, WarmAlarmIntentKind.RETRIGGER, PendingIntent.FLAG_NO_CREATE)
@@ -87,6 +112,7 @@ internal object WarmAlarmPendingIntents {
         kind: WarmAlarmIntentKind,
         extraFlags: Int,
     ): PendingIntent? {
+        WarmAlarmIds.requireSupported(alarmId)
         val intent =
             Intent(context, WarmAlarmReceiver::class.java).apply {
                 action = WarmAlarmReceiver.ACTION_FIRE

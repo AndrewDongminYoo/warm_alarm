@@ -31,6 +31,13 @@ device is in Doze mode. The exact-alarm permission (either `USE_EXACT_ALARM` for
 `SCHEDULE_EXACT_ALARM` with user approval) is declared in the manifest and checked at runtime
 through `getPermissionState()`.
 
+Android alarm IDs must be signed 32-bit integers (`-2147483648` through `2147483647`, inclusive).
+Negative IDs, including `-1`, are supported.
+Scheduling or individually cancelling an out-of-range ID fails with `INVALID_ALARM_ID` before changing stored schedules or Android registrations.
+Startup and boot recovery skip unsupported legacy IDs and emit a failed event with `invalidArguments`; the stored records remain available for inspection.
+`cancelAllAlarms()` clears those records without looking up their truncated IDs, which could cancel a different supported alarm.
+Already-aliased out-of-range registrations from older versions cannot be reconstructed independently; full 64-bit ID migration is not provided.
+
 `requestNotificationPermission()` requests `POST_NOTIFICATIONS` on Android 13+.
 On Android 12 and earlier there is no runtime notification permission to request, so the call reports `unsupported` and the caller should open notification settings instead.
 `openReadinessSettings(reason)` opens notification, exact-alarm, or full-screen settings when the reported reason supports it.
@@ -65,6 +72,8 @@ primary alarm, the alarm retriggers (up to `maxRetriggers` times at `retriggerDe
 A retrigger and the regular alarm are separate `PendingIntent`s.
 `AlarmManager` matches on request code plus `Intent.filterEquals`, which ignores extras, so a shared identity let arming a retrigger re-target the pending next occurrence and let a dismiss cancel it.
 Only the retrigger carries a `warm-alarm://<package>/alarm/<id>/retrigger` data Uri; the regular alarm keeps the data-less identity it had before 0.1.2, so an alarm scheduled by an older install stays cancellable after an update.
+This compatibility applies to IDs in the supported range.
+Stop and Snooze service actions use an ID-scoped URI and distinct actions, so their identities do not depend on multiplying an ID into a request code.
 Finishing a wake check clears a recurring alarm's retrigger count and removes the stored schedule only for a one-shot alarm.
 
 `filterEquals` cannot be exercised from the JVM unit tests.
