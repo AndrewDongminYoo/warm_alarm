@@ -21,6 +21,15 @@ final class WarmAlarmAudioSourceTests: XCTestCase {
         XCTAssertEqual(delegate.handleForegroundDelivery(content: content), [.alert, .sound])
     }
 
+    func testForegroundCancelledAlarmDoesNotRequestNotificationSound() throws {
+        let (delegate, content) = foregroundAudioFixture()
+        let schedule = try XCTUnwrap(WarmAlarmStore.shared.load(id: 7_070_002))
+        defer { WarmAlarmStore.shared.save(schedule) }
+        WarmAlarmStore.shared.remove(id: 7_070_002)
+
+        XCTAssertTrue(delegate.handleForegroundDelivery(content: content).isEmpty)
+    }
+
     func testForegroundCustomFileDoesNotRequestDuplicateNotificationSound() throws {
         let file = try makeAudioFile()
         let (delegate, content) = foregroundAudioFixture(filePath: file.path)

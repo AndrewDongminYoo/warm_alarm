@@ -53,11 +53,11 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
               let alarmId = Int64(alarmIdString) else {
             return [.alert, .sound]
         }
-        let schedule = WarmAlarmStore.shared.load(id: alarmId)
+        guard let schedule = WarmAlarmStore.shared.load(id: alarmId) else { return [] }
         startAudio(alarmId: alarmId, for: schedule)
         emitEvent(WarmAlarmEventWire(
-            alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis(), payload: schedule?.payload))
-        let source = WarmAlarmAudioSource.select(filePath: schedule?.filePath, assetPath: schedule?.assetPath)
+            alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis(), payload: schedule.payload))
+        let source = WarmAlarmAudioSource.select(filePath: schedule.filePath, assetPath: schedule.assetPath)
         return source == .none ? [.alert, .sound] : [.alert]
     }
 
