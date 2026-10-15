@@ -88,6 +88,8 @@ class WarmAlarmForegroundService : Service() {
             return
         }
         val schedule = WarmAlarmStore.load(this, alarmId)
+        // The newest alarm replaces playback, without performing Stop or Snooze on the old schedule.
+        stopAudio()
         currentSchedule = schedule
         isRinging = true
         currentAlarmId = alarmId
@@ -287,8 +289,11 @@ class WarmAlarmForegroundService : Service() {
         volumeEnforcerHandler.removeCallbacksAndMessages(null)
         vibrationController?.stop()
         mediaPlayer?.runCatching {
-            stop()
-            release()
+            try {
+                stop()
+            } finally {
+                release()
+            }
         }
         mediaPlayer = null
     }
