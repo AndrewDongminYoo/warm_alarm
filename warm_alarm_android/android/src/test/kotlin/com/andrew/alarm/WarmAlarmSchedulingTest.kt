@@ -60,6 +60,42 @@ class WarmAlarmSchedulingTest {
     }
 
     @Test
+    fun lockedBootIsIgnoredOnApi19() = assertLockedBootIgnored(19)
+
+    @Test
+    fun lockedBootIsIgnoredOnApi22() = assertLockedBootIgnored(22)
+
+    @Test
+    fun lockedBootIsIgnoredOnApi23() = assertLockedBootIgnored(23)
+
+    @Test
+    fun lockedBootRecoveryStartsOnApi24() = assertScheduling(SchedulingEntry.LOCKED_BOOT, 24, "setExactAndAllowWhileIdle")
+
+    private fun assertLockedBootIgnored(sdkInt: Int) {
+        SchedulingHarness(sdkInt, exactGranted = true).use { harness ->
+            val schedule =
+                WarmAlarmScheduleWire(
+                    id = 41,
+                    scheduledAtMillis = System.currentTimeMillis() + 60_000,
+                    notification = WarmAlarmNotificationWire(title = "Alarm", body = "Boot", keepNotificationAfterAlarmEnds = false),
+                    audio = WarmAlarmAudioWire(loop = true, vibrate = false, volumeEnforced = false),
+                    androidFullScreenIntent = false,
+                )
+            WarmAlarmStore.save(harness.context, schedule)
+            assertNotNull(WarmAlarmStore.load(harness.context, schedule.id))
+            Mockito.clearInvocations(harness.context)
+            val intent = Mockito.mock(Intent::class.java)
+            Mockito.`when`(intent.action).thenReturn("android.intent.action.LOCKED_BOOT_COMPLETED")
+
+            WarmAlarmBootReceiver().onReceive(harness.context, intent)
+
+            assertTrue(harness.calls.isEmpty(), "Locked boot must not register alarms on API $sdkInt")
+            Mockito.verifyNoInteractions(harness.context)
+            assertEquals(schedule, WarmAlarmStore.load(harness.context, schedule.id))
+        }
+    }
+
+    @Test
     fun wakeCheckUsesLegacyInexactAlarmOnApi19And22() {
         for (sdkInt in listOf(19, 22)) assertWakeCheck(sdkInt, "set")
     }

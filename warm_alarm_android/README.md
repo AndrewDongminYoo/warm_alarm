@@ -97,10 +97,9 @@ occurrence; `cancelAlarm(id)` tears down the series.
 
 ### Boot persistence
 
-`WarmAlarmBootReceiver` handles `BOOT_COMPLETED` and `LOCKED_BOOT_COMPLETED` broadcasts (via
-`RECEIVE_BOOT_COMPLETED` permission) to reschedule any alarms that were lost when the device
-restarted. It is `directBootAware`, so alarms scheduled before first unlock are restored from
-device-protected storage.
+`WarmAlarmBootReceiver` handles `BOOT_COMPLETED` (via the `RECEIVE_BOOT_COMPLETED` permission) to reschedule alarms lost when the device restarted.
+It accepts `LOCKED_BOOT_COMPLETED` only from API 24, where Direct Boot is supported, and restores alarms from device-protected storage before first unlock.
+On API 19–23, the locked-boot action is ignored before reading or modifying stored alarms; ordinary boot recovery remains supported.
 If the stored schedule list is unreadable, the store replaces it with an empty list.
 If individual records are unreadable, the store retains valid schedules and persists the repaired set through the same device-protected and credential-protected storage path.
 

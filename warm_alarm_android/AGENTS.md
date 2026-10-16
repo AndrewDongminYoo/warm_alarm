@@ -55,6 +55,7 @@ test/
 - The native instrumentation matrix covers API 19, 22, and 29 without a Flutter engine.
   Keep the test-only image dependency exclusion scoped to `AndroidTestRuntimeClasspath`; do not add a manifest minimum-SDK override or alter consumers' dependencies.
 - Don't drop the `directBootAware="true"` flag on `WarmAlarmBootReceiver` — alarms scheduled before unlock won't restore otherwise.
+- Reject `LOCKED_BOOT_COMPLETED` below API 24 before accessing storage; ordinary `BOOT_COMPLETED` recovery must remain supported on API 19–23.
 - Don't switch the foreground service type away from `mediaPlayback` without auditing Android 14+ permission requirements (`FOREGROUND_SERVICE_MEDIA_PLAYBACK`).
 - Don't add Java sources; this is a Kotlin-only module.
 

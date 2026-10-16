@@ -10,19 +10,17 @@ class WarmAlarmBootReceiver : BroadcastReceiver() {
         context: Context,
         intent: Intent,
     ) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED &&
-            intent.action != "android.intent.action.LOCKED_BOOT_COMPLETED"
-        ) {
-            return
-        }
+        val isBootCompleted = intent.action == Intent.ACTION_BOOT_COMPLETED
+        val isLockedBootCompleted =
+            intent.action == "android.intent.action.LOCKED_BOOT_COMPLETED" &&
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
+        if (!isBootCompleted && !isLockedBootCompleted) return
 
         val now = System.currentTimeMillis()
 
         // Use device-protected storage during Direct Boot (before first unlock).
         val storeContext =
-            if (intent.action == "android.intent.action.LOCKED_BOOT_COMPLETED" &&
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
-            ) {
+            if (isLockedBootCompleted) {
                 context.createDeviceProtectedStorageContext()
             } else {
                 context
