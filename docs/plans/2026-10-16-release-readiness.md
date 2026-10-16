@@ -5,8 +5,8 @@
 Prepare the next coordinated release from merged revision `97315fb021d83d3585a3b210add13281bd55e4e2`.
 The operator authorized a documentation PR and a separate Android API 19–22 compatibility PR, including tests and reviews, after PR #93.
 Scoped commits, pushes, PR creation, and review follow-through are authorized; merge, release tags, and package publication remain operator decisions.
-This documentation PR leaves package versions and dependency constraints unchanged.
-Do not describe the release as ready while the Android compatibility blocker below remains unresolved.
+The documentation and compatibility PRs leave package versions and dependency constraints unchanged.
+The Android repair below must pass its tests and reviews and receive operator merge approval before release preparation advances to version assignment.
 
 ## Documentation contract
 
@@ -37,25 +37,27 @@ Do not combine an unpublished platform floor with its facade release in one stag
 
 Sources: [interface](https://pub.dev/api/packages/warm_alarm_platform_interface), [Android](https://pub.dev/api/packages/warm_alarm_android), [iOS](https://pub.dev/api/packages/warm_alarm_ios), [macOS](https://pub.dev/api/packages/warm_alarm_macos), and [facade](https://pub.dev/api/packages/warm_alarm).
 
-## Release blocker: Android API 19–22 scheduling
+## Android API 19–22 scheduling repair
 
 `warm_alarm_android/android/build.gradle` declares minSdkVersion 19.
-The initial scheduling path and initialization recovery in `WarmAlarmPlugin.kt`, and boot recovery in `WarmAlarmBootReceiver.kt`, call `setExactAndAllowWhileIdle()` without an API 23 guard.
+At the preparation baseline, the initial scheduling path and initialization recovery in `WarmAlarmPlugin.kt`, and boot recovery in `WarmAlarmBootReceiver.kt`, called `setExactAndAllowWhileIdle()` without an API 23 guard.
 The [Android API reference](<https://developer.android.com/reference/android/app/AlarmManager#setExactAndAllowWhileIdle(int,%20long,%20android.app.PendingIntent)>) identifies that overload as available from API 23.
-The existing `AlarmSchedulingBackend.scheduleLegacy()` calls `setExact()`, but its guarded dispatcher is used by rescheduling rather than those three entry points.
-This is a source-confirmed compatibility gap, not a reproduced physical-device crash.
+The existing `AlarmSchedulingBackend.scheduleLegacy()` calls `setExact()`, and the compatibility repair routes those three entry points through its version-aware dispatcher.
+The initial schedule result uses the dispatcher's actual inexact-selection result for its warning and readiness decision.
+The declared minimum SDK, permissions, public API, and regular PendingIntent identity remain unchanged.
 
-Recommended repair: preserve the declared minimum SDK and route initial scheduling, initialization recovery, and boot recovery through the existing version-aware scheduling policy.
-Add regressions that execute those entry points on simulated API 19/22, API 23, and API 31 with exact-alarm access denied.
-Verify `setExact()` below 23, the exact idle-capable API from 23, and the inexact fallback plus existing warning behavior on 31 when access is missing.
-Run the Android native unit and instrumented jobs after the repair, with no permission or public API expansion.
-The repair is approved as a separate native implementation PR and is not included in this documentation PR.
-Do not hide the gap by silently raising minSdk.
+`WarmAlarmSchedulingTest` calls the actual entry points with simulated API 19/22, API 23, and API 31 with and without exact-alarm access.
+Its assertions read the AlarmManager method, alarm type, fire time, PendingIntent, persisted schedule, scheduled event, and result warning.
+The active-snooze fixture verifies that the store can read its snooze deadline before invoking recovery.
+The corrected fixtures reproduced seven legacy-path failures before the implementation changed; the modern-path cases passed.
+These JVM checks verify platform API selection, not physical-device delivery.
+The full native unit suite and the Android instrumented job remain required for the final candidate.
+The repair is tracked separately in [PR #95](https://github.com/AndrewDongminYoo/warm_alarm/pull/95), stacked on [documentation PR #94](https://github.com/AndrewDongminYoo/warm_alarm/pull/94).
 
 ## Ordered release steps
 
 1. Review and commit the documentation reconciliation and Unreleased notes as one concern, then open its authorized documentation PR.
-2. Resolve the Android blocker before any coordinated release tags.
+2. Verify and obtain operator merge approval for the Android compatibility repair before any coordinated release tags.
 3. For stage 1, assign interface 0.1.7 and replace only its Unreleased heading with that version.
    Resolve the workspace with `flutter pub get`, run package tests, scoped formatting and Trunk, and complete the interface Pana job.
    Complete PR review, obtain operator merge, verify the merge, and then obtain or reuse explicit tag/publication authority.
@@ -106,3 +108,4 @@ Oracle returned the personal warm_alarm federated-release precedent through `wik
 The linked local `federated-release-order.md` was read and compared with the current workspace and publish workflow.
 Its workspace-resolution failure and three-stage publication lesson confirm the separated release stages and the additional hosted lower-bound checks above.
 No applicable documentation-drift precedent was returned.
+The separate `legacy scheduling` and `alarm recovery` queries returned no relevant precedent; the compatibility repair follows current source and failing regression evidence.

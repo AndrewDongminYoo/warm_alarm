@@ -84,7 +84,10 @@ class WarmAlarmSchedulingTest {
                 )
             if (entry != SchedulingEntry.INITIAL) {
                 WarmAlarmStore.save(harness.context, schedule)
-                if (recoveringSnooze) WarmAlarmStore.setActiveSnooze(harness.context, schedule.id, fireAt)
+                if (recoveringSnooze) {
+                    WarmAlarmStore.setActiveSnooze(harness.context, schedule.id, fireAt)
+                    assertEquals(fireAt, WarmAlarmStore.activeSnoozeUntilMillis(harness.context, schedule.id))
+                }
             }
 
             when (entry) {
@@ -234,6 +237,7 @@ private class SchedulingHarness(
         val values = mutableMapOf<String, Any>()
         val preferences = Mockito.mock(SharedPreferences::class.java)
         val editor = Mockito.mock(SharedPreferences.Editor::class.java, Mockito.RETURNS_SELF)
+        Mockito.`when`(preferences.contains(Mockito.anyString())).thenAnswer { it.getArgument<String>(0) in values }
         Mockito.`when`(preferences.getString(Mockito.anyString(), Mockito.nullable(String::class.java))).thenAnswer {
             values[it.getArgument<String>(0)] as String? ?: it.getArgument<String?>(1)
         }

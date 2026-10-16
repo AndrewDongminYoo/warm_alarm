@@ -1,5 +1,6 @@
 # Unreleased
 
+- Use the API 19–22 exact-alarm API for initial scheduling, initialization recovery, and boot recovery while retaining modern exact/inexact scheduling and warnings.
 - Release the previous player, callbacks, and vibration before an overlapping alarm starts, including repeated delivery for the same alarm ID.
 - Attempt to release a newly allocated player when initialization fails, preserving the original playback error if cleanup also fails.
 - Reject alarm IDs outside the signed 32-bit range instead of truncating them, and keep alarm and wake-check PendingIntent identities distinct.

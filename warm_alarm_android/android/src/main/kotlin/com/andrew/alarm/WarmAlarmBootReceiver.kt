@@ -1,7 +1,5 @@
 package com.andrew.alarm
 
-import android.app.AlarmManager
-import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -18,7 +16,6 @@ class WarmAlarmBootReceiver : BroadcastReceiver() {
             return
         }
 
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val now = System.currentTimeMillis()
 
         // Use device-protected storage during Direct Boot (before first unlock).
@@ -53,19 +50,7 @@ class WarmAlarmBootReceiver : BroadcastReceiver() {
                 }
                 schedule.id to fireAt
             }.forEach { (alarmId, fireAt) ->
-                val pending =
-                    WarmAlarmPendingIntents.broadcast(
-                        context,
-                        alarmId,
-                        WarmAlarmIntentKind.REGULAR,
-                        PendingIntent.FLAG_UPDATE_CURRENT,
-                    )!!
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
-                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pending)
-                } else {
-                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pending)
-                }
+                WarmAlarmPlugin.rescheduleAlarm(context, alarmId, fireAt)
             }
     }
 }

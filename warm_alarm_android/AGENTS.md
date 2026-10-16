@@ -27,7 +27,7 @@ test/
 | Task                           | Location                                                                                       |
 | ------------------------------ | ---------------------------------------------------------------------------------------------- |
 | Permission/manifest changes    | `android/src/main/AndroidManifest.xml` (auto-merged into host)                                 |
-| Alarm scheduling logic         | `WarmAlarmPlugin.kt` (uses `AlarmManager.setExactAndAllowWhileIdle`)                           |
+| Alarm scheduling logic         | `WarmAlarmPlugin.kt` (shared version-aware `AlarmSchedulingBackend` policy)                    |
 | Notification rendering / audio | `WarmAlarmForegroundService.kt` (`mediaPlayback` foreground type)                              |
 | Wake-check flow                | `WarmAlarmReceiver.kt` (handles primary fire, wake-check fire, dismiss)                        |
 | Boot recovery                  | `WarmAlarmBootReceiver.kt` (`directBootAware="true"`, listens for `LOCKED_BOOT_COMPLETED` too) |
