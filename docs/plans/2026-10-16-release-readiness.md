@@ -63,12 +63,20 @@ The regression fixtures reproduce both failures before those changes and retain 
 The JVM suite runs interpreted because its SDK fixtures temporarily replace a static final Android stub field; JIT constant folding otherwise retains a previous case's SDK value.
 
 The example Gradle wrapper is regenerated at 9.2.1, whose embedded Kotlin version matches the Flutter Gradle plugin's 2.2.20 request.
-This removes the Gradle 9.0 support warning and the embedded-Kotlin mismatch without changing the application's AGP or Kotlin plugin versions.
+This removes the Gradle 9.0 support warning and the embedded-Kotlin mismatch.
 The example uses the current Kotlin compiler-options DSL while retaining its JVM 11 target.
 Sources: [Gradle compatibility table](https://docs.gradle.org/current/userguide/compatibility.html) and [Gradle 9.2.1 release notes](https://docs.gradle.org/9.2.1/release-notes.html).
-The newly observed AGP 9.0.1 and Kotlin 2.3.20 minimum-version recommendations require a separate operator decision on migration scope.
+The operator subsequently approved upgrading the example host to AGP 9.0.1 and Kotlin 2.3.20 in the same compatibility PR.
+Its checked-in `android.newDsl=false` and `android.builtInKotlin=false` settings retain the Flutter legacy DSL and external Kotlin plugin integration for direct Gradle CI jobs.
+The public plugin keeps its existing Flutter constraint and Kotlin plugin application.
+AGP 9 reports deprecation notices for these compatibility settings and the existing Jetifier setting; this migration removes Flutter version recommendations, not every build warning.
+Sources: [Flutter AGP migration](https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin) and [AGP 9.0 compatibility](https://developer.android.com/build/releases/agp-9-0-0-release-notes).
+The migration must remove both Flutter version recommendations, pass the native unit suite, build the example and instrumented APKs, and pass the API 19/22/29 hosted execution matrix.
+The scoped AGP migration and Kotlin compatibility Oracle queries returned \[no precedent found\].
 
 The native instrumentation matrix targets API 19, 22, and 29.
+Its test-only `targetSdk` is explicitly 19 to preserve the pre-migration test APK contract; AGP 9 otherwise changes the resolved target to compileSdk 34.
+The example host retains Flutter's target SDK, and the plugin does not set a consuming app's target SDK.
 Its delivery fixture writes a silent WAV, registers through the production scheduler, waits for the persisted fired event and service startup, checks for audio initialization failure, sends Stop, and waits for the wake-check event.
 It removes its own alarms, notification, events, and audio file after execution.
 The test runtime excludes the Flutter embedding's transitive `androidx.exifinterface` dependency, which declares API 21, because this native fixture never starts the Flutter engine or decodes images.

@@ -48,6 +48,9 @@ android {
     }
 
     testOptions {
+        // Preserve the legacy test APK contract across AGP default changes.
+        targetSdk = 19
+
         unitTests.all {
             useJUnitPlatform()
             // SDK fixtures replace Android's static final SDK_INT between cases.
