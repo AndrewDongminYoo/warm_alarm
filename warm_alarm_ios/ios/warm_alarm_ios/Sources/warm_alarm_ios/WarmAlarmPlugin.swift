@@ -2670,6 +2670,12 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         let replacingIdentifiers = Set(staleIdentifiers)
         pendingNotificationReader { [weak self] pendingRequests in
             guard let self else { return }
+            let previousSchedule = WarmAlarmStore.shared.load(id: schedule.id)
+            let previousRequests = pendingRequests.filter {
+                replacingIdentifiers.contains($0.identifier)
+                    && $0.content.categoryIdentifier == WarmAlarmDelegate.categoryIdentifier
+                    && $0.content.userInfo["alarmId"] as? String == String(schedule.id)
+            }
             let pendingIdentifiers = Set(pendingRequests.map(\.identifier))
             let reservedSlotCount = Self.killWarningReservedSlotCount(
                 isConfigured: Self.isKillWarningConfigured,
@@ -2699,9 +2705,9 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                     completion(.failure(error))
                     return
                 }
-                self.delegate.clearHandledForegroundOccurrence(alarmId: schedule.id)
-                self.pendingNotificationRemover(staleIdentifiers)
-                WarmAlarmStore.shared.save(storedSchedule)
+                self.pendingNotificationRemover(previousRequests.map(\.identifier))
+                // Near-due callbacks need the new generation, but old sound ownership is tentative.
+                WarmAlarmStore.shared.save(storedSchedule, cleanupPreviousSound: false)
                 let capacityWarning = Self.fallbackCapacityWarning(
                     omittedCount: selection.omittedFallbackCount
                 )
@@ -2713,16 +2719,31 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                 ) { [weak self] error in
                     guard let self else { return }
                     if let error {
-                        WarmAlarmStore.shared.remove(id: schedule.id)
-                        self.delegate.emitFailure(alarmId: schedule.id, message: error.localizedDescription)
-                        completion(.success(WarmAlarmNotificationSchedulingOutcome(
-                            didSchedule: false,
-                            warning: WarmAlarmWarningWire(
-                                message: "Scheduling failed: \(error.localizedDescription)"
-                            )
-                        )))
+                        // Native routing may already have canceled the previous AlarmKit alarm.
+                        // Restore only fallback intent; never mark that canceled native alarm active.
+                        if let previousSchedule, !previousSchedule.alarmKitManaged {
+                            WarmAlarmStore.shared.save(previousSchedule)
+                        } else {
+                            WarmAlarmStore.shared.remove(id: schedule.id)
+                        }
+                        WarmAlarmStore.shared.removeSoundIfUnreferenced(
+                            previousSchedule?.alarmKitSoundName,
+                            keepingPaths: [schedule.audio.filePath, schedule.audio.systemSoundFilePath]
+                        )
+                        let requestsToRestore = previousSchedule?.alarmKitManaged == true ? [] : previousRequests
+                        WarmAlarmRecovery.recoverAll(requestsToRestore, recover: self.notificationAdder) { restored in
+                            var code = "scheduling-failed"
+                            var message = "Scheduling failed: \(error.localizedDescription)"
+                            if case let .failure(restoreError) = restored {
+                                code = "scheduling-rollback-failed"
+                                message += "; restoring the previous alarm also failed: \(restoreError.localizedDescription)"
+                            }
+                            completion(.failure(PigeonError(code: code, message: message, details: nil)))
+                        }
                         return
                     }
+                    self.delegate.clearHandledForegroundOccurrence(alarmId: schedule.id)
+                    WarmAlarmStore.shared.removeSoundIfUnreferenced(previousSchedule?.alarmKitSoundName)
                     completion(.success(WarmAlarmNotificationSchedulingOutcome(
                         didSchedule: true,
                         warning: capacityWarning

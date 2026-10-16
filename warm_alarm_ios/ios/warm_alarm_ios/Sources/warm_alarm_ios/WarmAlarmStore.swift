@@ -291,12 +291,12 @@ final class WarmAlarmStore: @unchecked Sendable {
     private let key = "warm_alarm_schedules"
     private init() {}
 
-    func save(_ data: WarmAlarmScheduleData) {
+    func save(_ data: WarmAlarmScheduleData, cleanupPreviousSound: Bool = true) {
         var all = loadRaw()
         let oldSound = all[String(data.id)]?.alarmKitSoundName
         all[String(data.id)] = data
         persist(all)
-        if oldSound != data.alarmKitSoundName { removeSoundIfUnreferenced(oldSound) }
+        if cleanupPreviousSound, oldSound != data.alarmKitSoundName { removeSoundIfUnreferenced(oldSound) }
     }
 
     func load(id: Int64) -> WarmAlarmScheduleData? {
@@ -324,8 +324,17 @@ final class WarmAlarmStore: @unchecked Sendable {
         sounds.forEach { WarmAlarmSoundFiles.remove(named: $0) }
     }
 
-    func removeSoundIfUnreferenced(_ name: String?) {
-        guard let name, !loadRaw().values.contains(where: { $0.alarmKitSoundName == name }) else { return }
+    func removeSoundIfUnreferenced(_ name: String?, keepingPaths: [String?] = []) {
+        guard let name, let ownedURL = WarmAlarmSoundFiles.ownedURL(named: name),
+              !keepingPaths.compactMap({ $0 }).contains(where: {
+                  URL(fileURLWithPath: $0).standardizedFileURL == ownedURL
+              }),
+              !loadRaw().values.contains(where: { schedule in
+                  schedule.alarmKitSoundName == name
+                      || [schedule.filePath, schedule.systemSoundFilePath].compactMap { $0 }.contains {
+                          URL(fileURLWithPath: $0).standardizedFileURL == ownedURL
+                      }
+              }) else { return }
         WarmAlarmSoundFiles.remove(named: name)
     }
 

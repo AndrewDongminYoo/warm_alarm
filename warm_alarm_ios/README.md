@@ -132,6 +132,12 @@ The persisted backend marker lets a later authorization or host-configuration ch
 `getScheduledAlarms()` and `isRinging()` read AlarmKit state so native Stop, Snooze countdown fire dates, and alerting states are reflected in the public API.
 Flutter cancellation uses AlarmKit `stop(id:)` while a native alarm is alerting and `cancel(id:)` for its other states.
 
+A failed User Notifications replacement restores the previous fallback schedule and attempts to restore every previous pending request, including recurrence and snooze.
+The call returns a scheduling error instead of success with a warning.
+If restoration also fails, the error reports both causes and the previous saved intent remains available for recovery.
+The mutation queue stays occupied until restoration finishes.
+Pending-request rollback cannot recall notifications already delivered during the attempt, and it does not recreate a native AlarmKit alarm that backend routing already canceled.
+
 ### Audio
 
 On configured AlarmKit hosts, call `prepareSystemSound` with a recording and an optional Flutter tone asset before scheduling.
