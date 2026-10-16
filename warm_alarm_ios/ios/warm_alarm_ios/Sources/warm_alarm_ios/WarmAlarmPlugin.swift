@@ -659,6 +659,7 @@ final class WarmAlarmAlarmKitObservationState: @unchecked Sendable {
 }
 
 public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate, WarmAlarmApi {
+    typealias NotificationAdder = (UNNotificationRequest, @escaping (Error?) -> Void) -> Void
     typealias PendingNotificationReader = (@escaping ([UNNotificationRequest]) -> Void) -> Void
     typealias NotificationSettingsReader = (@escaping (WarmAlarmNotificationSettingsSnapshot) -> Void) -> Void
     typealias NotificationAuthorizationRequester = (
@@ -670,6 +671,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
     private let notificationMutationQueue: WarmAlarmMutationQueue
     private let soundPreparationQueue = WarmAlarmMutationQueue(label: "warm_alarm.sound_preparation")
     private let notificationCenter: UNUserNotificationCenter
+    private let notificationAdder: NotificationAdder
     private let pendingNotificationReader: PendingNotificationReader
     private let pendingNotificationRemover: ([String]) -> Void
     private let notificationSettingsReader: NotificationSettingsReader
@@ -720,6 +722,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         notificationMutationQueue: WarmAlarmMutationQueue,
         notificationCenter: UNUserNotificationCenter,
         notificationCenterDelegate: WarmAlarmNotificationCenterDelegate,
+        notificationAdder: NotificationAdder? = nil,
         pendingNotificationReader: PendingNotificationReader? = nil,
         pendingNotificationRemover: (([String]) -> Void)? = nil,
         notificationSettingsReader: NotificationSettingsReader? = nil,
@@ -735,6 +738,9 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         self.delegate = delegate
         self.notificationMutationQueue = notificationMutationQueue
         self.notificationCenter = notificationCenter
+        self.notificationAdder = notificationAdder ?? { request, completion in
+            notificationCenter.add(request, withCompletionHandler: completion)
+        }
         self.pendingNotificationReader = pendingNotificationReader ?? { completion in
             notificationCenter.getPendingNotificationRequests(completionHandler: completion)
         }
@@ -2694,14 +2700,16 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                     return
                 }
                 self.delegate.clearHandledForegroundOccurrence(alarmId: schedule.id)
-                self.notificationCenter.removePendingNotificationRequests(withIdentifiers: staleIdentifiers)
+                self.pendingNotificationRemover(staleIdentifiers)
                 WarmAlarmStore.shared.save(storedSchedule)
                 let capacityWarning = Self.fallbackCapacityWarning(
                     omittedCount: selection.omittedFallbackCount
                 )
-                Self.addRequestsAtomically(
+                WarmAlarmRequestRegistration.addAtomically(
                     selection.requests,
-                    center: self.notificationCenter
+                    identifier: { $0.identifier },
+                    add: self.notificationAdder,
+                    rollback: self.pendingNotificationRemover
                 ) { [weak self] error in
                     guard let self else { return }
                     if let error {

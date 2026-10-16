@@ -2990,6 +2990,187 @@ final class WarmAlarmRequestTests: XCTestCase {
         )
     }
 
+    func testFallbackReplacementRestoresExactPreviousRequestsAfterFirstAndPartialFailure() throws {
+        for failedIndex in [0, 2] {
+            let fixture = fallbackReplacementFixture()
+            let previous = try XCTUnwrap(fixture.previous)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .sortedKeys
+            let encoded = try encoder.encode(previous)
+            var replacementIndex = 0
+            fixture.addError = { request in
+                guard request.content.title == "Replacement" else { return nil }
+                defer { replacementIndex += 1 }
+                return replacementIndex == failedIndex ? fixture.registrationError : nil
+            }
+            let completed = expectation(description: "failed replacement restored")
+            var replies = 0
+            fixture.plugin.scheduleAlarm(schedule: fixture.replacement) { result in
+                replies += 1
+                XCTAssertTrue(Thread.isMainThread)
+                switch result {
+                case .success: XCTFail("Rejected replacement must return failure")
+                case let .failure(error): XCTAssertEqual((error as? PigeonError)?.code, "scheduling-failed")
+                }
+                completed.fulfill()
+            }
+            wait(for: [completed], timeout: 5)
+            XCTAssertEqual(replies, 1)
+            XCTAssertEqual(try encoder.encode(XCTUnwrap(WarmAlarmStore.shared.load(id: previous.id))), encoded)
+            XCTAssertEqual(Set(fixture.pending.keys), Set(fixture.originalRequests.map(\.identifier)))
+            for request in fixture.originalRequests {
+                XCTAssertTrue(fixture.pending[request.identifier] === request, "Restore original content and trigger")
+            }
+            XCTAssertEqual(fixture.events.events.filter { $0.type == .failed }.count, 1)
+            XCTAssertTrue(fixture.events.events.filter { $0.type == .scheduled }.isEmpty)
+            XCTAssertGreaterThan(replacementIndex, failedIndex)
+        }
+    }
+
+    func testFallbackReplacementAttemptsEveryRestoreAndReportsBothFailures() throws {
+        let fixture = fallbackReplacementFixture()
+        let previous = try XCTUnwrap(fixture.previous)
+        let recoveryError = NSError(domain: "Recovery", code: 2, userInfo: [NSLocalizedDescriptionKey: "restore rejected"])
+        var restoreAttempts = [String]()
+        fixture.addError = { request in
+            if request.content.title == "Replacement" { return fixture.registrationError }
+            restoreAttempts.append(request.identifier)
+            return restoreAttempts.count == 1 ? recoveryError : nil
+        }
+        let completed = expectation(description: "partial recovery reports failure")
+        fixture.plugin.scheduleAlarm(schedule: fixture.replacement) { result in
+            switch result {
+            case .success: XCTFail("Incomplete restoration must fail")
+            case let .failure(error):
+                let error = error as? PigeonError
+                XCTAssertEqual(error?.code, "scheduling-rollback-failed")
+                XCTAssertTrue(error?.message?.contains("registration rejected") == true)
+                XCTAssertTrue(error?.message?.contains("restore rejected") == true)
+            }
+            completed.fulfill()
+        }
+        wait(for: [completed], timeout: 5)
+        let owned = fixture.originalRequests.filter { $0.identifier != "host-notification" }
+        XCTAssertEqual(Set(restoreAttempts), Set(owned.map(\.identifier)))
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        XCTAssertEqual(try encoder.encode(XCTUnwrap(WarmAlarmStore.shared.load(id: previous.id))),
+                       try encoder.encode(previous))
+        XCTAssertNotNil(fixture.pending["host-notification"])
+        XCTAssertEqual(fixture.pending.count, fixture.originalRequests.count - 1)
+        XCTAssertEqual(fixture.events.events.filter { $0.type == .failed }.count, 1)
+    }
+
+    func testFallbackFirstRegistrationFailureLeavesNoSavedAlarmOrPartialRequests() {
+        let fixture = fallbackReplacementFixture(existing: false)
+        fixture.addError = { _ in fixture.registrationError }
+        let completed = expectation(description: "first registration fails")
+        fixture.plugin.scheduleAlarm(schedule: fixture.replacement) { result in
+            if case .success = result { XCTFail("First registration must fail explicitly") }
+            completed.fulfill()
+        }
+        wait(for: [completed], timeout: 5)
+        XCTAssertNil(WarmAlarmStore.shared.load(id: fixture.replacement.id))
+        XCTAssertEqual(Set(fixture.pending.keys), ["host-notification"])
+        XCTAssertEqual(fixture.events.events.filter { $0.type == .failed }.count, 1)
+        XCTAssertTrue(fixture.events.events.filter { $0.type == .scheduled }.isEmpty)
+    }
+
+    func testFallbackSuccessfulReplacementCommitsOnlyNewRequests() {
+        let fixture = fallbackReplacementFixture()
+        let completed = expectation(description: "replacement commits")
+        fixture.plugin.scheduleAlarm(schedule: fixture.replacement) { result in
+            if case let .failure(error) = result { XCTFail("Replacement failed: \(error)") }
+            completed.fulfill()
+        }
+        wait(for: [completed], timeout: 5)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: fixture.replacement.id)?.notificationTitle, "Replacement")
+        XCTAssertNil(WarmAlarmStore.shared.load(id: fixture.replacement.id)?.activeSnoozeUntilMillis)
+        XCTAssertNotNil(fixture.pending["host-notification"])
+        let expectedIdentifiers = ["host-notification", String(fixture.replacement.id)]
+            + (1...10).map { "\(fixture.replacement.id)#fallback#\($0)" }
+        XCTAssertEqual(Set(fixture.pending.keys), Set(expectedIdentifiers))
+        XCTAssertTrue(fixture.pending.values.filter { $0.identifier != "host-notification" }
+            .allSatisfy { $0.content.title == "Replacement" })
+        XCTAssertEqual(fixture.events.events.filter { $0.type == .scheduled }.count, 1)
+        XCTAssertTrue(fixture.events.events.filter { $0.type == .failed }.isEmpty)
+    }
+
+    func testFallbackMutationQueueWaitsForRecoveryBeforeReplyAndNextMutation() {
+        let fixture = fallbackReplacementFixture()
+        let restoring = expectation(description: "recovery started")
+        let completed = expectation(description: "failure replied")
+        let nextMutation = expectation(description: "next mutation ran")
+        var releaseRecovery: (() -> Void)?
+        var order = [String]()
+        fixture.addError = { request in
+            request.content.title == "Replacement" ? fixture.registrationError : nil
+        }
+        fixture.delayAdd = { request, resume in
+            guard request.content.title != "Replacement", releaseRecovery == nil else { return false }
+            releaseRecovery = resume
+            restoring.fulfill()
+            return true
+        }
+        fixture.plugin.scheduleAlarm(schedule: fixture.replacement) { result in
+            if case .success = result { XCTFail("Replacement must fail") }
+            order.append("reply")
+            completed.fulfill()
+        }
+        wait(for: [restoring], timeout: 5)
+        fixture.queue.enqueueOnMain { finish in
+            order.append("next")
+            nextMutation.fulfill()
+            finish()
+        }
+        XCTAssertTrue(order.isEmpty)
+        releaseRecovery?()
+        wait(for: [completed, nextMutation], timeout: 5, enforceOrder: true)
+        XCTAssertEqual(order, ["reply", "next"])
+    }
+
+    func testFallbackRollbackRetainsPreviousOwnedSoundUntilCommit() throws {
+        guard #available(iOS 26.0, *) else { throw XCTSkip("AlarmKit sound preparation requires iOS 26") }
+        let fixture = fallbackReplacementFixture()
+        let input = try makeSoundLifecycleRecording()
+        defer { try? FileManager.default.removeItem(at: input) }
+        let sound = try WarmAlarmSoundFiles.prepare(primary: input, background: nil)
+        let previous = try XCTUnwrap(fixture.previous).withAlarmKitSound(named: sound.lastPathComponent)
+        WarmAlarmStore.shared.save(previous)
+        fixture.addError = { request in
+            XCTAssertTrue(FileManager.default.fileExists(atPath: sound.path), "Previous sound must survive tentative save")
+            return request.content.title == "Replacement" ? fixture.registrationError : nil
+        }
+        let failed = expectation(description: "sound survives recovery")
+        fixture.plugin.scheduleAlarm(schedule: fixture.replacement) { _ in failed.fulfill() }
+        wait(for: [failed], timeout: 5)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: sound.path))
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: previous.id)?.alarmKitSoundName, sound.lastPathComponent)
+        fixture.addError = nil
+        let committed = expectation(description: "success releases old sound")
+        fixture.plugin.scheduleAlarm(schedule: fixture.replacement) { result in
+            if case let .failure(error) = result { XCTFail("Replacement failed: \(error)") }
+            committed.fulfill()
+        }
+        wait(for: [committed], timeout: 5)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: sound.path))
+    }
+
+    private func fallbackReplacementFixture(existing: Bool = true) -> FallbackReplacementFixture {
+        let id: Int64 = 4_242_424_288
+        let oldWire = makeWireSchedule(id: id, scheduledAtMillis: 1_900_000_000_000, recurrenceWeekdays: [1, 3])
+        var replacement = makeWireSchedule(id: id, scheduledAtMillis: 1_900_000_100_000)
+        replacement.notification.title = "Replacement"
+        let fixture = FallbackReplacementFixture(previousWire: existing ? oldWire : nil, replacement: replacement)
+        addTeardownBlock {
+            fixture.addError = nil
+            fixture.delayAdd = nil
+            fixture.plugin = nil
+            WarmAlarmStore.shared.remove(id: id)
+        }
+        return fixture
+    }
+
     func testFallbackCapacityFailurePreservesCallerSoundAndCleansInternalConversion() throws {
         guard #available(iOS 26.0, *) else { throw XCTSkip("AlarmKit requires iOS 26") }
         let previous = Array(WarmAlarmStore.shared.loadAll().values)
@@ -6225,6 +6406,69 @@ final class WarmAlarmRequestTests: XCTestCase {
             minute: minute
         ))!
         return Int64(date.timeIntervalSince1970 * 1_000)
+    }
+}
+
+private final class FallbackReplacementFixture {
+    let queue = WarmAlarmMutationQueue(label: "warm_alarm_tests.fallback_replacement")
+    let events = RecordingWarmAlarmEventsApi()
+    let registrationError = NSError(domain: "Registration", code: 1,
+                                    userInfo: [NSLocalizedDescriptionKey: "registration rejected"])
+    let replacement: WarmAlarmScheduleWire
+    let previous: WarmAlarmScheduleData?
+    let originalRequests: [UNNotificationRequest]
+    var pending: [String: UNNotificationRequest]
+    var addError: ((UNNotificationRequest) -> Error?)?
+    var delayAdd: ((UNNotificationRequest, @escaping () -> Void) -> Bool)?
+    var plugin: WarmAlarmPlugin!
+
+    init(previousWire: WarmAlarmScheduleWire?, replacement: WarmAlarmScheduleWire) {
+        self.replacement = replacement
+        WarmAlarmStore.shared.remove(id: replacement.id)
+        let delegate = WarmAlarmDelegate(eventsApi: events, notificationMutationQueue: queue)
+        var requests = [UNNotificationRequest(identifier: "host-notification", content: UNMutableNotificationContent(), trigger: nil)]
+        if let previousWire {
+            let data = WarmAlarmScheduleData.from(wire: previousWire, occurrenceSeriesToken: "previous-series")
+                .withActiveSnooze(untilMillis: 1_900_000_060_000)
+            previous = data
+            WarmAlarmStore.shared.save(data)
+            let content = delegate.makeContent(from: data)
+            requests += WarmAlarmPlugin.makeRequests(for: previousWire, content: content,
+                                                     fallbackAnchorMillis: previousWire.scheduledAtMillis,
+                                                     occurrenceSeriesToken: data.occurrenceSeriesToken)
+            requests.append(UNNotificationRequest(identifier: String(data.id), content: content,
+                                                  trigger: UNTimeIntervalNotificationTrigger(timeInterval: 60, repeats: false)))
+        } else {
+            previous = nil
+        }
+        originalRequests = requests
+        pending = Dictionary(uniqueKeysWithValues: requests.map { ($0.identifier, $0) })
+        plugin = WarmAlarmPlugin(
+            delegate: delegate,
+            notificationMutationQueue: queue,
+            notificationCenter: UNUserNotificationCenter.current(),
+            notificationCenterDelegate: WarmAlarmNotificationCenterDelegate(warmAlarmDelegate: delegate, forwardingDelegate: nil),
+            notificationAdder: { [unowned self] request, completion in
+                let finish = {
+                    let error = self.addError?(request)
+                    if error == nil { self.pending[request.identifier] = request }
+                    completion(error)
+                }
+                if self.delayAdd?(request, finish) != true { finish() }
+            },
+            pendingNotificationReader: { [unowned self] completion in
+                completion(self.pending.values.sorted { $0.identifier < $1.identifier })
+            },
+            pendingNotificationRemover: { [unowned self] identifiers in
+                identifiers.forEach { self.pending.removeValue(forKey: $0) }
+            },
+            notificationSettingsReader: { completion in
+                completion(WarmAlarmNotificationSettingsSnapshot(authorizationStatus: .authorized,
+                                                                 alertsEnabled: true, soundsEnabled: true,
+                                                                 timeSensitiveEnabled: true))
+            },
+            alarmKitBackend: nil
+        )
     }
 }
 
