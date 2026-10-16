@@ -198,7 +198,7 @@ Zero-duration fields remain valid.
 | `WarmAlarmScheduled`          | `alarmId`                     |
 | `WarmAlarmFired`              | `alarmId`                     |
 | `WarmAlarmStopped`            | `alarmId`                     |
-| `WarmAlarmSnoozed`            | `alarmId`, `snoozeDuration`   |
+| `WarmAlarmSnoozed`            | `alarmId`, `duration`         |
 | `WarmAlarmFailed`             | `alarmId`, `WarmAlarmFailure` |
 | `WarmAlarmWakeCheckShown`     | `alarmId`                     |
 | `WarmAlarmWakeCheckDismissed` | `alarmId`                     |
