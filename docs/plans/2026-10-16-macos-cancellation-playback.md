@@ -14,6 +14,7 @@ Keep the prior branch intact because cleanup was not requested.
 2. Add matching-ID and all-player cleanup methods using the existing delegate teardown, then call them from cancellation → verify stop-before-completion and unrelated playback preservation.
 3. Run the full macOS native suite with the real FlutterMacOS framework, macOS Dart tests, Flutter analysis, explicit Dart formatting, and scoped Trunk → inspect results and test coverage.
 4. Review the complete diff against the cancellation contract → repair confirmed findings within two local rounds.
+   Serialize foreground startup and cancellation with a delegate lock, prove contention before releasing the test factory, and stop the previous player before replacement → verify both overlap regressions and retained-player replacement.
 5. Commit, push, and open a PR closing #73 → observe exact-head CI and hosted reviews within five rounds and five hours.
 
 ## Completion boundary

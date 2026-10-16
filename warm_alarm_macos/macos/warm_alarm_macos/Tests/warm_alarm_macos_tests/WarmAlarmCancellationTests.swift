@@ -6,6 +6,26 @@ import XCTest
 @testable import warm_alarm_macos
 
 final class WarmAlarmCancellationTests: XCTestCase {
+    func testCancelAlarmWaitsForConcurrentForegroundStartup() throws {
+        try assertCancellationWaitsForForegroundStartup(cancelAll: false)
+    }
+
+    func testCancelAllWaitsForConcurrentForegroundStartup() throws {
+        try assertCancellationWaitsForForegroundStartup(cancelAll: true)
+    }
+
+    func testCancelledAlarmCannotStartForegroundPlayback() throws {
+        let (plugin, delegate, schedule) = try scheduledAlarmFixture()
+        let completed = expectation(description: "alarm cancelled before delivery")
+        plugin.cancelAlarm(id: schedule.id) { _ in completed.fulfill() }
+        wait(for: [completed], timeout: 2)
+
+        XCTAssertTrue(delegate.handleForegroundDelivery(content: delegate.makeContent(from: schedule)).isEmpty)
+        XCTAssertNil(delegate.audioPlayer)
+        XCTAssertNil(delegate.currentlyPlayingAlarmId)
+        withExtendedLifetime(plugin) {}
+    }
+
     func testCancelActiveAlarmStopsPlaybackBeforeCompletion() throws {
         let (plugin, delegate, player, alarmID) = try playingAlarmFixture()
         let completed = expectation(description: "active alarm cancelled")
@@ -19,6 +39,38 @@ final class WarmAlarmCancellationTests: XCTestCase {
             completed.fulfill()
         }
 
+        wait(for: [completed], timeout: 2)
+        withExtendedLifetime(plugin) {}
+    }
+
+    func testReplacingPlaybackDoesNotOrphanThePreviousPlayer() throws {
+        let (plugin, delegate, schedule) = try scheduledAlarmFixture()
+        _ = delegate.handleForegroundDelivery(content: delegate.makeContent(from: schedule))
+        let firstPlayer = try XCTUnwrap(delegate.audioPlayer)
+        XCTAssertTrue(firstPlayer.isPlaying)
+        let replacement = WarmAlarmScheduleData.from(wire: WarmAlarmScheduleWire(
+            id: schedule.id + 1,
+            scheduledAtMillis: schedule.scheduledAtMillis,
+            notification: WarmAlarmNotificationWire(
+                title: "Replacement", body: "Alarm", keepNotificationAfterAlarmEnds: true
+            ),
+            audio: WarmAlarmAudioWire(
+                filePath: schedule.filePath, loop: true, volume: 0, vibrate: false, volumeEnforced: false
+            )
+        ))
+        WarmAlarmStore.shared.save(replacement)
+        _ = delegate.handleForegroundDelivery(content: delegate.makeContent(from: replacement))
+        let secondPlayer = try XCTUnwrap(delegate.audioPlayer)
+        XCTAssertTrue(secondPlayer.isPlaying)
+        XCTAssertFalse(firstPlayer.isPlaying)
+        let completed = expectation(description: "previous alarm cancelled without stopping replacement")
+        plugin.cancelAlarm(id: schedule.id) { result in
+            if case let .failure(error) = result { XCTFail("Cancellation failed: \(error)") }
+            XCTAssertFalse(firstPlayer.isPlaying)
+            XCTAssertTrue(secondPlayer.isPlaying)
+            XCTAssertEqual(delegate.currentlyPlayingAlarmId, replacement.id)
+            completed.fulfill()
+        }
         wait(for: [completed], timeout: 2)
         withExtendedLifetime(plugin) {}
     }
@@ -170,6 +222,18 @@ final class WarmAlarmCancellationTests: XCTestCase {
     }
 
     private func playingAlarmFixture() throws -> (WarmAlarmPlugin, WarmAlarmDelegate, AVAudioPlayer, Int64) {
+        let (plugin, delegate, schedule) = try scheduledAlarmFixture()
+        _ = delegate.handleForegroundDelivery(content: delegate.makeContent(from: schedule))
+        let player = try XCTUnwrap(delegate.audioPlayer)
+        XCTAssertTrue(player.isPlaying, "The regression fixture must start real looping playback")
+        XCTAssertEqual(delegate.currentlyPlayingAlarmId, schedule.id)
+        return (plugin, delegate, player, schedule.id)
+    }
+
+    private func scheduledAlarmFixture(
+        playbackLock: NSRecursiveLock = NSRecursiveLock(),
+        audioPlayerFactory: @escaping (URL) throws -> AVAudioPlayer = { try AVAudioPlayer(contentsOf: $0) }
+    ) throws -> (WarmAlarmPlugin, WarmAlarmDelegate, WarmAlarmScheduleData) {
         let previous = Array(WarmAlarmStore.shared.loadAll().values)
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -190,7 +254,9 @@ final class WarmAlarmCancellationTests: XCTestCase {
         )
         let delegate = WarmAlarmDelegate(
             eventsApi: WarmAlarmEventsApi(binaryMessenger: CancellationTestMessenger()),
-            eventQueue: eventQueue
+            eventQueue: eventQueue,
+            playbackLock: playbackLock,
+            audioPlayerFactory: audioPlayerFactory
         )
         let schedule = WarmAlarmScheduleData.from(wire: WarmAlarmScheduleWire(
             id: 7_730_001,
@@ -210,17 +276,70 @@ final class WarmAlarmCancellationTests: XCTestCase {
             try FileManager.default.removeItem(at: directory)
         }
         WarmAlarmStore.shared.save(schedule)
-        _ = delegate.handleForegroundDelivery(content: delegate.makeContent(from: schedule))
-        let player = try XCTUnwrap(delegate.audioPlayer)
-        XCTAssertTrue(player.isPlaying, "The regression fixture must start real looping playback")
-        XCTAssertEqual(delegate.currentlyPlayingAlarmId, schedule.id)
         let plugin = WarmAlarmPlugin(
             delegate: delegate,
             pendingNotificationReader: { $0([]) },
             pendingNotificationRemover: { _ in },
             deliveredNotificationRemover: { _ in }
         )
-        return (plugin, delegate, player, schedule.id)
+        return (plugin, delegate, schedule)
+    }
+
+    private func assertCancellationWaitsForForegroundStartup(cancelAll: Bool) throws {
+        let factoryEntered = expectation(description: "foreground validated schedule and entered player factory")
+        let releaseFactory = DispatchSemaphore(value: 0)
+        let cancellationContended = expectation(description: "cancellation contends for the held playback lock")
+        let playbackLock = ContentionReportingLock { cancellationContended.fulfill() }
+        let playerLock = NSLock()
+        var retainedPlayer: AVAudioPlayer?
+        let (plugin, delegate, schedule) = try scheduledAlarmFixture(playbackLock: playbackLock) { url in
+            let player = try AVAudioPlayer(contentsOf: url)
+            playerLock.lock()
+            retainedPlayer = player
+            playerLock.unlock()
+            factoryEntered.fulfill()
+            XCTAssertEqual(releaseFactory.wait(timeout: .now() + 5), .success)
+            return player
+        }
+        defer { releaseFactory.signal() }
+        let foregroundFinished = expectation(description: "foreground startup finishes")
+        DispatchQueue.global().async {
+            _ = delegate.handleForegroundDelivery(content: delegate.makeContent(from: schedule))
+            foregroundFinished.fulfill()
+        }
+        wait(for: [factoryEntered], timeout: 2)
+        playerLock.lock()
+        let createdPlayer = retainedPlayer
+        playerLock.unlock()
+        let player = try XCTUnwrap(createdPlayer)
+        let cancelledTooSoon = expectation(description: "cancellation must wait for foreground startup")
+        cancelledTooSoon.isInverted = true
+        let completed = expectation(description: "cancellation completes with playback stopped")
+        var didReleaseFactory = false
+        let completion: (Result<Void, Error>) -> Void = { result in
+            if case let .failure(error) = result { XCTFail("Cancellation failed: \(error)") }
+            if !didReleaseFactory { cancelledTooSoon.fulfill() }
+            XCTAssertFalse(player.isPlaying)
+            XCTAssertNil(delegate.currentlyPlayingAlarmId)
+            plugin.isRinging(alarmId: cancelAll ? nil : schedule.id) {
+                XCTAssertEqual(try? $0.get(), false)
+                completed.fulfill()
+            }
+        }
+        if cancelAll {
+            plugin.cancelAllAlarms(completion: completion)
+        } else {
+            plugin.cancelAlarm(id: schedule.id, completion: completion)
+        }
+        wait(for: [cancellationContended], timeout: 2)
+        XCTAssertNil(WarmAlarmStore.shared.load(id: schedule.id))
+        wait(for: [cancelledTooSoon], timeout: 0.05)
+        didReleaseFactory = true
+        releaseFactory.signal()
+        wait(for: [foregroundFinished, completed], timeout: 2)
+        XCTAssertFalse(player.isPlaying)
+        XCTAssertNil(delegate.currentlyPlayingAlarmId)
+        withExtendedLifetime(plugin) {}
     }
 
     private func makeSchedule() -> WarmAlarmScheduleData {
@@ -232,6 +351,21 @@ final class WarmAlarmCancellationTests: XCTestCase {
             ),
             audio: WarmAlarmAudioWire(loop: false, vibrate: false, volumeEnforced: false)
         ))
+    }
+}
+
+private final class ContentionReportingLock: NSRecursiveLock, @unchecked Sendable {
+    private let onContention: () -> Void
+
+    init(onContention: @escaping () -> Void) {
+        self.onContention = onContention
+        super.init()
+    }
+
+    override func lock() {
+        if super.try() { return }
+        onContention()
+        super.lock()
     }
 }
 
