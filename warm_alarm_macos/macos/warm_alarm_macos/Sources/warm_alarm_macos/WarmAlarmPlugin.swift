@@ -118,6 +118,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     private let delegate: WarmAlarmDelegate
     private let pendingNotificationReader: PendingNotificationReader
     private let pendingNotificationRemover: ([String]) -> Void
+    private let deliveredNotificationRemover: ([String]) -> Void
     private static let killWarningNotifId = "warm_alarm_kill_warning_notif"
     // ponytail: serializes all Apple notification mutations; split by alarm ID only if contention is measured.
     private let notificationMutationQueue = WarmAlarmMutationQueue(label: "warm_alarm.notification_mutation")
@@ -129,11 +130,15 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         },
         pendingNotificationRemover: @escaping ([String]) -> Void = { identifiers in
             UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
+        },
+        deliveredNotificationRemover: @escaping ([String]) -> Void = { identifiers in
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: identifiers)
         }
     ) {
         self.delegate = delegate
         self.pendingNotificationReader = pendingNotificationReader
         self.pendingNotificationRemover = pendingNotificationRemover
+        self.deliveredNotificationRemover = deliveredNotificationRemover
     }
 
     public static func register(with registrar: FlutterPluginRegistrar) {
@@ -573,9 +578,9 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 identifiers += weekdays.map { "\(id)#\($0)" }
             }
             WarmAlarmStore.shared.remove(id: id)
-            let center = UNUserNotificationCenter.current()
-            center.removePendingNotificationRequests(withIdentifiers: identifiers)
-            center.removeDeliveredNotifications(withIdentifiers: identifiers)
+            self.delegate.stopIfPlaying(alarmId: id)
+            self.pendingNotificationRemover(identifiers)
+            self.deliveredNotificationRemover(identifiers)
             WarmAlarmPlatformReply.complete(.success(()), completion: completion, finish: finish)
         }
     }
@@ -588,6 +593,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             }
             // Invalidate foreground delivery before the asynchronous pending-request read.
             WarmAlarmStore.shared.clear()
+            self.delegate.stopAllIfPlaying()
             self.pendingNotificationReader { pendingRequests in
                 let identifiers = pendingRequests.filter {
                     $0.content.categoryIdentifier == WarmAlarmDelegate.categoryIdentifier

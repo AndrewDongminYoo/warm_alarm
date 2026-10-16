@@ -10,15 +10,33 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     static let snoozeActionIdentifier = "SNOOZE"
 
     private let eventQueue: WarmAlarmEventQueue
-    private var audioPlayer: AVAudioPlayer?
-    private(set) var currentlyPlayingAlarmId: Int64?
+    private let audioPlayerFactory: (URL) throws -> AVAudioPlayer
+    private let playbackLock: NSRecursiveLock
+    private var activePlayer: AVAudioPlayer?
+    private var activeAlarmId: Int64?
     private var fadeWorkItems: [DispatchWorkItem] = []
     private var volumeEnforcerTimer: Timer?
 
+    var audioPlayer: AVAudioPlayer? {
+        playbackLock.lock()
+        defer { playbackLock.unlock() }
+        return activePlayer
+    }
+
+    var currentlyPlayingAlarmId: Int64? {
+        playbackLock.lock()
+        defer { playbackLock.unlock() }
+        return activeAlarmId
+    }
+
     init(
         eventsApi: WarmAlarmEventsApi,
-        eventQueue: WarmAlarmEventQueue? = nil
+        eventQueue: WarmAlarmEventQueue? = nil,
+        playbackLock: NSRecursiveLock = NSRecursiveLock(),
+        audioPlayerFactory: @escaping (URL) throws -> AVAudioPlayer = { try AVAudioPlayer(contentsOf: $0) }
     ) {
+        self.playbackLock = playbackLock
+        self.audioPlayerFactory = audioPlayerFactory
         self.eventQueue = eventQueue ?? WarmAlarmEventQueue { event, completion in
             let emit = {
                 eventsApi.emitEvent(event: event) { result in
@@ -54,13 +72,20 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
               let alarmId = Int64(alarmIdString) else {
             return [.alert, .sound]
         }
-        guard let schedule = WarmAlarmStore.shared.load(id: alarmId) else { return [] }
-        guard content.userInfo["occurrenceSeriesToken"] as? String == schedule.occurrenceSeriesToken else { return [] }
-        startAudio(alarmId: alarmId, for: schedule)
+        guard let schedule = startForegroundAudio(alarmId: alarmId, content: content) else { return [] }
         emitEvent(WarmAlarmEventWire(
             alarmId: alarmId, type: .fired, occurredAtMillis: nowMillis(), payload: schedule.payload))
         let source = WarmAlarmAudioSource.select(filePath: schedule.filePath, assetPath: schedule.assetPath)
         return source == .none ? [.alert, .sound] : [.alert]
+    }
+
+    private func startForegroundAudio(alarmId: Int64, content: UNNotificationContent) -> WarmAlarmScheduleData? {
+        playbackLock.lock()
+        defer { playbackLock.unlock() }
+        guard let schedule = WarmAlarmStore.shared.load(id: alarmId),
+              content.userInfo["occurrenceSeriesToken"] as? String == schedule.occurrenceSeriesToken else { return nil }
+        guard startAudio(alarmId: alarmId, for: schedule) else { return nil }
+        return schedule
     }
 
     func userNotificationCenter(
@@ -89,6 +114,17 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     }
 
     // MARK: - Actions
+
+    func stopIfPlaying(alarmId: Int64) {
+        playbackLock.lock()
+        defer { playbackLock.unlock() }
+        guard activeAlarmId == alarmId else { return }
+        stopAudio()
+    }
+
+    func stopAllIfPlaying() {
+        stopAudio()
+    }
 
     func handleStop(alarmId: Int64, deliveredIdentifier: String? = nil) {
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
@@ -173,15 +209,21 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
     // MARK: - Audio
 
-    private func startAudio(alarmId: Int64, for schedule: WarmAlarmScheduleData?) {
+    @discardableResult
+    private func startAudio(alarmId: Int64, for schedule: WarmAlarmScheduleData?) -> Bool {
+        playbackLock.lock()
+        defer { playbackLock.unlock() }
+        guard let schedule,
+              let storedSchedule = WarmAlarmStore.shared.load(id: alarmId),
+              storedSchedule.occurrenceSeriesToken == schedule.occurrenceSeriesToken else { return false }
         configureAudioSession()
         let player: AVAudioPlayer?
-        switch WarmAlarmAudioSource.select(filePath: schedule?.filePath, assetPath: schedule?.assetPath) {
+        switch WarmAlarmAudioSource.select(filePath: schedule.filePath, assetPath: schedule.assetPath) {
         case let .file(path):
-            player = try? AVAudioPlayer(contentsOf: URL(fileURLWithPath: path))
+            player = try? audioPlayerFactory(URL(fileURLWithPath: path))
         case let .asset(asset):
             if let url = WarmAlarmAudioSource.assetURL(for: asset) {
-                player = try? AVAudioPlayer(contentsOf: url)
+                player = try? audioPlayerFactory(url)
             } else {
                 player = nil
             }
@@ -189,21 +231,23 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             player = nil
         }
         if let p = player {
-            let steps = schedule?.fadeSteps
+            stopAudio()
+            let steps = schedule.fadeSteps
             if let first = steps?.first, first.timeMillis == 0 {
                 p.volume = max(0.0, min(1.0, Float(first.volume)))
-            } else if let v = schedule?.volume {
+            } else if let v = schedule.volume {
                 p.volume = max(0.0, min(1.0, Float(v)))
             } else {
                 p.volume = 1.0
             }
-            p.numberOfLoops = (schedule?.loop ?? true) ? -1 : 0
+            p.numberOfLoops = schedule.loop ? -1 : 0
             p.play()
-            audioPlayer = p
-            currentlyPlayingAlarmId = alarmId
+            activePlayer = p
+            activeAlarmId = alarmId
             if let steps = steps { applyFadeSteps(steps, to: p) }
-            if schedule?.volumeEnforced == true { startVolumeEnforcer(for: p) }
+            if schedule.volumeEnforced == true { startVolumeEnforcer(for: p) }
         }
+        return true
     }
 
     private func applyFadeSteps(_ steps: [FadeStep], to player: AVAudioPlayer) {
@@ -223,13 +267,15 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     }
 
     private func stopAudio() {
+        playbackLock.lock()
+        defer { playbackLock.unlock() }
         fadeWorkItems.forEach { $0.cancel() }
         fadeWorkItems = []
         volumeEnforcerTimer?.invalidate()
         volumeEnforcerTimer = nil
-        audioPlayer?.stop()
-        audioPlayer = nil
-        currentlyPlayingAlarmId = nil
+        activePlayer?.stop()
+        activePlayer = nil
+        activeAlarmId = nil
         deactivateAudioSession()
     }
 
