@@ -20,7 +20,7 @@ lint:
   disabled:
     - dart
   enabled:
-    - pinact@4.1.1: { commands: [lint, upgrade] }
+    - pinact@4.1.1: { commands: [lint] }
     - cspell@10.4.0
     - actionlint@1.7.12
     - checkov@3.3.29
