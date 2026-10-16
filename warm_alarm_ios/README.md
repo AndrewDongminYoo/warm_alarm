@@ -223,10 +223,17 @@ Scheduling fails without replacing the prior schedule if the primary or weekday 
 
 ### Kill warning
 
-`setKillWarning(title, body)` stores a warning message. If the app is backgrounded while an alarm is
-ringing, the plugin posts a non-actionable notification warning the user not to force-quit the app.
-`clearKillWarning()` removes the stored message; the pending notification is auto-dismissed when the
-app returns to the foreground.
+`setKillWarning(title, body)` stores the warning text without posting a notification.
+When the app or scene becomes inactive while plugin playback is active, the plugin submits a warning request with a one-second delay.
+When iOS delivers the app-termination callback, the plugin submits an immediate warning request for a future process-owned alarm or active plugin playback.
+Future AlarmKit-managed alarms alone do not trigger this termination warning.
+Both paths require configured warning text and use the same notification identifier.
+The termination path does not cover a suspended app removed from the app switcher because that path does not receive the termination callback.
+
+`clearKillWarning()` removes the stored text and disables future warning requests; it does not remove an existing pending or delivered warning.
+When the app or scene becomes active again, the plugin removes only the pending warning request.
+These handlers do not dismiss a warning that has already been delivered.
+Notification permission and delivery of the relevant lifecycle callback are required.
 While a warning is configured, alarm scheduling reserves one of the 64 pending-request slots.
 Enabling the warning fails if no slot is available for that reservation.
 

@@ -67,8 +67,15 @@ request and tears down the series.
 
 ### Kill warning
 
-`setKillWarning(title, body)` posts a persistent notification reminding users not to force-quit the
-app before an alarm fires. `clearKillWarning()` removes it.
+`setKillWarning(title, body)` stores the warning text without posting a notification.
+When the app resigns active status while the plugin reports a ringing alarm, it submits a warning request with a one-second delay.
+When macOS delivers the app-termination callback, the plugin submits an immediate warning request if an alarm is scheduled in the future or is currently ringing.
+Both paths require configured warning text and use the same notification identifier.
+
+`clearKillWarning()` removes the stored text and disables future warning requests; it does not remove an existing pending or delivered warning.
+When the app becomes active again, the plugin removes only the pending warning request.
+These handlers do not dismiss a warning that has already been delivered.
+Notification permission and delivery of the relevant lifecycle callback are required.
 
 ### Events emitted
 
