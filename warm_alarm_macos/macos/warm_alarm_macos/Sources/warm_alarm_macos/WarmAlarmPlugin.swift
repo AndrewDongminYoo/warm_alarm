@@ -120,6 +120,8 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     private let notificationAdder: NotificationAdder
     private let authorizationStatusReader: AuthorizationStatusReader
     private let delegate: WarmAlarmDelegate
+    private var notificationCenter: UNUserNotificationCenter?
+    private var notificationCenterDelegate: WarmAlarmNotificationCenterDelegate?
     private let pendingNotificationReader: PendingNotificationReader
     private let pendingNotificationRemover: ([String]) -> Void
     private let deliveredNotificationRemover: ([String]) -> Void
@@ -159,7 +161,11 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         let delegate = WarmAlarmDelegate(eventsApi: eventsApi)
         let instance = WarmAlarmPlugin(delegate: delegate)
 
-        UNUserNotificationCenter.current().delegate = delegate
+        let notificationCenter = UNUserNotificationCenter.current()
+        instance.notificationCenter = notificationCenter
+        instance.notificationCenterDelegate = WarmAlarmNotificationCenterDelegate.install(
+            warmAlarmDelegate: delegate, on: notificationCenter
+        )
         WarmAlarmDelegate.registerCategories()
         WarmAlarmApiSetup.setUp(binaryMessenger: binaryMessenger, api: instance)
         instance.setupLifecycleObservers()
@@ -167,6 +173,9 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     }
 
     deinit {
+        if let notificationCenter {
+            notificationCenterDelegate?.uninstall(from: notificationCenter)
+        }
         NotificationCenter.default.removeObserver(self)
     }
 
