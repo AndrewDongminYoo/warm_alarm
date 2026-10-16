@@ -77,6 +77,9 @@ The scoped AGP migration and Kotlin compatibility Oracle queries returned \[no p
 The boot receiver accepts `LOCKED_BOOT_COMPLETED` only from API 24 and rejects it before accessing storage on API 19–23.
 Ordinary boot recovery remains supported on those older versions.
 Regression cases cover the rejected legacy actions and the API 24 direct-boot boundary.
+The example wrapper pins the published Gradle 9.2.1 distribution SHA-256 for developer and CI downloads.
+Checksum verification applies to a fresh distribution download, not an already extracted cache.
+Source: [Gradle distribution verification](https://docs.gradle.org/current/userguide/gradle_wrapper.html#sec:verification).
 
 The native instrumentation matrix targets API 19, 22, and 29.
 Its test-only `targetSdk` is explicitly 19 to preserve the pre-migration test APK contract; AGP 9 otherwise changes the resolved target to compileSdk 34.

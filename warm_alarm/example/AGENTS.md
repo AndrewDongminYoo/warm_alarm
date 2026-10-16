@@ -46,6 +46,7 @@ android/, ios/, macos/                       # default Flutter native shells (re
 - The Android host uses AGP 9.0.1, Kotlin 2.3.20, and Gradle 9.2.1.
   Keep `android.newDsl=false` and `android.builtInKotlin=false` in its `gradle.properties` while Flutter uses the legacy Android DSL and this plugin applies the external Kotlin plugin.
   Direct native Gradle jobs do not run Flutter build migrations.
+  Keep the wrapper distribution's published SHA-256 checksum pinned for both local builds and CI downloads.
 
 - `flows/test_readiness.yaml` is intentionally tiny — it presses the "Inspect Alarm API" button (key/text in `lib/main.dart`) and invokes the custom `checkReadiness` action. If you rename the button text, update the flow.
 - The `actions/check_readiness/` package depends on `fluttium: ^0.1.0`. It is consumed at flow-execution time, not at app build time, so changes there don't require a Flutter rebuild — just re-run the flow.
