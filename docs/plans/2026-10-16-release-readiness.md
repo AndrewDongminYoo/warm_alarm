@@ -76,9 +76,9 @@ Each package's private pub.dev automated-publishing setting still needs confirma
 
 ## Validation and limits
 
-The local [review receipt](/Users/dongminyu/Development/01_personal/pr-loop-reviews/warm_alarm/release-preparation-2026-10-16/REVIEW.md) retains the verification summary and review outcome outside Git-local control state.
-Its adjacent evidence directory contains the [scoped Trunk output](/Users/dongminyu/Development/01_personal/pr-loop-reviews/warm_alarm/release-preparation-2026-10-16/evidence/docs-check.log) and [standalone validation results](/Users/dongminyu/Development/01_personal/pr-loop-reviews/warm_alarm/release-preparation-2026-10-16/evidence/standalone-validation-results.json), with per-package downgrade and test logs.
-These are local operator artifacts, not files included in the repository or published packages.
+The local review receipt at `/Users/dongminyu/Development/01_personal/pr-loop-reviews/warm_alarm/release-preparation-2026-10-16/REVIEW.md` retains the verification summary and review outcome outside Git-local control state.
+Its adjacent `evidence/` directory contains `docs-check.log`, `standalone-validation-results.json`, and per-package downgrade and test logs.
+These are local operator paths, not GitHub links or files included in the repository or published packages.
 
 Current-bound checks used isolated copies of the five packages with only `resolution: workspace` removed from their copied manifests.
 `flutter pub downgrade --no-example` resolved every sibling dependency from hosted pub.dev packages rather than the local workspace.
