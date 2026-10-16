@@ -9,3 +9,7 @@ podhelper
 widgetkit
 xcresulttool
 afconvert
+Unarchiver
+swiftc
+Xlinker
+Xswiftc

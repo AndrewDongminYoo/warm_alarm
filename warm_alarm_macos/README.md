@@ -39,6 +39,16 @@ If registration fails, the plugin removes partial replacement requests and resto
 If the system also rejects restoration, it attempts every previous request, keeps the previous saved schedule for initialization recovery, and returns `scheduling-rollback-failed` with both failure causes.
 Pending rollback cannot recall notifications that already fired during the replacement attempt.
 
+### Notification delegate integration
+
+Registration preserves the previously installed `UNUserNotificationCenterDelegate` through a weak forwarding reference.
+Notifications in the `WARM_ALARM` category go only to the plugin; other notifications keep the host's foreground presentation and response callbacks.
+The host controls presentation options and completion timing.
+If the host does not implement an optional callback, presentation defaults to no options and responses complete immediately.
+Settings callbacks also forward to the host.
+Releasing a plugin instance restores the newest live previous delegate unless another integration has since replaced it.
+Hosts must retain their own delegate, and integrations installed later must preserve forwarding themselves.
+
 ### Audio
 
 `WarmAlarmDelegate` plays audio with `AVAudioPlayer`. Because macOS does not expose `AVAudioSession`,

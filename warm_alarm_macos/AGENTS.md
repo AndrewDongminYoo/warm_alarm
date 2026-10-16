@@ -14,6 +14,7 @@ macos/
     Package.swift                                          # SwiftPM manifest (PrivacyInfo.xcprivacy is a TODO placeholder)
     Sources/warm_alarm_macos/
       WarmAlarmPlugin.swift                                # plugin entry; AppKit lifecycle hooks; kill-warning
+      WarmAlarmNotificationCenterDelegate.swift            # host callback routing and delegate restoration
       WarmAlarmDelegate.swift                              # UNUserNotificationCenter delegate; AVAudioPlayer; fade; snooze reschedule
       WarmAlarmStore.swift                                 # UserDefaults-backed Codable schedule store
       Messages.g.swift                                     # GENERATED Pigeon Swift bindings
@@ -34,8 +35,10 @@ macos/
 - This package is a **separate copy** of the `warm_alarm_ios` Swift implementation, not a symlink/include. Behavioral changes must be applied here too. Diff against `warm_alarm_ios/ios/warm_alarm_ios/Sources/warm_alarm_ios/` after any non-trivial change to keep them aligned.
 - Use AppKit (`NSApplication`) — never reference `UIApplication` here.
 - Dart unit tests in `test/` exercise the wire-mapping layer.
-- Native tests in `macos/warm_alarm_macos/Tests/warm_alarm_macos_tests/` exercise event persistence, acknowledgement, replay, and audio source selection.
-  Run the `warm_alarm_macos_tests` SwiftPM target with the Flutter SDK's real `FlutterMacOS` framework search and runtime paths; a bare `swift test` cannot resolve that framework outside a configured host.
+- Native tests in `macos/warm_alarm_macos/Tests/warm_alarm_macos_tests/` exercise event persistence, acknowledgement, replay, audio source selection, and host notification callback routing.
+  Run `bash tool/run_macos_native_tests.sh` from the repository root.
+  It builds the SwiftPM target with the real FlutterMacOS framework and loads XCTest in a temporary app bundle so registration tests can access `UNUserNotificationCenter`.
+  Bare SwiftPM runs skip the app-only registration tests; the `macos_notification_delegate` CI workflow runs all tests and rejects skips.
   Keep native storage and concurrency regressions here because Dart mapping tests cannot observe those mechanisms.
 
 ## ANTI-PATTERNS
