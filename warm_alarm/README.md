@@ -330,7 +330,9 @@ with a richer capability model, macOS support, and a cleaner public/wire boundar
 | `AlarmSettings.volumeSettings`       | `WarmAlarmAudio` (`volume`, `fadeInDuration`, `fadeSteps`, `volumeEnforced`) |                                                           |
 | `NotificationSettings.icon`          | `WarmAlarmNotification.androidIcon`                                          | Android only                                              |
 | `NotificationSettings.iconColor`     | `WarmAlarmNotification.androidIconColor`                                     | Android only — ARGB int instead of `Color`                |
-| `AlarmSettings.payload`              | `WarmAlarmSchedule.payload`                                                  | Propagated to every event type                            |
+| `AlarmSettings.payload`              | `WarmAlarmSchedule.payload`                                                  | Optional payload on the four event types listed below     |
+
+`WarmAlarmSchedule.payload` is exposed as an optional `payload` only on `WarmAlarmFired`, `WarmAlarmStopped`, `WarmAlarmSnoozed`, and `WarmAlarmRetriggered` events.
 
 ---
 
