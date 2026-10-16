@@ -115,6 +115,10 @@ enum WarmAlarmRecovery {
 
 public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     typealias PendingNotificationReader = (@escaping ([UNNotificationRequest]) -> Void) -> Void
+    typealias NotificationAdder = (UNNotificationRequest, @escaping (Error?) -> Void) -> Void
+    typealias AuthorizationStatusReader = (@escaping (UNAuthorizationStatus) -> Void) -> Void
+    private let notificationAdder: NotificationAdder
+    private let authorizationStatusReader: AuthorizationStatusReader
     private let delegate: WarmAlarmDelegate
     private let pendingNotificationReader: PendingNotificationReader
     private let pendingNotificationRemover: ([String]) -> Void
@@ -125,6 +129,12 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
 
     init(
         delegate: WarmAlarmDelegate,
+        notificationAdder: @escaping NotificationAdder = { request, completion in
+            UNUserNotificationCenter.current().add(request, withCompletionHandler: completion)
+        },
+        authorizationStatusReader: @escaping AuthorizationStatusReader = { completion in
+            UNUserNotificationCenter.current().getNotificationSettings { completion($0.authorizationStatus) }
+        },
         pendingNotificationReader: @escaping PendingNotificationReader = { completion in
             UNUserNotificationCenter.current().getPendingNotificationRequests(completionHandler: completion)
         },
@@ -135,6 +145,8 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: identifiers)
         }
     ) {
+        self.notificationAdder = notificationAdder
+        self.authorizationStatusReader = authorizationStatusReader
         self.delegate = delegate
         self.pendingNotificationReader = pendingNotificationReader
         self.pendingNotificationRemover = pendingNotificationRemover
@@ -434,9 +446,8 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
     private func captureNotificationSnapshot(
         _ handler: @escaping (WarmAlarmPermissionStateWire, WarmAlarmReadinessWire) -> Void
     ) {
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            let granted = settings.authorizationStatus == .authorized
-                || settings.authorizationStatus == .provisional
+        authorizationStatusReader { status in
+            let granted = status == .authorized || status == .provisional
             var reasons: [WarmAlarmReadinessReasonWire] = [.backgroundExecutionLimited]
             if !granted { reasons.insert(.notificationPermissionDenied, at: 0) }
             handler(
@@ -521,45 +532,54 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                 finish()
                 return
             }
-            // Clear any prior requests for this id (one-shot "{id}" plus per-weekday
-            // "{id}#{weekday}") so re-scheduling with a different weekday set does not
-            // leave orphaned repeating triggers armed.
-            let center = UNUserNotificationCenter.current()
-            var staleIdentifiers = [String(schedule.id)]
-            if let previousWeekdays = WarmAlarmStore.shared.load(id: schedule.id)?.recurrenceWeekdays {
-                staleIdentifiers += previousWeekdays.map { "\(schedule.id)#\($0)" }
-            }
-            center.removePendingNotificationRequests(withIdentifiers: staleIdentifiers)
-
-            let data = WarmAlarmScheduleData.from(wire: schedule)
-            WarmAlarmStore.shared.save(data)
-
-            let content = self.delegate.makeContent(from: data)
-            let requests = Self.makeRequests(for: schedule, content: content)
-            Self.addRequestsAtomically(
-                requests,
-                center: center
-            ) { [weak self] error in
-                guard let self else {
-                    finish()
-                    return
+            self.pendingNotificationReader { pending in
+                let previous = WarmAlarmStore.shared.load(id: schedule.id)
+                let previousRequests = pending.filter {
+                    $0.content.categoryIdentifier == WarmAlarmDelegate.categoryIdentifier
+                        && $0.content.userInfo["alarmId"] as? String == String(schedule.id)
                 }
-                if let error {
-                    WarmAlarmStore.shared.remove(id: schedule.id)
-                    self.delegate.emitFailure(alarmId: schedule.id, message: error.localizedDescription)
-                    WarmAlarmPlatformReply.complete(.success(WarmAlarmScheduleResultWire(
-                        alarmId: schedule.id,
-                        readiness: WarmAlarmReadinessWire(level: .limited, reasons: [.backgroundExecutionLimited]),
-                        warning: WarmAlarmWarningWire(message: "Scheduling failed: \(error.localizedDescription)")
-                    )), completion: completion, finish: finish)
-                    return
-                }
-                self.delegate.emitScheduled(alarmId: schedule.id)
-                self.getReadiness { result in
-                    let readiness = (try? result.get())
-                        ?? WarmAlarmReadinessWire(level: .limited, reasons: [.backgroundExecutionLimited])
-                    WarmAlarmPlatformReply.complete(.success(WarmAlarmScheduleResultWire(
-                        alarmId: schedule.id, readiness: readiness, warning: nil)), completion: completion, finish: finish)
+                self.pendingNotificationRemover(previousRequests.map(\.identifier))
+
+                let data = WarmAlarmScheduleData.from(wire: schedule)
+                // A near-due notification must find its generation before registration can deliver it.
+                WarmAlarmStore.shared.save(data)
+                let requests = Self.makeRequests(for: schedule, content: self.delegate.makeContent(from: data))
+                WarmAlarmRequestRegistration.addAtomically(
+                    requests,
+                    identifier: { $0.identifier },
+                    add: self.notificationAdder,
+                    rollback: self.pendingNotificationRemover
+                ) { error in
+                    if let error {
+                        // addAtomically has removed every replacement identifier before the old token is restored.
+                        if let previous {
+                            WarmAlarmStore.shared.save(previous)
+                        } else {
+                            WarmAlarmStore.shared.remove(id: schedule.id)
+                        }
+                        // Recovery attempts every request even if an earlier restoration is rejected.
+                        WarmAlarmRecovery.recoverAll(previousRequests, recover: self.notificationAdder) { restored in
+                            var message = "Scheduling failed: \(error.localizedDescription)"
+                            var code = "scheduling-failed"
+                            if case let .failure(restoreError) = restored {
+                                code = "scheduling-rollback-failed"
+                                message += "; restoring the previous alarm also failed: \(restoreError.localizedDescription)"
+                            }
+                            self.delegate.emitFailure(alarmId: schedule.id, message: message)
+                            WarmAlarmPlatformReply.complete(
+                                .failure(PigeonError(code: code, message: message, details: nil)),
+                                completion: completion, finish: finish
+                            )
+                        }
+                        return
+                    }
+                    self.delegate.emitScheduled(alarmId: schedule.id)
+                    self.getReadiness { result in
+                        let readiness = (try? result.get())
+                            ?? WarmAlarmReadinessWire(level: .limited, reasons: [.backgroundExecutionLimited])
+                        WarmAlarmPlatformReply.complete(.success(WarmAlarmScheduleResultWire(
+                            alarmId: schedule.id, readiness: readiness, warning: nil)), completion: completion, finish: finish)
+                    }
                 }
             }
         }
