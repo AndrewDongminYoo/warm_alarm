@@ -54,6 +54,32 @@ These JVM checks verify platform API selection, not physical-device delivery.
 The full native unit suite and the Android instrumented job remain required for the final candidate.
 The repair is tracked separately in [PR #95](https://github.com/AndrewDongminYoo/warm_alarm/pull/95), stacked on [documentation PR #94](https://github.com/AndrewDongminYoo/warm_alarm/pull/94).
 
+## Approved release follow-ups
+
+The operator also authorized the reported wake-check compatibility repair, legacy Android runtime checks, and bounded Gradle warning cleanup before release.
+Wake-check registration keeps its inexact behavior with `set()` below API 23.
+The same service used API 21 audio attributes without a guard; API 19–20 now uses the alarm stream instead.
+The regression fixtures reproduce both failures before those changes and retain the modern branches.
+The JVM suite runs interpreted because its SDK fixtures temporarily replace a static final Android stub field; JIT constant folding otherwise retains a previous case's SDK value.
+
+The example Gradle wrapper is regenerated at 9.2.1, whose embedded Kotlin version matches the Flutter Gradle plugin's 2.2.20 request.
+This removes the Gradle 9.0 support warning and the embedded-Kotlin mismatch without changing the application's AGP or Kotlin plugin versions.
+The example uses the current Kotlin compiler-options DSL while retaining its JVM 11 target.
+Sources: [Gradle compatibility table](https://docs.gradle.org/current/userguide/compatibility.html) and [Gradle 9.2.1 release notes](https://docs.gradle.org/9.2.1/release-notes.html).
+The newly observed AGP 9.0.1 and Kotlin 2.3.20 minimum-version recommendations require a separate operator decision on migration scope.
+
+The native instrumentation matrix targets API 19, 22, and 29.
+Its delivery fixture writes a silent WAV, registers through the production scheduler, waits for the persisted fired event and service startup, checks for audio initialization failure, sends Stop, and waits for the wake-check event.
+It removes its own alarms, notification, events, and audio file after execution.
+The test runtime excludes the Flutter embedding's transitive `androidx.exifinterface` dependency, which declares API 21, because this native fixture never starts the Flutter engine or decodes images.
+The manifest no longer overrides dependency minimum SDK declarations.
+This is a native plugin check, not proof of current Flutter engine compatibility with API 19.
+Hosted results must pass before the candidate is ready.
+
+Oracle's `wiki/concepts/federated-pub-package-release-chain.md`, sourced from `raw/sources/warm_alarm/AGENTS.md`, confirms the declared API 19 floor and supports repairing rather than silently raising it.
+`wiki/concepts/mac-mini-resource-limits.md`, sourced from `raw/sources/.claude/rules/mac-mini-resource-limits.md`, confirms serial local mobile builds and hosted emulator execution.
+The direct wake-check and Gradle-warning queries returned \[no precedent found\].
+
 ## Ordered release steps
 
 1. Review and commit the documentation reconciliation and Unreleased notes as one concern, then open its authorized documentation PR.

@@ -50,6 +50,9 @@ android {
     testOptions {
         unitTests.all {
             useJUnitPlatform()
+            // SDK fixtures replace Android's static final SDK_INT between cases.
+            // Interpret test code so the JIT cannot retain an earlier SDK value.
+            jvmArgs '-Xint'
 
             testLogging {
                events "passed", "skipped", "failed", "standardOut", "standardError"
@@ -64,4 +67,10 @@ kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
+}
+
+// Native instrumentation does not start a Flutter engine or decode Flutter images.
+// Exclude its API 21 image dependency only from the test APK, without overriding minSdk.
+configurations.matching { it.name.endsWith('AndroidTestRuntimeClasspath') }.configureEach {
+    exclude group: 'androidx.exifinterface', module: 'exifinterface'
 }

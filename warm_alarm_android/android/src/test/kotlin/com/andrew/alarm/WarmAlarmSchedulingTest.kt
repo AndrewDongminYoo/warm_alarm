@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Build
+import android.os.Handler
 import androidx.core.app.NotificationManagerCompat
 import org.mockito.Mockito
 import java.lang.reflect.Field
@@ -56,6 +57,57 @@ class WarmAlarmSchedulingTest {
     @Test
     fun lockedBootRecoveryKeepsTheInexactFallback() {
         assertScheduling(SchedulingEntry.LOCKED_BOOT, 31, "setAndAllowWhileIdle", exactGranted = false)
+    }
+
+    @Test
+    fun wakeCheckUsesLegacyInexactAlarmOnApi19And22() {
+        for (sdkInt in listOf(19, 22)) assertWakeCheck(sdkInt, "set")
+    }
+
+    @Test
+    fun wakeCheckKeepsModernInexactAlarmOnApi23And31() {
+        for (sdkInt in listOf(23, 31)) assertWakeCheck(sdkInt, "setAndAllowWhileIdle")
+    }
+
+    private fun assertWakeCheck(
+        sdkInt: Int,
+        expectedMethod: String,
+    ) {
+        SchedulingHarness(sdkInt, exactGranted = false).use { harness ->
+            val schedule =
+                WarmAlarmScheduleWire(
+                    id = 41,
+                    scheduledAtMillis = System.currentTimeMillis(),
+                    notification = WarmAlarmNotificationWire(title = "Alarm", body = "Wake check", keepNotificationAfterAlarmEnds = false),
+                    audio = WarmAlarmAudioWire(loop = true, vibrate = false, volumeEnforced = false),
+                    wakeCheck = WarmAlarmWakeCheckWire(checkDelayMillis = 60_000, maxRetriggers = 1),
+                    androidFullScreenIntent = false,
+                )
+            WarmAlarmStore.save(harness.context, schedule)
+            val intent = Mockito.mock(Intent::class.java)
+            Mockito.`when`(intent.action).thenReturn(WarmAlarmForegroundService.ACTION_STOP)
+            Mockito.`when`(intent.hasExtra(WarmAlarmForegroundService.EXTRA_ALARM_ID)).thenReturn(true)
+            Mockito.`when`(intent.getLongExtra(WarmAlarmForegroundService.EXTRA_ALARM_ID, -1L)).thenReturn(41)
+            val earliest = System.currentTimeMillis() + 60_000
+            harness.service().onStartCommand(intent, 0, 1)
+            val latest = System.currentTimeMillis() + 60_000
+
+            val call = harness.calls.single()
+            assertEquals(expectedMethod, call.method, "Wake check on API $sdkInt")
+            assertEquals(AlarmManager.RTC_WAKEUP, call.type)
+            assertTrue(call.fireAt in earliest..latest)
+            assertEquals(harness.pendingIntent, call.pendingIntent)
+            assertEquals(listOf(WarmAlarmPendingIntents.wakeCheckRequestCode(41)), harness.scheduledRequestCodes)
+            assertNotNull(WarmAlarmStore.load(harness.context, 41))
+            assertEquals(
+                WarmAlarmEventTypeWire.STOPPED,
+                WarmAlarmEventQueueStore
+                    .create(harness.context)
+                    .loadAll()
+                    .single()
+                    .event.type,
+            )
+        }
     }
 
     private fun assertModernScheduling(entry: SchedulingEntry) {
@@ -165,7 +217,7 @@ private class SchedulingHarness(
     private val alarmManager =
         Mockito.mock(AlarmManager::class.java) { call ->
             when (call.method.name) {
-                "setExact", "setExactAndAllowWhileIdle", "setAndAllowWhileIdle" -> {
+                "set", "setExact", "setExactAndAllowWhileIdle", "setAndAllowWhileIdle" -> {
                     calls += ScheduledAlarmCall(call.method.name, call.getArgument(0), call.getArgument(1), call.getArgument(2))
                     null
                 }
@@ -218,6 +270,30 @@ private class SchedulingHarness(
         resources += notificationFactory
     }
 
+    fun service(): WarmAlarmForegroundService {
+        val service = Mockito.mock(WarmAlarmForegroundService::class.java, Mockito.CALLS_REAL_METHODS)
+        Mockito
+            .doAnswer { context.getSharedPreferences(it.getArgument(0), it.getArgument(1)) }
+            .`when`(service)
+            .getSharedPreferences(Mockito.anyString(), Mockito.anyInt())
+        Mockito
+            .doAnswer { context.getSystemService(it.getArgument<String>(0)) }
+            .`when`(service)
+            .getSystemService(Mockito.anyString())
+        Mockito.doReturn(context).`when`(service).createDeviceProtectedStorageContext()
+        Mockito.doReturn(context.packageName).`when`(service).getPackageName()
+        @Suppress("DEPRECATION")
+        Mockito.doNothing().`when`(service).stopForeground(Mockito.anyBoolean())
+        Mockito.doNothing().`when`(service).stopSelf()
+        for (name in listOf("fadeStepHandler", "volumeEnforcerHandler")) {
+            WarmAlarmForegroundService::class.java
+                .getDeclaredField(name)
+                .apply { isAccessible = true }
+                .set(service, Mockito.mock(Handler::class.java))
+        }
+        return service
+    }
+
     fun plugin(): WarmAlarmPlugin {
         val plugin = Mockito.mock(WarmAlarmPlugin::class.java, Mockito.CALLS_REAL_METHODS)
         for ((name, value) in mapOf(
@@ -267,7 +343,7 @@ private class SchedulingHarness(
 }
 
 /** The JVM Android stub has no runtime SDK; scope its static value to each test fixture. */
-private class AndroidSdkOverride(
+internal class AndroidSdkOverride(
     sdkInt: Int,
 ) : AutoCloseable {
     private val field = Build.VERSION::class.java.getDeclaredField("SDK_INT")

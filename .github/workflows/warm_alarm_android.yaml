@@ -12,6 +12,7 @@ on:
       - .github/workflows/pana.yaml
       - .github/workflows/warm_alarm_android.yaml
       - warm_alarm_android/**
+      - warm_alarm/example/android/**
   push:
     branches:
       - main
@@ -19,6 +20,7 @@ on:
       - .github/workflows/pana.yaml
       - .github/workflows/warm_alarm_android.yaml
       - warm_alarm_android/**
+      - warm_alarm/example/android/**
 
 jobs:
   build:
@@ -60,6 +62,16 @@ jobs:
         run: ./gradlew :warm_alarm_android:testDebugUnitTest --console=plain
 
   instrumented-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - api-level: 19
+            arch: x86
+          - api-level: 22
+            arch: x86_64
+          - api-level: 29
+            arch: x86_64
     # Intent.filterEquals decides whether the regular alarm and its wake-check retrigger
     # are one handle or two, and no JVM test can reach it. This job is the only gate that
     # can. Linux runners are 1x-billed and the only place the emulator gets hardware
@@ -97,8 +109,8 @@ jobs:
       - name: Run Android instrumented tests
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
-          api-level: 29
-          arch: x86_64
+          api-level: ${{ matrix.api-level }}
+          arch: ${{ matrix.arch }}
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           working-directory: warm_alarm/example/android

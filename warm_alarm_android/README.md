@@ -51,7 +51,7 @@ Query readiness again after the app resumes.
 When the scheduled time arrives `WarmAlarmReceiver` receives the `com.andrew.alarm.ACTION_FIRE`
 broadcast and starts `WarmAlarmForegroundService`. The service:
 
-- Plays audio via `MediaPlayer` (local file, asset, or system default ringtone)
+- Plays audio via `MediaPlayer` (local file, asset, or system default ringtone), using the legacy alarm stream on API 19–20 and audio attributes on API 21 or later
 - Selects one audio source: a nonempty local file takes precedence, an asset is the direct-boot fallback when that file is unavailable before unlock, and the system alarm sound is used when neither path is configured
 - Applies `loop` to the selected local file or asset without mixing sources
 - Applies optional fade-in via a `Handler`-driven volume schedule
@@ -66,9 +66,9 @@ It does not perform a Stop or Snooze action on the replaced alarm's stored sched
 
 ### Wake-check
 
-When `WarmAlarmWakeCheck` is configured, a secondary alarm is scheduled for `checkDelay` after the
-primary alarm fires. If `ACTION_WAKE_CHECK_FIRE` arrives without the user having dismissed the
-primary alarm, the alarm retriggers (up to `maxRetriggers` times at `retriggerDelay` intervals).
+When `WarmAlarmWakeCheck` is configured, stopping the primary alarm schedules a secondary alarm for `checkDelay` later.
+The check uses inexact `AlarmManager.set()` on API 19–22 and `setAndAllowWhileIdle()` on API 23 or later.
+When `ACTION_WAKE_CHECK_FIRE` arrives, the receiver shows the wake-check prompt and schedules a retrigger when `retriggerDelay` is configured, up to `maxRetriggers` times.
 `ACTION_WAKE_CHECK_DISMISS` cancels the follow-up chain.
 
 A retrigger and the regular alarm are separate `PendingIntent`s.
@@ -79,7 +79,10 @@ Stop and Snooze service actions use an ID-scoped URI and distinct actions, so th
 Finishing a wake check clears a recurring alarm's retrigger count and removes the stored schedule only for a one-shot alarm.
 
 `filterEquals` cannot be exercised from the JVM unit tests.
-`WarmAlarmPendingIntentsInstrumentedTest` asserts it against the real framework registry and runs on an emulator in CI, so the identity split itself is gated.
+`WarmAlarmPendingIntentsInstrumentedTest` asserts it against the real framework registry on API 19, 22, and 29 emulators in CI.
+`WarmAlarmDeliveryInstrumentedTest` registers a native alarm, observes receiver delivery and audio initialization, sends Stop, and waits for the wake-check event on the same images.
+These tests exercise native code without starting a Flutter engine; they do not establish that a current Flutter application can run on API 19.
+The test APK excludes Flutter's API 21 image-decoding dependency and does not override dependency minimum SDK requirements.
 What that test does not cover is the scenario around it, which is still a device check: schedule a recurring alarm, let the wake check fire, tap the dismiss action, then confirm the next occurrence is still listed by `adb shell dumpsys alarm | grep <package>`.
 Read `adb shell dumpsys activity intents` rather than `dumpsys alarm` when the question is which `PendingIntent` is which: only the former prints `requestCode` and the intent's data Uri.
 

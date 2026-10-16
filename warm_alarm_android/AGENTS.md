@@ -50,6 +50,10 @@ test/
 - Don't add new permissions to the host app's manifest as a workaround — declare them here so the merge propagates.
 - On API 23+, use the version-aware scheduling policy so exact alarms can fire during idle; do not replace its idle-capable calls with `setExact()`.
   Preserve `setExact()` for the API 19–22 legacy branch, where `setExactAndAllowWhileIdle()` is unavailable.
+- Wake-check delay registration is intentionally inexact: use `set()` below API 23 and `setAndAllowWhileIdle()` from API 23.
+- Configure MediaPlayer with `setAudioStreamType(STREAM_ALARM)` below API 21; `AudioAttributes` is unavailable there.
+- The native instrumentation matrix covers API 19, 22, and 29 without a Flutter engine.
+  Keep the test-only image dependency exclusion scoped to `AndroidTestRuntimeClasspath`; do not add a manifest minimum-SDK override or alter consumers' dependencies.
 - Don't drop the `directBootAware="true"` flag on `WarmAlarmBootReceiver` — alarms scheduled before unlock won't restore otherwise.
 - Don't switch the foreground service type away from `mediaPlayback` without auditing Android 14+ permission requirements (`FOREGROUND_SERVICE_MEDIA_PLAYBACK`).
 - Don't add Java sources; this is a Kotlin-only module.
