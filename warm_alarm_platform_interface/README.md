@@ -39,8 +39,8 @@ Apps must wait for the snapshot before starting a second player.
 | `cancelAllAlarms()`               | `Future<void>`               | Cancel all scheduled alarms                                 |
 | `getScheduledAlarms()`            | `List<WarmAlarmSnapshot>`    | Enumerate all currently scheduled alarms                    |
 | `isRinging({id})`                 | `Future<bool>`               | Whether an alarm (or any alarm) is ringing                  |
-| `setKillWarning(title,body)`      | `Future<void>`               | Post a persistent kill-warning notification                 |
-| `clearKillWarning()`              | `Future<void>`               | Dismiss the kill-warning notification                       |
+| `setKillWarning(title,body)`      | `Future<void>`               | Configure app-termination warning text                      |
+| `clearKillWarning()`              | `Future<void>`               | Clear the configured warning text                           |
 | `events`                          | `Stream<WarmAlarmEvent>`     | Broadcast stream of alarm lifecycle events                  |
 
 The two remediation methods carry an `unsupported` default, so a platform package built against an

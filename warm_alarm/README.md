@@ -207,9 +207,13 @@ Custom activities use a separate opt-in from AlarmKit countdown presentation.
 | `hasAlarm()`                      | `Future<bool>`                        | Whether any future alarm is currently scheduled             |
 | `getAlarm(id)`                    | `Future<WarmAlarmSnapshot?>`          | Fetch a single future scheduled alarm by ID                 |
 | `isRinging({id})`                 | `Future<bool>`                        | Whether an alarm (or any alarm) is currently ringing        |
-| `setKillWarning(...)`             | `Future<void>`                        | Post a persistent notification warning against force-quit   |
-| `clearKillWarning()`              | `Future<void>`                        | Remove the kill-warning notification                        |
+| `setKillWarning(...)`             | `Future<void>`                        | Configure app-termination warning text                      |
+| `clearKillWarning()`              | `Future<void>`                        | Clear the configured warning text                           |
 | `events`                          | `Stream<WarmAlarmEvent>`              | Real-time alarm lifecycle event stream                      |
+
+`setKillWarning()` configures warning text for later lifecycle callbacks; it does not immediately display a notification.
+`clearKillWarning()` removes that configuration without removing a warning that is already pending or delivered.
+See the platform-specific triggers and removal behavior for [Android](../warm_alarm_android/README.md#kill-warning), [iOS](../warm_alarm_ios/README.md#kill-warning), and [macOS](../warm_alarm_macos/README.md#kill-warning).
 
 On iOS and macOS, a schedule with `wakeCheck` returns `warning.code == WarmAlarmWarningCode.unsupportedWakeCheck` because wake-check cannot run there.
 The wake-check request is ignored, and `warning.message` also retains any native scheduling warning.

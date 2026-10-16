@@ -148,8 +148,8 @@ See the [`warm_alarm_ios` host requirements][warm_alarm_ios_requirements] for th
 | `getScheduledAlarms()`            | `List<WarmAlarmSnapshot>`    | List all currently scheduled alarms                         |
 | `events`                          | `Stream<WarmAlarmEvent>`     | Real-time alarm lifecycle event stream                      |
 | `isRinging({id})`                 | `Future<bool>`               | Whether any alarm — or a specific alarm by ID — is ringing  |
-| `setKillWarning({title, body})`   | `Future<void>`               | Set the notification shown if the app is force-killed       |
-| `clearKillWarning()`              | `Future<void>`               | Clear the app-kill warning notification                     |
+| `setKillWarning({title, body})`   | `Future<void>`               | Configure app-termination warning text                      |
+| `clearKillWarning()`              | `Future<void>`               | Clear the configured warning text                           |
 
 On iOS and macOS, scheduling with `wakeCheck` returns `WarmAlarmWarningCode.unsupportedWakeCheck` while retaining any native warning in the message.
 Other native warnings can have a null code.

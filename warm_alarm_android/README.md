@@ -101,8 +101,11 @@ If individual records are unreadable, the store retains valid schedules and pers
 
 ### Kill warning
 
-`setKillWarning(title, body)` posts a persistent, non-dismissible notification to discourage users
-from force-quitting the app before an alarm fires. Call `clearKillWarning()` to remove it.
+`setKillWarning(title, body)` stores the warning text without posting a notification.
+When Android calls the service's `onTaskRemoved` callback, such as when the app is swiped from recents, the plugin posts the configured warning if an alarm is scheduled in the future or is currently ringing.
+The warning notification has auto-cancel enabled and is not marked ongoing.
+`clearKillWarning()` removes the stored text and disables future warning posts; it does not dismiss an already posted warning.
+Warning delivery depends on notification permission and the task-removal callback being delivered.
 
 ---
 
