@@ -34,6 +34,11 @@ without the plugin's intervention.
 Alarms are scheduled as `UNNotificationRequest` objects via `UNUserNotificationCenter`, using a
 `UNCalendarNotificationTrigger` for the configured `scheduledAt` time.
 
+Replacing an alarm snapshots its previous saved schedule and pending notification requests.
+If registration fails, the plugin removes partial replacement requests and restores that snapshot before returning a `scheduling-failed` platform error and emitting `WarmAlarmFailed`.
+If the system also rejects restoration, it attempts every previous request, keeps the previous saved schedule for initialization recovery, and returns `scheduling-rollback-failed` with both failure causes.
+Pending rollback cannot recall notifications that already fired during the replacement attempt.
+
 ### Audio
 
 `WarmAlarmDelegate` plays audio with `AVAudioPlayer`. Because macOS does not expose `AVAudioSession`,
