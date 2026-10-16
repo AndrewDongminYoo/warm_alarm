@@ -1,3 +1,11 @@
+# Unreleased
+
+- Restore native default sound for foreground notifications when no custom player owns audio.
+- Preserve unrelated host notifications when cancelling plugin alarms.
+- Restore the previous User Notifications schedule and pending requests when replacement registration fails, and report incomplete recovery as a scheduling rollback failure.
+- Bundle required-reason privacy declarations for app-local UserDefaults and generated-sound file timestamps in CocoaPods and SwiftPM distributions.
+- Clarify kill-warning lifecycle behavior and pending-only cancellation on reactivation.
+
 # 0.1.11
 
 - Report an unsupported wake-check request in the typed schedule warning while preserving native warning text.

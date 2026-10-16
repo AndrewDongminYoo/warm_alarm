@@ -15,9 +15,9 @@ public model classes shared across platforms.
 
 The abstract class that every platform implementation extends. Platform plugins call
 `WarmAlarmPlatform.instance = MyPlatformImpl()` in their `registerWith()` to install themselves.
-The default instance is `MethodChannelWarmAlarm`, which returns empty / `unknown` values for all
-methods (it never throws) and serves as a no-op fallback for apps that have not registered a real
-platform implementation.
+The default instance is `MethodChannelWarmAlarm`, a no-op fallback for apps without a registered platform implementation.
+It reports unknown capabilities, unsupported readiness, false permission/ringing flags, and empty scheduled-alarm and event collections.
+Its scheduling result has alarm ID `0` and unsupported readiness; it does not schedule a native alarm.
 
 **Contract methods:**
 
@@ -26,27 +26,32 @@ Pass that path through `WarmAlarmAudio.systemSoundFilePath` while retaining the 
 Only `WarmAlarmSnapshot.systemManagedAudio` identifies actual system playback ownership; its default is false.
 Apps must wait for the snapshot before starting a second player.
 
-| Method                            | Returns                      | Description                                                 |
-| --------------------------------- | ---------------------------- | ----------------------------------------------------------- |
-| `init()`                          | `Future<void>`               | Rehydrate native alarm state after a process restart        |
-| `getCapabilities()`               | `WarmAlarmCapabilities`      | Per-feature support status for this platform                |
-| `getPermissionState()`            | `WarmAlarmPermissionState`   | Current notification and exact-alarm permission grants      |
-| `getReadiness()`                  | `WarmAlarmReadiness`         | Aggregated readiness level with reason codes                |
-| `requestNotificationPermission()` | `WarmAlarmRemediationResult` | Request notification authorization and return current state |
-| `openReadinessSettings(reason)`   | `WarmAlarmRemediationResult` | Open supported native settings and return current state     |
-| `scheduleAlarm(schedule)`         | `WarmAlarmScheduleResult`    | Schedule an alarm and return its assigned ID                |
-| `cancelAlarm(id)`                 | `Future<void>`               | Cancel a specific alarm by ID                               |
-| `cancelAllAlarms()`               | `Future<void>`               | Cancel all scheduled alarms                                 |
-| `getScheduledAlarms()`            | `List<WarmAlarmSnapshot>`    | Enumerate all currently scheduled alarms                    |
-| `isRinging({id})`                 | `Future<bool>`               | Whether an alarm (or any alarm) is ringing                  |
-| `setKillWarning(title,body)`      | `Future<void>`               | Configure app-termination warning text                      |
-| `clearKillWarning()`              | `Future<void>`               | Clear the configured warning text                           |
-| `events`                          | `Stream<WarmAlarmEvent>`     | Broadcast stream of alarm lifecycle events                  |
+| Method                            | Returns                               | Description                                                 |
+| --------------------------------- | ------------------------------------- | ----------------------------------------------------------- |
+| `init()`                          | `Future<void>`                        | Rehydrate native alarm state after a process restart        |
+| `startLiveActivity(state)`        | `Future<WarmAlarmLiveActivityResult>` | Start a custom activity on a configured iOS host            |
+| `updateLiveActivity(id, state)`   | `Future<WarmAlarmLiveActivityResult>` | Update activity content without rescheduling the alarm      |
+| `endLiveActivity(id)`             | `Future<WarmAlarmLiveActivityResult>` | End a custom activity by its identifier                     |
+| `prepareSystemSound(...)`         | `Future<String?>`                     | Prepare an AlarmKit sound; return null if unsupported       |
+| `getCapabilities()`               | `Future<WarmAlarmCapabilities>`       | Per-feature support status for the current platform         |
+| `getPermissionState()`            | `Future<WarmAlarmPermissionState>`    | Current notification and exact-alarm permission grants      |
+| `getReadiness()`                  | `Future<WarmAlarmReadiness>`          | Overall system readiness with actionable reason codes       |
+| `requestNotificationPermission()` | `Future<WarmAlarmRemediationResult>`  | Request notification authorization and return current state |
+| `openReadinessSettings(reason)`   | `Future<WarmAlarmRemediationResult>`  | Open supported native settings and return current state     |
+| `scheduleAlarm(schedule)`         | `Future<WarmAlarmScheduleResult>`     | Schedule an alarm; returns the assigned ID and any warnings |
+| `cancelAlarm(id)`                 | `Future<void>`                        | Cancel a specific alarm by ID                               |
+| `cancelAllAlarms()`               | `Future<void>`                        | Cancel all scheduled alarms                                 |
+| `getScheduledAlarms()`            | `Future<List<WarmAlarmSnapshot>>`     | List all currently scheduled alarms                         |
+| `isRinging({id})`                 | `Future<bool>`                        | Whether an alarm (or any alarm) is currently ringing        |
+| `setKillWarning(...)`             | `Future<void>`                        | Configure app-termination warning text                      |
+| `clearKillWarning()`              | `Future<void>`                        | Clear the configured warning text                           |
+| `events`                          | `Stream<WarmAlarmEvent>`              | Real-time alarm lifecycle event stream                      |
 
 The two remediation methods carry an `unsupported` default, so a platform package built against an
 earlier version of this contract keeps working and simply reports that it cannot remediate.
-The endorsed Android, iOS, and macOS implementations ship in their own packages once they depend on
-this version.
+The endorsed Android, iOS, and macOS implementations override those remediation defaults.
+Live Activity methods also have inherited `unsupported` defaults, and `prepareSystemSound()` defaults to null.
+The iOS implementation provides these optional integrations when its host and operating system support them.
 `openReadinessSettings()` hands the user off to a separate screen and returns as soon as the
 platform accepts the request, so its snapshot describes the state before the user acted on it — call
 `getReadiness()` again after the app resumes.
@@ -59,22 +64,27 @@ All public-facing model classes live in `lib/src/models/` and are stable across 
 implementations. Pigeon-generated wire DTOs (in `lib/src/messages.g.dart` of each platform package)
 are never exposed here.
 
-| Model                        | Purpose                                                                                                                         |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `WarmAlarmSchedule`          | Full alarm configuration passed to `scheduleAlarm()`                                                                            |
-| `WarmAlarmAudio`             | Audio source, looping, volume, fade-in curve, and vibration settings                                                            |
-| `WarmAlarmNotification`      | Notification title, body, action button labels, and Android-specific icon/color                                                 |
-| `WarmAlarmSnooze`            | Snooze duration                                                                                                                 |
-| `WarmAlarmRecurrence`        | Weekly recurrence via a list of ISO weekday numbers (`weekdays`, 1 = Monday … 7 = Sunday)                                       |
-| `WarmAlarmWakeCheck`         | Wake-check configuration: check delay, optional retrigger delay, and max retrigger count                                        |
-| `WarmAlarmSnapshot`          | Full read-back of a scheduled alarm (mirrors `WarmAlarmSchedule` fields)                                                        |
-| `WarmAlarmCapabilities`      | Per-feature `WarmAlarmSupportStatus`: notification & exact scheduling, background audio, full-screen, wake-check, Live Activity |
-| `WarmAlarmPermissionState`   | Runtime permission grant flags                                                                                                  |
-| `WarmAlarmReadiness`         | Aggregated readiness level plus a list of actionable `WarmAlarmReadinessReason` codes                                           |
-| `WarmAlarmRemediationResult` | Action status plus permission and readiness state when the action returns                                                       |
-| `WarmAlarmScheduleResult`    | Schedule outcome: `alarmId`, `readiness` snapshot, optional `WarmAlarmWarning`                                                  |
-| `WarmAlarmEvent`             | Sealed class hierarchy covering every alarm lifecycle transition                                                                |
-| `WarmAlarmVolumeFadeStep`    | A single (time, volume) breakpoint in a custom fade curve                                                                       |
+| Model                           | Purpose                                                                                                                         |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `WarmAlarmSchedule`             | Full alarm configuration passed to `scheduleAlarm()`                                                                            |
+| `WarmAlarmAudio`                | Audio source, looping, volume, fade-in curve, and vibration settings                                                            |
+| `WarmAlarmNotification`         | Notification title, body, action button labels, and Android-specific icon/color                                                 |
+| `WarmAlarmSnooze`               | Snooze duration                                                                                                                 |
+| `WarmAlarmRecurrence`           | Weekly recurrence via a list of ISO weekday numbers (`weekdays`, 1 = Monday … 7 = Sunday)                                       |
+| `WarmAlarmWakeCheck`            | Wake-check configuration: check delay, optional retrigger delay, and max retrigger count                                        |
+| `WarmAlarmSnapshot`             | Scheduled-alarm fields plus `systemManagedAudio` (default `false`)                                                              |
+| `WarmAlarmCapabilities`         | Per-feature `WarmAlarmSupportStatus`: notification & exact scheduling, background audio, full-screen, wake-check, Live Activity |
+| `WarmAlarmPermissionState`      | Runtime permission grant flags                                                                                                  |
+| `WarmAlarmReadiness`            | Aggregated readiness level plus a list of actionable `WarmAlarmReadinessReason` codes                                           |
+| `WarmAlarmRemediationResult`    | Action status plus permission and readiness state when the action returns                                                       |
+| `WarmAlarmScheduleResult`       | Schedule outcome: `alarmId`, `readiness` snapshot, optional `WarmAlarmWarning`                                                  |
+| `WarmAlarmEvent`                | Sealed class hierarchy covering every alarm lifecycle transition                                                                |
+| `WarmAlarmVolumeFadeStep`       | A single (time, volume) breakpoint in a custom fade curve                                                                       |
+| `WarmAlarmNotificationSettings` | Granular notification authorization, alert, sound, and Time Sensitive settings                                                  |
+| `WarmAlarmWarning`              | Scheduling message with an optional `WarmAlarmWarningCode`                                                                      |
+| `WarmAlarmFailure`              | `WarmAlarmFailureCode` and an optional diagnostic message                                                                       |
+| `WarmAlarmLiveActivityState`    | Host-widget content: alarm ID, title, `WarmAlarmLiveActivityStatus`, and optional next occurrence                               |
+| `WarmAlarmLiveActivityResult`   | `WarmAlarmLiveActivityResultStatus` and optional ActivityKit identifier                                                         |
 
 ---
 

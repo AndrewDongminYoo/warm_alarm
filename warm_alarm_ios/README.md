@@ -21,9 +21,9 @@ This package is [endorsed][endorsed_link], which means you do **not** add it dir
 | Wake-check                | ❌ None               | iOS does not provide the Android wake-check flow                     |
 | Live Activity             | ✅ Full or ⚠️ Limited | Opt-in ActivityKit adapter and host-owned Widget Extension           |
 
-**⚠️ Limited** for exact alarm scheduling means the alarm fires via a `UNUserNotificationCenter` notification. The app is not
-guaranteed to launch automatically in the background — audio plays only after the user interacts
-with the notification (or if the app is already in the foreground).
+**⚠️ Limited** for exact alarm scheduling means the alarm uses a `UNUserNotificationCenter` notification.
+The notification can play the host’s bundled `alarm_ring.caf`, or the default notification sound, when delivered, subject to system notification settings.
+Custom in-app audio requires foreground delivery or interaction with the notification; delivery does not guarantee that the app launches in the background.
 
 ## Privacy manifest
 

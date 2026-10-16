@@ -12,9 +12,12 @@ lib/src/models/
   warm_alarm_audio.dart
   warm_alarm_capabilities.dart
   warm_alarm_event.dart                  # SEALED hierarchy of alarm lifecycle events
+  warm_alarm_live_activity.dart          # optional Live Activity state and operation results
   warm_alarm_notification.dart
+  warm_alarm_notification_settings.dart # granular notification authorization and delivery settings
   warm_alarm_permission_state.dart
   warm_alarm_readiness.dart
+  warm_alarm_remediation.dart            # permission/settings action results
   warm_alarm_schedule.dart
   warm_alarm_schedule_result.dart
   warm_alarm_snapshot.dart

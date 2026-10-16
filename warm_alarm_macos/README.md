@@ -20,10 +20,10 @@ This package is [endorsed][endorsed_link], which means you do **not** add it dir
 | Full-screen presentation  | ❌ None    | macOS does not support full-screen intent notifications    |
 | Wake-check                | ❌ None    | macOS cannot self-trigger background wakes after dismissal |
 
-**⚠️ Limited** means alarms fire via `UNUserNotificationCenter` notifications. Audio plays when the
-user clicks the notification or when the app is in the foreground. Unlike iOS, macOS has no
-`AVAudioSession` category override, so Silent mode behavior is governed by the system audio stack
-without the plugin's intervention.
+**⚠️ Limited** means alarms use `UNUserNotificationCenter` notifications.
+The default notification sound can play on delivery, subject to system notification settings.
+Custom in-app audio starts when the user clicks the notification or when the app receives it in the foreground.
+macOS has no `AVAudioSession` category override, so the plugin does not control system audio policy.
 
 ---
 

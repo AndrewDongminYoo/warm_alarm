@@ -11,7 +11,7 @@ pigeons/{messages.dart,copyright.txt}            # Pigeon source of truth
 android/
   build.gradle                                   # Java 17, compileSdk 34, minSdk 19, no runtime deps
   src/main/
-    AndroidManifest.xml                          # 7 permissions + 2 receivers + 1 service
+    AndroidManifest.xml                          # 8 permissions + 2 receivers + 2 services
     kotlin/com/andrew/alarm/
       WarmAlarmPlugin.kt                         # plugin entry; schedule/cancel/permissions/events/kill-warning
       WarmAlarmReceiver.kt                       # ACTION_FIRE, ACTION_WAKE_CHECK_FIRE, ACTION_WAKE_CHECK_DISMISS
@@ -42,13 +42,14 @@ test/
 - Native package is `com.andrew.alarm` (set in `pubspec.yaml`, `build.gradle`, `Pigeon` options, `AndroidManifest.xml` namespace, and intent action prefix `com.andrew.alarm.ACTION_*`). Keep all five in lockstep when renaming.
 - Source root is `android/src/main/kotlin/` (declared in `build.gradle` `sourceSets`). Don't add a `src/main/java/` tree.
 - Plugin class registration is via `dartPluginClass: WarmAlarmAndroid` (set in `pubspec.yaml`'s `flutter.plugin.platforms.android` block); the Kotlin `WarmAlarmPlugin` is the channel side. Both must exist.
-- The class implements both `WarmAlarmPlatform` and `WarmAlarmEventsApi` (Pigeon flutter API). `_ensureEventsApiSetUp()` lazy-binds the events channel — don't bypass it.
+- The Dart class extends `WarmAlarmPlatform` and implements `WarmAlarmEventsApi` (Pigeon Flutter API). `_ensureEventsApiSetUp()` lazy-binds the events channel — don't bypass it.
 
 ## ANTI-PATTERNS
 
 - Don't edit `Messages.g.kt` or `lib/src/messages.g.dart`. Edit `pigeons/messages.dart` and run `melos run generate`.
 - Don't add new permissions to the host app's manifest as a workaround — declare them here so the merge propagates.
-- Don't use `setExact()` (will be killed by Doze on idle devices). Use `setExactAndAllowWhileIdle()`.
+- On API 23+, use the version-aware scheduling policy so exact alarms can fire during idle; do not replace its idle-capable calls with `setExact()`.
+  Preserve `setExact()` for the API 19–22 legacy branch, where `setExactAndAllowWhileIdle()` is unavailable.
 - Don't drop the `directBootAware="true"` flag on `WarmAlarmBootReceiver` — alarms scheduled before unlock won't restore otherwise.
 - Don't switch the foreground service type away from `mediaPlayback` without auditing Android 14+ permission requirements (`FOREGROUND_SERVICE_MEDIA_PLAYBACK`).
 - Don't add Java sources; this is a Kotlin-only module.

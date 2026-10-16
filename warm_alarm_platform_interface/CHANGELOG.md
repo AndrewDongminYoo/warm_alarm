@@ -1,3 +1,8 @@
+# Unreleased
+
+- Complete the public contract reference with Live Activity operations, notification settings, warning and failure models, and asynchronous return types.
+- Clarify that kill-warning methods configure text rather than posting or removing notifications.
+
 # 0.1.6
 
 - Document readiness reasons and scheduling warning semantics in the public models.
