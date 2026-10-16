@@ -22,7 +22,7 @@ on:
 
 jobs:
   build:
-    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/flutter_package.yml@61d25935870f12a1f2c23f2a04d5f193c83f4e5d # v1.21.1
+    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/flutter_package.yml@1b9a5149720adc43e9d5caca2505da2169ec24de # v2.0.0
     with:
       flutter_version: 3.47.7
       coverage_excludes: "**/*.g.dart"
