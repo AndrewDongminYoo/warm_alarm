@@ -10,7 +10,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     static let snoozeActionIdentifier = "SNOOZE"
 
     private let eventQueue: WarmAlarmEventQueue
-    private var audioPlayer: AVAudioPlayer?
+    private(set) var audioPlayer: AVAudioPlayer?
     private(set) var currentlyPlayingAlarmId: Int64?
     private var fadeWorkItems: [DispatchWorkItem] = []
     private var volumeEnforcerTimer: Timer?
@@ -89,6 +89,15 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     }
 
     // MARK: - Actions
+
+    func stopIfPlaying(alarmId: Int64) {
+        guard currentlyPlayingAlarmId == alarmId else { return }
+        stopAudio()
+    }
+
+    func stopAllIfPlaying() {
+        stopAudio()
+    }
 
     func handleStop(alarmId: Int64, deliveredIdentifier: String? = nil) {
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
