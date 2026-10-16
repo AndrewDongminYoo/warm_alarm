@@ -14,6 +14,14 @@ final class WarmAlarmCancellationTests: XCTestCase {
         try assertCancellationWaitsForForegroundStartup(cancelAll: true)
     }
 
+    func testCancelAlarmBeforeRevalidationSuppressesForegroundDelivery() throws {
+        try assertCancellationSuppressesDeliveryBeforeRevalidation(cancelAll: false)
+    }
+
+    func testCancelAllBeforeRevalidationSuppressesForegroundDelivery() throws {
+        try assertCancellationSuppressesDeliveryBeforeRevalidation(cancelAll: true)
+    }
+
     func testCancelledAlarmCannotStartForegroundPlayback() throws {
         let (plugin, delegate, schedule) = try scheduledAlarmFixture()
         let completed = expectation(description: "alarm cancelled before delivery")
@@ -232,6 +240,7 @@ final class WarmAlarmCancellationTests: XCTestCase {
 
     private func scheduledAlarmFixture(
         playbackLock: NSRecursiveLock = NSRecursiveLock(),
+        onEvent: @escaping (WarmAlarmEventWire) -> Void = { _ in },
         audioPlayerFactory: @escaping (URL) throws -> AVAudioPlayer = { try AVAudioPlayer(contentsOf: $0) }
     ) throws -> (WarmAlarmPlugin, WarmAlarmDelegate, WarmAlarmScheduleData) {
         let previous = Array(WarmAlarmStore.shared.loadAll().values)
@@ -250,7 +259,10 @@ final class WarmAlarmCancellationTests: XCTestCase {
             store: WarmAlarmEventQueueStore(storage: FileWarmAlarmEventQueueStorage(
                 fileURL: directory.appendingPathComponent("events.json")
             )),
-            emit: { _, completion in completion(true) }
+            emit: { event, completion in
+                onEvent(event)
+                completion(true)
+            }
         )
         let delegate = WarmAlarmDelegate(
             eventsApi: WarmAlarmEventsApi(binaryMessenger: CancellationTestMessenger()),
@@ -292,7 +304,7 @@ final class WarmAlarmCancellationTests: XCTestCase {
         let playbackLock = ContentionReportingLock { cancellationContended.fulfill() }
         let playerLock = NSLock()
         var retainedPlayer: AVAudioPlayer?
-        let (plugin, delegate, schedule) = try scheduledAlarmFixture(playbackLock: playbackLock) { url in
+        let (plugin, delegate, schedule) = try scheduledAlarmFixture(playbackLock: playbackLock, audioPlayerFactory: { url in
             let player = try AVAudioPlayer(contentsOf: url)
             playerLock.lock()
             retainedPlayer = player
@@ -300,7 +312,7 @@ final class WarmAlarmCancellationTests: XCTestCase {
             factoryEntered.fulfill()
             XCTAssertEqual(releaseFactory.wait(timeout: .now() + 5), .success)
             return player
-        }
+        })
         defer { releaseFactory.signal() }
         let foregroundFinished = expectation(description: "foreground startup finishes")
         DispatchQueue.global().async {
@@ -342,6 +354,56 @@ final class WarmAlarmCancellationTests: XCTestCase {
         withExtendedLifetime(plugin) {}
     }
 
+    private func assertCancellationSuppressesDeliveryBeforeRevalidation(cancelAll: Bool) throws {
+        let firstValidationFinished = expectation(description: "foreground pauses before playback revalidation")
+        let cancellationContended = expectation(description: "cancellation invalidates the schedule before stop")
+        let releaseRevalidation = DispatchSemaphore(value: 0)
+        let playbackLock = ContentionReportingLock(
+            onAcquisition: { count in
+                guard count == 2 else { return }
+                firstValidationFinished.fulfill()
+                XCTAssertEqual(releaseRevalidation.wait(timeout: .now() + 5), .success)
+            },
+            onContention: { cancellationContended.fulfill() }
+        )
+        let (plugin, delegate, schedule) = try scheduledAlarmFixture(
+            playbackLock: playbackLock,
+            onEvent: { event in
+                XCTAssertNotEqual(event.type, .fired, "Invalidated delivery must not emit a fired event")
+            },
+            audioPlayerFactory: { url in
+                XCTFail("Invalidated delivery must not construct a player")
+                return try AVAudioPlayer(contentsOf: url)
+            }
+        )
+        defer { releaseRevalidation.signal() }
+        let foregroundFinished = expectation(description: "invalidated foreground delivery is suppressed")
+        DispatchQueue.global().async {
+            XCTAssertTrue(delegate.handleForegroundDelivery(content: delegate.makeContent(from: schedule)).isEmpty)
+            foregroundFinished.fulfill()
+        }
+        wait(for: [firstValidationFinished], timeout: 2)
+        let completed = expectation(description: "cancellation completes without playback")
+        let completion: (Result<Void, Error>) -> Void = { result in
+            if case let .failure(error) = result { XCTFail("Cancellation failed: \(error)") }
+            XCTAssertNil(delegate.audioPlayer)
+            plugin.isRinging(alarmId: cancelAll ? nil : schedule.id) {
+                XCTAssertEqual(try? $0.get(), false)
+                completed.fulfill()
+            }
+        }
+        if cancelAll {
+            plugin.cancelAllAlarms(completion: completion)
+        } else {
+            plugin.cancelAlarm(id: schedule.id, completion: completion)
+        }
+        wait(for: [cancellationContended], timeout: 2)
+        XCTAssertNil(WarmAlarmStore.shared.load(id: schedule.id))
+        releaseRevalidation.signal()
+        wait(for: [foregroundFinished, completed], timeout: 2)
+        withExtendedLifetime(plugin) {}
+    }
+
     private func makeSchedule() -> WarmAlarmScheduleData {
         .from(wire: WarmAlarmScheduleWire(
             id: 7_760_001,
@@ -355,17 +417,23 @@ final class WarmAlarmCancellationTests: XCTestCase {
 }
 
 private final class ContentionReportingLock: NSRecursiveLock, @unchecked Sendable {
+    private let onAcquisition: (Int) -> Void
     private let onContention: () -> Void
+    private var acquisitionCount = 0
 
-    init(onContention: @escaping () -> Void) {
+    init(onAcquisition: @escaping (Int) -> Void = { _ in }, onContention: @escaping () -> Void) {
+        self.onAcquisition = onAcquisition
         self.onContention = onContention
         super.init()
     }
 
     override func lock() {
-        if super.try() { return }
-        onContention()
-        super.lock()
+        if !super.try() {
+            onContention()
+            super.lock()
+        }
+        acquisitionCount += 1
+        onAcquisition(acquisitionCount)
     }
 }
 

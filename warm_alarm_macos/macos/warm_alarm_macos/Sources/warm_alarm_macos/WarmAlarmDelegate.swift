@@ -84,7 +84,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         defer { playbackLock.unlock() }
         guard let schedule = WarmAlarmStore.shared.load(id: alarmId),
               content.userInfo["occurrenceSeriesToken"] as? String == schedule.occurrenceSeriesToken else { return nil }
-        startAudio(alarmId: alarmId, for: schedule)
+        guard startAudio(alarmId: alarmId, for: schedule) else { return nil }
         return schedule
     }
 
@@ -209,12 +209,13 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
     // MARK: - Audio
 
-    private func startAudio(alarmId: Int64, for schedule: WarmAlarmScheduleData?) {
+    @discardableResult
+    private func startAudio(alarmId: Int64, for schedule: WarmAlarmScheduleData?) -> Bool {
         playbackLock.lock()
         defer { playbackLock.unlock() }
         guard let schedule,
               let storedSchedule = WarmAlarmStore.shared.load(id: alarmId),
-              storedSchedule.occurrenceSeriesToken == schedule.occurrenceSeriesToken else { return }
+              storedSchedule.occurrenceSeriesToken == schedule.occurrenceSeriesToken else { return false }
         configureAudioSession()
         let player: AVAudioPlayer?
         switch WarmAlarmAudioSource.select(filePath: schedule.filePath, assetPath: schedule.assetPath) {
@@ -246,6 +247,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             if let steps = steps { applyFadeSteps(steps, to: p) }
             if schedule.volumeEnforced == true { startVolumeEnforcer(for: p) }
         }
+        return true
     }
 
     private func applyFadeSteps(_ steps: [FadeStep], to player: AVAudioPlayer) {

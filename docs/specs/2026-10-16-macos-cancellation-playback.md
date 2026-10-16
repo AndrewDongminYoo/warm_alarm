@@ -10,6 +10,7 @@ Preserve notification ownership, pending-read ordering, unrelated playback, and 
 Cancellation does not acquire the notification-action semantics of `handleStop`, including its event and recurrence behavior.
 Foreground schedule validation and player startup must be serialized with cancellation teardown, including the matching-ID check.
 Cancellation must wait for an in-progress startup before reporting stopped playback.
+If startup revalidation rejects an invalidated schedule, foreground delivery must return no presentation options and emit no fired event.
 Playback state reads and writes use the same delegate-owned lock; event emission and cancellation completion remain outside it.
 Starting replacement playback must stop the previously tracked player so that cancellation cannot leave an untracked player ringing.
 
@@ -21,6 +22,7 @@ Cover matching cancellation, a different alarm ID, all-alarm cancellation, and a
 Existing notification cancellation and foreground-delivery regressions must still pass.
 Pause the injected player factory after foreground validation, observe cancellation contending for the held playback lock, and assert that completion waits until startup is released and stopped.
 Exercise this overlap for both cancellation APIs, then verify that cancellation before delivery suppresses playback entirely.
+Pause before the second schedule read and let cancellation invalidate storage; verify that the rejected startup produces neither presentation nor a fired event for both cancellation APIs.
 Retain both players during replacement and verify that cancelling the previous alarm leaves only the replacement playing.
 Run macOS native tests, Dart tests, Flutter analysis, explicit formatting, and scoped Trunk checks.
 
