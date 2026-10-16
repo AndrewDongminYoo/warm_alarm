@@ -9,7 +9,7 @@ import android.content.SharedPreferences
 import android.os.Build
 import androidx.core.app.NotificationManagerCompat
 import org.mockito.Mockito
-import sun.misc.Unsafe
+import java.lang.reflect.Field
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -268,20 +268,28 @@ private class AndroidSdkOverride(
 ) : AutoCloseable {
     private val field = Build.VERSION::class.java.getDeclaredField("SDK_INT")
     private val original = field.getInt(null)
+    private val unsafeClass = Class.forName("sun.misc.Unsafe")
     private val unsafe =
-        Unsafe::class.java
+        unsafeClass
             .getDeclaredField("theUnsafe")
             .apply { isAccessible = true }
-            .get(null) as Unsafe
-    private val base = unsafe.staticFieldBase(field)
-    private val offset = unsafe.staticFieldOffset(field)
+            .get(null)
+    private val base = unsafeClass.getMethod("staticFieldBase", Field::class.java).invoke(unsafe, field)
+    private val offset = unsafeClass.getMethod("staticFieldOffset", Field::class.java).invoke(unsafe, field)
+    private val putInt =
+        unsafeClass.getMethod(
+            "putIntVolatile",
+            Any::class.java,
+            Long::class.javaPrimitiveType,
+            Int::class.javaPrimitiveType,
+        )
 
     init {
-        unsafe.putIntVolatile(base, offset, sdkInt)
+        putInt.invoke(unsafe, base, offset, sdkInt)
         check(Build.VERSION.SDK_INT == sdkInt)
     }
 
     override fun close() {
-        unsafe.putIntVolatile(base, offset, original)
+        putInt.invoke(unsafe, base, offset, original)
     }
 }
