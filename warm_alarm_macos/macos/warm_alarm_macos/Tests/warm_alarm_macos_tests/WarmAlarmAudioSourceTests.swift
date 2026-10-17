@@ -80,7 +80,9 @@ final class WarmAlarmAudioSourceTests: XCTestCase {
             schedule.withActiveSnooze(untilMillis: 1_900_000_060_000).withRecurrenceTime(hour: 8, minute: 30)
         )
 
-        XCTAssertEqual(delegate.handleForegroundDelivery(content: content), [.alert, .sound])
+        XCTAssertEqual(
+            delegate.handleForegroundDelivery(content: content, deliveredAtMillis: 1_900_000_060_000), [.alert, .sound]
+        )
     }
 
     func testUnrelatedNotificationWithMatchingAlarmIdDoesNotStartPlayer() throws {
@@ -93,15 +95,75 @@ final class WarmAlarmAudioSourceTests: XCTestCase {
         XCTAssertNil(delegate.currentlyPlayingAlarmId)
     }
 
-    func testForegroundCustomAssetDoesNotRequestDuplicateNotificationSound() {
-        let (delegate, content) = foregroundAudioFixture(assetPath: "assets/custom-alarm.caf")
+    func testForegroundMissingAssetFallsBackToNotificationSound() throws {
+        let (delegate, content) = foregroundAudioFixture(assetPath: "assets/missing-alarm.caf")
+        XCTAssertEqual(delegate.handleForegroundDelivery(content: content), [.alert, .sound])
+        XCTAssertNil(delegate.currentlyPlayingAlarmId)
+    }
 
-        XCTAssertEqual(delegate.handleForegroundDelivery(content: content), [.alert])
+    func testForegroundMissingFileFallsBackToNotificationSound() throws {
+        let (delegate, content) = foregroundAudioFixture(filePath: "/missing/\(UUID().uuidString).caf")
+        XCTAssertEqual(delegate.handleForegroundDelivery(content: content), [.alert, .sound])
+        XCTAssertNil(delegate.currentlyPlayingAlarmId)
+    }
+
+    func testForegroundCorruptFileFallsBackToNotificationSound() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).caf")
+        try Data("not audio".utf8).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let (delegate, content) = foregroundAudioFixture(filePath: file.path)
+        XCTAssertEqual(delegate.handleForegroundDelivery(content: content), [.alert, .sound])
+        XCTAssertNil(delegate.currentlyPlayingAlarmId)
+    }
+
+    func testForegroundRejectedPlaybackFallsBackToNotificationSound() throws {
+        let file = try makeAudioFile()
+        let (delegate, content) = foregroundAudioFixture(filePath: file.path, playAudio: { _ in false })
+        XCTAssertEqual(delegate.handleForegroundDelivery(content: content), [.alert, .sound])
+        XCTAssertNil(delegate.currentlyPlayingAlarmId)
+    }
+
+    func testRegistrationPreservesHostCategoriesAndDistinctCustomTitles() throws {
+        let (delegate, _) = foregroundAudioFixture()
+        func content(stop: String, snooze: String) -> UNNotificationContent {
+            let wire = WarmAlarmScheduleWire(
+                id: 7_070_002, scheduledAtMillis: 1_900_000_000_000,
+                notification: WarmAlarmNotificationWire(
+                    title: "Labels", body: "Alarm", stopActionTitle: stop, snoozeActionTitle: snooze,
+                    keepNotificationAfterAlarmEnds: true
+                ),
+                audio: WarmAlarmAudioWire(loop: false, vibrate: false, volumeEnforced: false)
+            )
+            return delegate.makeContent(from: WarmAlarmScheduleData.from(wire: wire))
+        }
+        let first = content(stop: "Dismiss A", snooze: "Later A")
+        let second = content(stop: "Dismiss B", snooze: "Later B")
+        XCTAssertNotEqual(first.categoryIdentifier, second.categoryIdentifier)
+        let proxy = WarmAlarmNotificationCenterDelegate(warmAlarmDelegate: delegate, forwardingDelegate: nil)
+        XCTAssertTrue(proxy.target(for: first) === delegate)
+        XCTAssertTrue(proxy.target(for: second) === delegate)
+        let unrelated = UNMutableNotificationContent()
+        unrelated.categoryIdentifier = "WARM_ALARM:HOST_MESSAGES"
+        XCTAssertNil(proxy.target(for: unrelated))
+        let host = UNNotificationCategory(identifier: "HOST_MESSAGES", actions: [], intentIdentifiers: [], options: [])
+        var registered: Set<UNNotificationCategory> = [host]
+        let done = expectation(description: "categories registered")
+        WarmAlarmDelegate.registerCategories(
+            for: [first, second], read: { $0(registered) }, write: { registered = $0 }
+        ) { done.fulfill() }
+        wait(for: [done], timeout: 2)
+        XCTAssertTrue(registered.contains(host))
+        let firstCategory = try XCTUnwrap(registered.first { $0.identifier == first.categoryIdentifier })
+        let secondCategory = try XCTUnwrap(registered.first { $0.identifier == second.categoryIdentifier })
+        XCTAssertEqual(firstCategory.actions.map(\.title), ["Dismiss A", "Later A"])
+        XCTAssertEqual(secondCategory.actions.map(\.title), ["Dismiss B", "Later B"])
+        XCTAssertEqual(firstCategory.actions.map(\.identifier), ["STOP", "SNOOZE"])
     }
 
     private func foregroundAudioFixture(
         filePath: String? = nil,
-        assetPath: String? = nil
+        assetPath: String? = nil,
+        playAudio: @escaping (AVAudioPlayer) -> Bool = { $0.play() }
     ) -> (WarmAlarmDelegate, UNNotificationContent) {
         let wire = WarmAlarmScheduleWire(
             id: 7_070_002,
@@ -123,7 +185,8 @@ final class WarmAlarmAudioSourceTests: XCTestCase {
         )
         let delegate = WarmAlarmDelegate(
             eventsApi: WarmAlarmEventsApi(binaryMessenger: ForegroundAudioTestMessenger()),
-            eventQueue: queue
+            eventQueue: queue,
+            playAudio: playAudio
         )
         WarmAlarmStore.shared.save(schedule)
         addTeardownBlock {

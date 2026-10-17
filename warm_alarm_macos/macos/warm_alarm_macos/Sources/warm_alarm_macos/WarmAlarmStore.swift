@@ -27,6 +27,7 @@ struct WarmAlarmScheduleData: Codable {
     let fadeSteps: [FadeStep]?
     let keepNotificationAfterAlarmEnds: Bool?
     let activeSnoozeUntilMillis: Int64?
+    let snoozedOccurrenceMillis: Int64?
     let occurrenceSeriesToken: String?
 
     // Explicit CodingKeys lets the synthesized encode(to:) work while we
@@ -37,7 +38,7 @@ struct WarmAlarmScheduleData: Codable {
         case loop, volume, vibrate, fadeInDurationMillis
         case recurrenceWeekdays, recurrenceHour, recurrenceMinute, snoozeDurationMillis, payload
         case volumeEnforced, fadeSteps, keepNotificationAfterAlarmEnds, activeSnoozeUntilMillis
-        case occurrenceSeriesToken
+        case occurrenceSeriesToken, snoozedOccurrenceMillis
     }
 }
 
@@ -94,6 +95,7 @@ extension WarmAlarmScheduleData {
         keepNotificationAfterAlarmEnds = try c.decodeIfPresent(
             Bool.self, forKey: .keepNotificationAfterAlarmEnds)
         activeSnoozeUntilMillis = try c.decodeIfPresent(Int64.self, forKey: .activeSnoozeUntilMillis)
+        snoozedOccurrenceMillis = try c.decodeIfPresent(Int64.self, forKey: .snoozedOccurrenceMillis)
         occurrenceSeriesToken = try c.decodeIfPresent(String.self, forKey: .occurrenceSeriesToken)
     }
 
@@ -131,15 +133,17 @@ extension WarmAlarmScheduleData {
             fadeSteps: wire.audio.fadeSteps?.map { FadeStep(timeMillis: $0.timeMillis, volume: $0.volume) },
             keepNotificationAfterAlarmEnds: wire.notification.keepNotificationAfterAlarmEnds,
             activeSnoozeUntilMillis: nil,
+            snoozedOccurrenceMillis: nil,
             occurrenceSeriesToken: UUID().uuidString
         )
     }
 
-    func withActiveSnooze(untilMillis: Int64) -> WarmAlarmScheduleData {
+    func withActiveSnooze(untilMillis: Int64, consumingOccurrenceMillis: Int64? = nil) -> WarmAlarmScheduleData {
         copying(
             recurrenceHour: recurrenceHour,
             recurrenceMinute: recurrenceMinute,
-            activeSnoozeUntilMillis: untilMillis
+            activeSnoozeUntilMillis: untilMillis,
+            snoozedOccurrenceMillis: consumingOccurrenceMillis ?? snoozedOccurrenceMillis
         )
     }
 
@@ -147,14 +151,16 @@ extension WarmAlarmScheduleData {
         copying(
             recurrenceHour: hour,
             recurrenceMinute: minute,
-            activeSnoozeUntilMillis: activeSnoozeUntilMillis
+            activeSnoozeUntilMillis: activeSnoozeUntilMillis,
+            snoozedOccurrenceMillis: snoozedOccurrenceMillis
         )
     }
 
     private func copying(
         recurrenceHour: Int?,
         recurrenceMinute: Int?,
-        activeSnoozeUntilMillis: Int64?
+        activeSnoozeUntilMillis: Int64?,
+        snoozedOccurrenceMillis: Int64?
     ) -> WarmAlarmScheduleData {
         WarmAlarmScheduleData(
             id: id, scheduledAtMillis: scheduledAtMillis,
@@ -172,6 +178,7 @@ extension WarmAlarmScheduleData {
             fadeSteps: fadeSteps,
             keepNotificationAfterAlarmEnds: keepNotificationAfterAlarmEnds,
             activeSnoozeUntilMillis: activeSnoozeUntilMillis,
+            snoozedOccurrenceMillis: snoozedOccurrenceMillis,
             occurrenceSeriesToken: occurrenceSeriesToken
         )
     }
