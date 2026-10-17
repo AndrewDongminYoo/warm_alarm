@@ -1,5 +1,8 @@
 # Unreleased
 
+- Preserve host notification categories and apply distinct custom Stop/Snooze titles in the User Notifications backend.
+- Report missing or failed custom audio and request notification sound for foreground fallback.
+- Scope Stop and Snooze playback teardown to the matching alarm occurrence.
 - Restore native default sound for foreground notifications when no custom player owns audio.
 - Preserve unrelated host notifications when cancelling plugin alarms.
 - Restore the previous User Notifications schedule and pending requests when replacement registration fails, and report incomplete recovery as a scheduling rollback failure.

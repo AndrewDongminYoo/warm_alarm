@@ -1,4 +1,5 @@
 import AVFoundation
+import CryptoKit
 import Foundation
 import UserNotifications
 
@@ -150,7 +151,9 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     static let categoryIdentifier = "WARM_ALARM"
     static let stopActionIdentifier = "STOP"
     static let snoozeActionIdentifier = "SNOOZE"
+    private static let categoryMutationQueue = WarmAlarmMutationQueue(label: "warm_alarm.categories")
 
+    private let playAudio: (AVAudioPlayer) -> Bool
     private let eventQueue: WarmAlarmEventQueue
     private let notificationMutationQueue: WarmAlarmMutationQueue
     private var audioPlayer: AVAudioPlayer?
@@ -167,8 +170,10 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         notificationMutationQueue: WarmAlarmMutationQueue,
         currentlyPlayingAlarmId: Int64? = nil,
         currentlyPlayingOccurrenceToken: String? = nil,
-        eventQueue: WarmAlarmEventQueue? = nil
+        eventQueue: WarmAlarmEventQueue? = nil,
+        playAudio: @escaping (AVAudioPlayer) -> Bool = { $0.play() }
     ) {
+        self.playAudio = playAudio
         self.eventQueue = eventQueue ?? WarmAlarmEventQueue { event, completion in
             let emit = {
                 eventsApi.emitEvent(event: event) { result in
@@ -198,7 +203,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        guard notification.request.content.categoryIdentifier == Self.categoryIdentifier else {
+        guard Self.ownsCategory(notification.request.content.categoryIdentifier) else {
             return
         }
         guard let alarmIdString = notification.request.content.userInfo["alarmId"] as? String,
@@ -255,11 +260,12 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             deliveredAtMillis: deliveredAtMillis,
             schedule: schedule
         )
+        var didStartAudio = false
         let didHandle = foregroundOccurrenceTracker.handleIfAllowed(
             alarmId: alarmId,
             occurrenceToken: occurrenceToken,
             perform: {
-                startAudio(alarmId: alarmId, occurrenceToken: occurrenceToken, for: schedule)
+                didStartAudio = startAudio(alarmId: alarmId, occurrenceToken: occurrenceToken, for: schedule)
                 emitEvent(WarmAlarmEventWire(
                     alarmId: alarmId,
                     type: .fired,
@@ -269,8 +275,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             }
         )
         guard didHandle else { return [] }
-        let source = WarmAlarmAudioSource.select(filePath: schedule.filePath, assetPath: schedule.assetPath)
-        return source == .none ? [.alert, .sound] : [.alert]
+        return didStartAudio ? [.alert] : [.alert, .sound]
     }
 
     func userNotificationCenter(
@@ -297,7 +302,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         deliveredAtMillis: Int64,
         completionHandler: @escaping () -> Void
     ) -> Bool {
-        guard content.categoryIdentifier == Self.categoryIdentifier else {
+        guard Self.ownsCategory(content.categoryIdentifier) else {
             return false
         }
         guard let alarmIdString = content.userInfo["alarmId"] as? String,
@@ -376,7 +381,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             alarmId: alarmId,
             occurrenceToken: occurrenceToken,
             minimumOccurrenceMillis: actionLowerBound,
-            perform: stopAudio
+            perform: { stopAudioIfPlaying(alarmId: alarmId, occurrenceToken: occurrenceToken) }
         ) else {
             stopAudioIfPlaying(alarmId: alarmId, occurrenceToken: occurrenceToken)
             return
@@ -429,7 +434,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             alarmId: alarmId,
             occurrenceToken: occurrenceToken,
             minimumOccurrenceMillis: actionLowerBound,
-            perform: stopAudio
+            perform: { stopAudioIfPlaying(alarmId: alarmId, occurrenceToken: occurrenceToken) }
         ) else {
             stopAudioIfPlaying(alarmId: alarmId, occurrenceToken: occurrenceToken)
             completion()
@@ -584,7 +589,11 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             content.sound = .default
         }
         content.userInfo = ["alarmId": String(schedule.id)]
-        content.categoryIdentifier = Self.categoryIdentifier
+        content.userInfo["warmAlarmStopActionTitle"] = schedule.stopActionTitle ?? "Stop"
+        content.userInfo["warmAlarmSnoozeActionTitle"] = schedule.snoozeActionTitle ?? "Snooze"
+        content.categoryIdentifier = Self.notificationCategory(
+            stopTitle: schedule.stopActionTitle, snoozeTitle: schedule.snoozeActionTitle
+        ).identifier
         if #available(iOS 15.0, *) {
             content.interruptionLevel = .timeSensitive
         }
@@ -604,18 +613,63 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
 
     // MARK: - Category registration
 
-    static func registerCategories() {
-        let stop = UNNotificationAction(
-            identifier: stopActionIdentifier, title: "Stop", options: .destructive)
-        let snooze = UNNotificationAction(
-            identifier: snoozeActionIdentifier, title: "Snooze", options: [])
-        let category = UNNotificationCategory(
-            identifier: categoryIdentifier,
-            actions: [stop, snooze],
-            intentIdentifiers: [],
-            options: []
+    static func ownsCategory(_ identifier: String) -> Bool {
+        if identifier == categoryIdentifier { return true }
+        let prefix = categoryIdentifier + ":"
+        guard identifier.hasPrefix(prefix) else { return false }
+        let digest = identifier.dropFirst(prefix.count)
+        return digest.count == 64 && digest.allSatisfy { "0123456789abcdef".contains($0) }
+    }
+
+    static func notificationCategory(stopTitle: String?, snoozeTitle: String?) -> UNNotificationCategory {
+        let stopTitle = stopTitle ?? "Stop"
+        let snoozeTitle = snoozeTitle ?? "Snooze"
+        let identifier: String
+        if stopTitle == "Stop", snoozeTitle == "Snooze" {
+            identifier = categoryIdentifier
+        } else {
+            // Length-prefixing keeps distinct title pairs distinct, including Unicode and delimiter text.
+            let input = "\(stopTitle.utf8.count):\(stopTitle)\(snoozeTitle)"
+            let digest = SHA256.hash(data: Data(input.utf8)).map { String(format: "%02x", $0) }.joined()
+            identifier = categoryIdentifier + ":" + digest
+        }
+        return UNNotificationCategory(
+            identifier: identifier,
+            actions: [
+                UNNotificationAction(identifier: stopActionIdentifier, title: stopTitle, options: .destructive),
+                UNNotificationAction(identifier: snoozeActionIdentifier, title: snoozeTitle, options: [])
+            ],
+            intentIdentifiers: [], options: []
         )
-        UNUserNotificationCenter.current().setNotificationCategories([category])
+    }
+
+    static func registerCategories(
+        for contents: [UNNotificationContent] = [],
+        read: @escaping (@escaping (Set<UNNotificationCategory>) -> Void) -> Void = { completion in
+            UNUserNotificationCenter.current().getNotificationCategories(completionHandler: completion)
+        },
+        write: @escaping (Set<UNNotificationCategory>) -> Void = {
+            UNUserNotificationCenter.current().setNotificationCategories($0)
+        },
+        completion: @escaping () -> Void = {}
+    ) {
+        var required: Set<UNNotificationCategory> = [notificationCategory(stopTitle: nil, snoozeTitle: nil)]
+        for content in contents where ownsCategory(content.categoryIdentifier) {
+            required.insert(notificationCategory(
+                stopTitle: content.userInfo["warmAlarmStopActionTitle"] as? String,
+                snoozeTitle: content.userInfo["warmAlarmSnoozeActionTitle"] as? String
+            ))
+        }
+        let categories = required
+        let identifiers = Set(categories.map(\.identifier))
+        categoryMutationQueue.enqueue { finish in
+            read { existing in
+                let preserved = existing.filter { !identifiers.contains($0.identifier) }
+                write(Set(preserved).union(categories))
+                completion()
+                finish()
+            }
+        }
     }
 
     // MARK: - Audio
@@ -634,38 +688,56 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         alarmId: Int64,
         occurrenceToken: String,
         for schedule: WarmAlarmScheduleData?
-    ) {
-        configureAudioSession()
-        let player: AVAudioPlayer?
+    ) -> Bool {
+        let url: URL?
         switch WarmAlarmAudioSource.select(filePath: schedule?.filePath, assetPath: schedule?.assetPath) {
         case let .file(path):
-            player = try? AVAudioPlayer(contentsOf: URL(fileURLWithPath: path))
+            url = URL(fileURLWithPath: path)
         case let .asset(asset):
-            if let url = flutterAssetURL(for: asset) {
-                player = try? AVAudioPlayer(contentsOf: url)
-            } else {
-                player = nil
-            }
+            url = flutterAssetURL(for: asset)
         case .none:
-            player = nil
+            return false
         }
-        if let p = player {
+        guard let url, FileManager.default.fileExists(atPath: url.path) else {
+            emitPlaybackFailure(alarmId: alarmId, code: .audioFileNotFound, message: "Custom alarm audio was not found.")
+            return false
+        }
+        do {
+            let player = try AVAudioPlayer(contentsOf: url)
+            stopAudio()
+            try configureAudioSession()
             let steps = schedule?.fadeSteps
             if let first = steps?.first, first.timeMillis == 0 {
-                p.volume = max(0.0, min(1.0, Float(first.volume)))
-            } else if let v = schedule?.volume {
-                p.volume = max(0.0, min(1.0, Float(v)))
+                player.volume = max(0.0, min(1.0, Float(first.volume)))
+            } else if let volume = schedule?.volume {
+                player.volume = max(0.0, min(1.0, Float(volume)))
             } else {
-                p.volume = 1.0
+                player.volume = 1.0
             }
-            p.numberOfLoops = (schedule?.loop ?? true) ? -1 : 0
-            p.play()
-            audioPlayer = p
+            player.numberOfLoops = (schedule?.loop ?? true) ? -1 : 0
+            guard playAudio(player) else {
+                player.stop()
+                deactivateAudioSession()
+                emitPlaybackFailure(alarmId: alarmId, code: .audioPlaybackFailed, message: "Custom alarm audio did not start.")
+                return false
+            }
+            audioPlayer = player
             currentlyPlayingAlarmId = alarmId
             currentlyPlayingOccurrenceToken = occurrenceToken
-            if let steps = steps { applyFadeSteps(steps, to: p) }
-            if schedule?.volumeEnforced == true { startVolumeEnforcer(for: p) }
+            if let steps { applyFadeSteps(steps, to: player) }
+            if schedule?.volumeEnforced == true { startVolumeEnforcer(for: player) }
+            return true
+        } catch {
+            emitPlaybackFailure(alarmId: alarmId, code: .audioPlaybackFailed, message: error.localizedDescription)
+            return false
         }
+    }
+
+    private func emitPlaybackFailure(alarmId: Int64, code: WarmAlarmFailureCodeWire, message: String) {
+        emitEvent(WarmAlarmEventWire(
+            alarmId: alarmId, type: .failed, occurredAtMillis: nowMillis(),
+            failure: WarmAlarmFailureWire(code: code, message: message)
+        ))
     }
 
     private func applyFadeSteps(_ steps: [FadeStep], to player: AVAudioPlayer) {
@@ -702,11 +774,11 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         stopAudio()
     }
 
-    private func configureAudioSession() {
+    private func configureAudioSession() throws {
         #if os(iOS)
         // .mixWithOthers lets warm_alarm coexist with just_audio playing the voice message.
-        try? AVAudioSession.sharedInstance().setCategory(.playback, options: [.mixWithOthers])
-        try? AVAudioSession.sharedInstance().setActive(true)
+        try AVAudioSession.sharedInstance().setCategory(.playback, options: [.mixWithOthers])
+        try AVAudioSession.sharedInstance().setActive(true)
         #endif
     }
 
