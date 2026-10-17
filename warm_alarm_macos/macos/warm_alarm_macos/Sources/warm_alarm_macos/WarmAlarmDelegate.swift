@@ -25,9 +25,11 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     private var activePlayer: AVAudioPlayer?
     private var activeAlarmId: Int64?
     private var activeOccurrenceToken: String?
-    // The last occurrence per alarm that a foreground delivery or a default tap already handled, whether
-    // custom audio started or the notification sound was used. A default tap on it is ignored.
-    private var handledForegroundOccurrenceTokens = [Int64: String]()
+    // Every occurrence per alarm that a foreground delivery or a default tap already handled, whether
+    // custom audio started or the notification sound was used. A default tap on any of them is ignored.
+    // A recurring alarm delivers one request per weekday, so retaining only the latest token would let a
+    // tap on an older, still-delivered weekday replay it. stopIfPlaying/stopAllIfPlaying clear the set.
+    private var handledForegroundOccurrenceTokens = [Int64: Set<String>]()
     private var fadeWorkItems: [DispatchWorkItem] = []
     private var volumeEnforcerTimer: Timer?
 
@@ -137,7 +139,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         guard let didStartAudio = startAudio(alarmId: alarmId, occurrenceToken: occurrenceToken, for: schedule) else {
             return nil
         }
-        handledForegroundOccurrenceTokens[alarmId] = occurrenceToken
+        handledForegroundOccurrenceTokens[alarmId, default: []].insert(occurrenceToken)
         return (schedule, didStartAudio)
     }
 
@@ -320,7 +322,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     private func hasHandledForegroundOccurrence(alarmId: Int64, occurrenceToken: String) -> Bool {
         playbackLock.lock()
         defer { playbackLock.unlock() }
-        return handledForegroundOccurrenceTokens[alarmId] == occurrenceToken
+        return handledForegroundOccurrenceTokens[alarmId]?.contains(occurrenceToken) ?? false
     }
 
     private func stopAudioIfPlaying(alarmId: Int64, occurrenceToken: String?) {

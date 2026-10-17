@@ -336,6 +336,42 @@ final class WarmAlarmActionTests: XCTestCase {
         XCTAssertEqual(fixture.events.map(\.type), [.fired])
     }
 
+    func testDefaultTapOnOlderHandledWeekdayAfterNotificationSoundFallbackEmitsNoThirdFired() throws {
+        let fixture = try fixture()
+        var recurringWire = fixture.wire
+        recurringWire.audio = WarmAlarmAudioWire(loop: true, volume: 0, vibrate: false, volumeEnforced: false)
+        recurringWire.recurrence = WarmAlarmRecurrenceWire(weekdays: [1, 2])
+        let recurring = WarmAlarmScheduleData.from(wire: recurringWire)
+        WarmAlarmStore.shared.save(recurring)
+        let content = fixture.delegate.makeContent(from: recurring)
+        let sunday = "\(recurring.id)#1"
+        let monday = "\(recurring.id)#2"
+        XCTAssertEqual(
+            fixture.delegate.handleForegroundDelivery(content: content, identifier: sunday, deliveredAtMillis: 1_000),
+            [.alert, .sound]
+        )
+        XCTAssertEqual(
+            fixture.delegate.handleForegroundDelivery(content: content, identifier: monday, deliveredAtMillis: 2_000),
+            [.alert, .sound]
+        )
+        XCTAssertEqual(fixture.events.map(\.type), [.fired, .fired])
+        XCTAssertNil(fixture.delegate.currentlyPlayingAlarmId)
+        var completions = 0
+        let done = expectation(description: "tap on the older handled weekday completed")
+        fixture.delegate.handleNotificationResponse(
+            actionIdentifier: UNNotificationDefaultActionIdentifier,
+            deliveredIdentifier: sunday, content: content, deliveredAtMillis: 1_000
+        ) {
+            completions += 1
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 2)
+        XCTAssertEqual(completions, 1)
+        XCTAssertNil(fixture.delegate.currentlyPlayingAlarmId)
+        XCTAssertNil(fixture.delegate.audioPlayer)
+        XCTAssertEqual(fixture.events.map(\.type), [.fired, .fired])
+    }
+
     func testDefaultTapOnHandledMissingFileOccurrenceEmitsNoSecondFailure() throws {
         let fixture = try fixture()
         var missingWire = fixture.wire
