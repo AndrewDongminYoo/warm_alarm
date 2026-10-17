@@ -1,5 +1,10 @@
 # Unreleased
 
+- Preserve host notification categories and apply distinct custom Stop/Snooze titles in the User Notifications backend.
+- Report missing or failed custom audio and request notification sound for foreground fallback.
+- Scope Stop and Snooze playback teardown to the matching alarm occurrence, and let an accepted delivery replace earlier playback before resolving its own source.
+- Reject actions from replaced notification generations and commit Snooze only after successful registration, with previous-request recovery on failure.
+- Record stopped recurring occurrences so a retained notification cannot snooze or replay them.
 - Restore native default sound for foreground notifications when no custom player owns audio.
 - Preserve unrelated host notifications during cancellation and forward their delegate callbacks without replacing host presentation or completion behavior.
 - Validate foreground notification ownership and suppress cancelled or superseded deliveries before playback starts.

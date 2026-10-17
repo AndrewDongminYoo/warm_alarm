@@ -82,7 +82,8 @@ enum WarmAlarmSnoozeRegistration {
     }
 }
 
-final class WarmAlarmMutationQueue {
+// Mutable queue state is accessed only on the private serial dispatch queue.
+final class WarmAlarmMutationQueue: @unchecked Sendable {
     typealias Mutation = (@escaping () -> Void) -> Void
 
     private let queue: DispatchQueue
@@ -478,7 +479,7 @@ class WarmAlarmNotificationCenterDelegate: NSObject, UNUserNotificationCenterDel
     }
 
     func target(for content: UNNotificationContent) -> UNUserNotificationCenterDelegate? {
-        if content.categoryIdentifier == WarmAlarmDelegate.categoryIdentifier {
+        if WarmAlarmDelegate.ownsCategory(content.categoryIdentifier) {
             return warmAlarmDelegate
         }
         return forwardingDelegate
@@ -738,8 +739,11 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         self.delegate = delegate
         self.notificationMutationQueue = notificationMutationQueue
         self.notificationCenter = notificationCenter
-        self.notificationAdder = notificationAdder ?? { request, completion in
+        let add: NotificationAdder = notificationAdder ?? { request, completion in
             notificationCenter.add(request, withCompletionHandler: completion)
+        }
+        self.notificationAdder = { request, completion in
+            WarmAlarmDelegate.registerCategories(for: [request.content], completion: { add(request, completion) })
         }
         self.pendingNotificationReader = pendingNotificationReader ?? { completion in
             notificationCenter.getPendingNotificationRequests(completionHandler: completion)
@@ -1689,7 +1693,9 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
             requests,
             identifier: { $0.identifier },
             add: { request, completion in
-                center.add(request, withCompletionHandler: completion)
+                WarmAlarmDelegate.registerCategories(for: [request.content], completion: {
+                    center.add(request, withCompletionHandler: completion)
+                })
             },
             rollback: { identifiers in
                 center.removePendingNotificationRequests(withIdentifiers: identifiers)
@@ -2673,7 +2679,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
             let previousSchedule = WarmAlarmStore.shared.load(id: schedule.id)
             let previousRequests = pendingRequests.filter {
                 replacingIdentifiers.contains($0.identifier)
-                    && $0.content.categoryIdentifier == WarmAlarmDelegate.categoryIdentifier
+                    && WarmAlarmDelegate.ownsCategory($0.content.categoryIdentifier)
                     && $0.content.userInfo["alarmId"] as? String == String(schedule.id)
             }
             let pendingIdentifiers = Set(pendingRequests.map(\.identifier))
@@ -3122,7 +3128,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
             self.delegate.stopAllIfPlaying()
             self.pendingNotificationReader { pendingRequests in
                 let identifiers = pendingRequests.filter {
-                    $0.content.categoryIdentifier == WarmAlarmDelegate.categoryIdentifier
+                    WarmAlarmDelegate.ownsCategory($0.content.categoryIdentifier)
                         || $0.identifier == Self.killWarningNotifId
                 }.map(\.identifier)
                 let cleanupLocalState = {

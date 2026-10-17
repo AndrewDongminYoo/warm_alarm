@@ -63,7 +63,7 @@ final class WarmAlarmNotificationCenterDelegate: NSObject, UNUserNotificationCen
     }
 
     func target(for content: UNNotificationContent) -> UNUserNotificationCenterDelegate? {
-        if content.categoryIdentifier == WarmAlarmDelegate.categoryIdentifier {
+        if WarmAlarmDelegate.ownsCategory(content.categoryIdentifier) {
             return warmAlarmDelegate
         }
         return forwardingDelegate

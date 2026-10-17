@@ -199,6 +199,11 @@ It does not require APNs, an ActivityKit push server, frequent-update configurat
 
 The following behavior applies to the User Notifications backend.
 
+User Notifications honors `notification.stopActionTitle` and `notification.snoozeActionTitle`, with `Stop` and `Snooze` as defaults.
+Different title pairs use distinct plugin category identifiers, so concurrently scheduled alarms retain their own labels.
+Registration merges those categories with the host's existing categories before adding notification requests.
+Hosts that replace notification categories later must also preserve the plugin categories.
+
 When the notification action is handled, `WarmAlarmDelegate` starts `AVAudioPlayer` with the
 configured audio source (a local file path or a Flutter asset). If neither is provided, no in-app
 audio is played — the notification itself still plays the bundled `alarm_ring.caf` (or the system
@@ -206,6 +211,13 @@ default) sound. The `AVAudioSession` category is set to `.playback` (with `.mixW
 audio continues even when the device is in Silent mode. An optional fade-in is applied by scheduling
 discrete volume steps as `DispatchWorkItem`s (via `DispatchQueue.main.asyncAfter`), not a periodic
 timer.
+
+A missing custom file or asset emits `WarmAlarmFailed` with `audioFileNotFound`; decoding, audio-session activation, or player-start failure emits `audioPlaybackFailed`.
+Foreground delivery then requests the notification sound instead of suppressing it.
+`WarmAlarmFired` records the accepted delivery, not proof of audible output; system settings can still silence the notification.
+A default notification tap cannot replay the original system notification sound, so custom-audio failure remains observable through the failure event.
+Stop and Snooze only stop a player owned by the same alarm and occurrence.
+An accepted foreground delivery stops any earlier playback before it resolves its own source, so the newest alarm owns audio even when it falls back to the notification sound.
 
 ### Recurrence
 

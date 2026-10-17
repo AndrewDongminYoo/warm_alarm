@@ -131,9 +131,7 @@ class WarmAlarmForegroundService : Service() {
             WarmAlarmPendingIntents.endWakeCheckCycle(this, alarmId)
             if (!isRecurring) WarmAlarmStore.remove(this, alarmId)
         }
-        val keepNotif = schedule?.notification?.keepNotificationAfterAlarmEnds == true
-        @Suppress("DEPRECATION")
-        stopForeground(!keepNotif)
+        finishForegroundNotification(alarmId, schedule)
         stopSelf()
     }
 
@@ -184,10 +182,44 @@ class WarmAlarmForegroundService : Service() {
                 payload = schedule?.payload,
             ),
         )
-        val keepNotif = schedule?.notification?.keepNotificationAfterAlarmEnds == true
-        @Suppress("DEPRECATION")
-        stopForeground(!keepNotif)
+        finishForegroundNotification(alarmId, schedule)
         stopSelf()
+    }
+
+    private fun finishForegroundNotification(
+        alarmId: Long,
+        schedule: WarmAlarmScheduleWire?,
+    ) {
+        if (schedule?.notification?.keepNotificationAfterAlarmEnds != true) {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+            return
+        }
+        val retained = buildNotification(alarmId, schedule)
+        // Completed notifications retain their content without stale alarm controls or another full-screen launch.
+        retained.actions = emptyArray()
+        retained.fullScreenIntent = null
+        retained.flags =
+            (
+                retained.flags and
+                    (Notification.FLAG_FOREGROUND_SERVICE or Notification.FLAG_ONGOING_EVENT or Notification.FLAG_NO_CLEAR).inv()
+            ) or
+            Notification.FLAG_ONLY_ALERT_ONCE
+        val notifications = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            // Detach first so the service no longer owns the record when the retained content replaces it.
+            stopForeground(STOP_FOREGROUND_DETACH)
+            notifications.notify(NOTIF_ID, retained)
+        } else {
+            // This is a new notification record, so ONLY_ALERT_ONCE cannot silence its first alert.
+            retained.priority = Notification.PRIORITY_LOW
+            retained.sound = null
+            retained.vibrate = null
+            retained.defaults = 0
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+            notifications.notify(NOTIF_ID, retained)
+        }
     }
 
     private fun startAudio(
