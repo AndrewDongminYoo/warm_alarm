@@ -1,4 +1,4 @@
-# Unreleased
+# 0.1.5
 
 - Preserve completed alarm notifications after service exit across supported Android versions, removing stale controls and full-screen intent.
 - Ignore locked-boot broadcasts below API 24 before accessing stored alarms; ordinary boot recovery remains available on API 19–23.
@@ -8,6 +8,7 @@
 - Attempt to release a newly allocated player when initialization fails, preserving the original playback error if cleanup also fails.
 - Reject alarm IDs outside the signed 32-bit range instead of truncating them, and keep alarm and wake-check PendingIntent identities distinct.
 - Clarify kill-warning triggers, notification dismissal, and the Android alarm ID contract.
+- Require platform interface 0.1.7 for the coordinated 0.1.7 / 0.1.8 release.
 
 # 0.1.4
 

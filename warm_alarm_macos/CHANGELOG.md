@@ -1,4 +1,4 @@
-# Unreleased
+# 0.1.6
 
 - Ignore a default tap on an occurrence the foreground already handled, so the tap neither restarts playback nor emits a duplicate `WarmAlarmFired`, including for alarms that fell back to the notification sound.
 - Preserve host notification categories and apply distinct custom Stop/Snooze titles in the User Notifications backend.
@@ -12,6 +12,7 @@
 - Stop active playback on cancellation and serialize startup with cancellation so stale callbacks cannot restart audio.
 - Restore the previous schedule and exact pending requests when replacement registration fails, and report incomplete recovery as a scheduling rollback failure.
 - Clarify kill-warning triggers and pending-only cancellation on reactivation.
+- Require platform interface 0.1.7 for the coordinated 0.1.7 / 0.1.8 release.
 
 # 0.1.5
 
