@@ -25,6 +25,14 @@ The default notification sound can play on delivery, subject to system notificat
 Custom in-app audio starts when the user clicks the notification or when the app receives it in the foreground.
 macOS has no `AVAudioSession` category override, so the plugin does not control system audio policy.
 
+## Privacy manifest
+
+SwiftPM and CocoaPods both bundle this plugin's `PrivacyInfo.xcprivacy`.
+It declares app-local `UserDefaults` access (`CA92.1`) for the alarm store and the process-termination warning text.
+The plugin declares no tracking or collected data types.
+Apple's enforcement of required-reason API declarations for macOS app uploads was not confirmed when this manifest was added.
+The consuming app remains responsible for its own behavior and the declarations of other dependencies.
+
 ---
 
 ## Native implementation
