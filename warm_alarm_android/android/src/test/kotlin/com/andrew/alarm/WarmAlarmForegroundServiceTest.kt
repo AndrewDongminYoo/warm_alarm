@@ -22,6 +22,34 @@ import kotlin.test.assertTrue
 
 class WarmAlarmForegroundServiceTest {
     @Test
+    fun api19PlaybackUsesTheLegacyAlarmStream() {
+        AndroidSdkOverride(19).use {
+            PlaybackHarness().use { harness ->
+                harness.fire(72)
+                val player = harness.players.single()
+                @Suppress("DEPRECATION")
+                Mockito.verify(player).setAudioStreamType(AudioManager.STREAM_ALARM)
+                Mockito.verify(player, Mockito.never()).setAudioAttributes(Mockito.any(AudioAttributes::class.java))
+                assertTrue(player.isPlaying)
+            }
+        }
+    }
+
+    @Test
+    fun api21PlaybackKeepsAudioAttributes() {
+        AndroidSdkOverride(21).use {
+            PlaybackHarness().use { harness ->
+                harness.fire(72)
+                val player = harness.players.single()
+                Mockito.verify(player).setAudioAttributes(Mockito.any(AudioAttributes::class.java))
+                @Suppress("DEPRECATION")
+                Mockito.verify(player, Mockito.never()).setAudioStreamType(Mockito.anyInt())
+                assertTrue(player.isPlaying)
+            }
+        }
+    }
+
+    @Test
     fun missingIdDoesNotStopOrReplaceCurrentPlayback() {
         PlaybackHarness().use { harness ->
             harness.fire(71)

@@ -154,7 +154,11 @@ class WarmAlarmForegroundService : Service() {
     ) {
         val pending = WarmAlarmPendingIntents.wakeCheckTrigger(this, alarmId, PendingIntent.FLAG_UPDATE_CURRENT)!!
         val am = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
-        am.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, checkAtMillis, pending)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            am.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, checkAtMillis, pending)
+        } else {
+            am.set(android.app.AlarmManager.RTC_WAKEUP, checkAtMillis, pending)
+        }
     }
 
     private fun handleSnooze(alarmId: Long) {
@@ -268,13 +272,18 @@ class WarmAlarmForegroundService : Service() {
         val player = MediaPlayer()
         try {
             player.configure()
-            player.setAudioAttributes(
-                AudioAttributes
-                    .Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .build(),
-            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                player.setAudioAttributes(
+                    AudioAttributes
+                        .Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build(),
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                player.setAudioStreamType(AudioManager.STREAM_ALARM)
+            }
             player.isLooping = loop
             player.setVolume(volume, volume)
             player.prepare()

@@ -26,13 +26,12 @@ This package is [endorsed][endorsed_link], which means you do **not** add it dir
 
 ### Scheduling
 
-The plugin uses `AlarmManager.setExactAndAllowWhileIdle()` when exact-alarm access is available.
+Initial scheduling, initialization recovery, boot recovery, and rescheduling use the same version-aware policy.
+On API 19–22, the plugin uses `AlarmManager.setExact()`.
+On API 23 or later, it uses `setExactAndAllowWhileIdle()` when exact-alarm access is available.
 On Android 12 or later without that access, it uses `setAndAllowWhileIdle()` and returns limited readiness plus a warning that the alarm may fire late.
 `getPermissionState()` reports the current exact-alarm grant.
 The manifest declares `SCHEDULE_EXACT_ALARM` and `USE_EXACT_ALARM`; their grant rules and eligible uses differ, as described in [Android’s exact-alarm permission guidance](https://developer.android.com/develop/background-work/services/alarms).
-
-The module declares minimum API 19, but initial scheduling and startup/boot recovery currently call an API 23 method without a legacy guard.
-API 19–22 compatibility is therefore a known release blocker; the existing legacy branch covers rescheduling only.
 
 Android alarm IDs must be signed 32-bit integers (`-2147483648` through `2147483647`, inclusive).
 Negative IDs, including `-1`, are supported.
@@ -52,7 +51,7 @@ Query readiness again after the app resumes.
 When the scheduled time arrives `WarmAlarmReceiver` receives the `com.andrew.alarm.ACTION_FIRE`
 broadcast and starts `WarmAlarmForegroundService`. The service:
 
-- Plays audio via `MediaPlayer` (local file, asset, or system default ringtone)
+- Plays audio via `MediaPlayer` (local file, asset, or system default ringtone), using the legacy alarm stream on API 19–20 and audio attributes on API 21 or later
 - Selects one audio source: a nonempty local file takes precedence, an asset is the direct-boot fallback when that file is unavailable before unlock, and the system alarm sound is used when neither path is configured
 - Applies `loop` to the selected local file or asset without mixing sources
 - Applies optional fade-in via a `Handler`-driven volume schedule
@@ -67,9 +66,9 @@ It does not perform a Stop or Snooze action on the replaced alarm's stored sched
 
 ### Wake-check
 
-When `WarmAlarmWakeCheck` is configured, a secondary alarm is scheduled for `checkDelay` after the
-primary alarm fires. If `ACTION_WAKE_CHECK_FIRE` arrives without the user having dismissed the
-primary alarm, the alarm retriggers (up to `maxRetriggers` times at `retriggerDelay` intervals).
+When `WarmAlarmWakeCheck` is configured, stopping the primary alarm schedules a secondary alarm for `checkDelay` later.
+The check uses inexact `AlarmManager.set()` on API 19–22 and `setAndAllowWhileIdle()` on API 23 or later.
+When `ACTION_WAKE_CHECK_FIRE` arrives, the receiver shows the wake-check prompt and schedules a retrigger when `retriggerDelay` is configured, up to `maxRetriggers` times.
 `ACTION_WAKE_CHECK_DISMISS` cancels the follow-up chain.
 
 A retrigger and the regular alarm are separate `PendingIntent`s.
@@ -80,7 +79,10 @@ Stop and Snooze service actions use an ID-scoped URI and distinct actions, so th
 Finishing a wake check clears a recurring alarm's retrigger count and removes the stored schedule only for a one-shot alarm.
 
 `filterEquals` cannot be exercised from the JVM unit tests.
-`WarmAlarmPendingIntentsInstrumentedTest` asserts it against the real framework registry and runs on an emulator in CI, so the identity split itself is gated.
+`WarmAlarmPendingIntentsInstrumentedTest` asserts it against the real framework registry on API 19, 22, and 29 emulators in CI.
+`WarmAlarmDeliveryInstrumentedTest` registers a native alarm, observes receiver delivery and audio initialization, sends Stop, and waits for the wake-check event on the same images.
+These tests exercise native code without starting a Flutter engine; they do not establish that a current Flutter application can run on API 19.
+The test APK excludes Flutter's API 21 image-decoding dependency and does not override dependency minimum SDK requirements.
 What that test does not cover is the scenario around it, which is still a device check: schedule a recurring alarm, let the wake check fire, tap the dismiss action, then confirm the next occurrence is still listed by `adb shell dumpsys alarm | grep <package>`.
 Read `adb shell dumpsys activity intents` rather than `dumpsys alarm` when the question is which `PendingIntent` is which: only the former prints `requestCode` and the intent's data Uri.
 
@@ -95,10 +97,9 @@ occurrence; `cancelAlarm(id)` tears down the series.
 
 ### Boot persistence
 
-`WarmAlarmBootReceiver` handles `BOOT_COMPLETED` and `LOCKED_BOOT_COMPLETED` broadcasts (via
-`RECEIVE_BOOT_COMPLETED` permission) to reschedule any alarms that were lost when the device
-restarted. It is `directBootAware`, so alarms scheduled before first unlock are restored from
-device-protected storage.
+`WarmAlarmBootReceiver` handles `BOOT_COMPLETED` (via the `RECEIVE_BOOT_COMPLETED` permission) to reschedule alarms lost when the device restarted.
+It accepts `LOCKED_BOOT_COMPLETED` only from API 24, where Direct Boot is supported, and restores alarms from device-protected storage before first unlock.
+On API 19–23, the locked-boot action is ignored before reading or modifying stored alarms; ordinary boot recovery remains supported.
 If the stored schedule list is unreadable, the store replaces it with an empty list.
 If individual records are unreadable, the store retains valid schedules and persists the repaired set through the same device-protected and credential-protected storage path.
 

@@ -142,12 +142,7 @@ class WarmAlarmPlugin :
         }
         recoverableAlarms
             .forEach { (alarmId, fireAt) ->
-                val pending = alarmPendingIntent(alarmId, PendingIntent.FLAG_UPDATE_CURRENT, WarmAlarmIntentKind.REGULAR)!!
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
-                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pending)
-                } else {
-                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pending)
-                }
+                rescheduleAlarm(context, alarmId, fireAt)
             }
         eventQueue.drain()
         callback(Result.success(Unit))
@@ -322,8 +317,12 @@ class WarmAlarmPlugin :
         // the regular identity below no longer retargets it and it would ring at
         // the old delay against the replacement schedule.
         WarmAlarmPendingIntents.endWakeCheckCycle(context, schedule.id)
-        val pending = alarmPendingIntent(schedule.id, PendingIntent.FLAG_UPDATE_CURRENT, WarmAlarmIntentKind.REGULAR)!!
-        val inexact = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()
+        val inexact =
+            scheduleAlarm(
+                backend = AndroidAlarmSchedulingBackend(context, schedule.id, isRetrigger = false),
+                fireAtMillis = fireAtMillis,
+                sdkInt = Build.VERSION.SDK_INT,
+            )
         val readiness =
             if (inexact) {
                 WarmAlarmReadinessWire(
@@ -333,11 +332,6 @@ class WarmAlarmPlugin :
             } else {
                 deriveReadiness(currentPermissionState())
             }
-        if (inexact) {
-            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAtMillis, pending)
-        } else {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAtMillis, pending)
-        }
         emitEventFromBackground(
             context,
             WarmAlarmEventWire(
@@ -577,18 +571,21 @@ class WarmAlarmPlugin :
             )
         }
 
+        /** Returns whether this registration used the inexact fallback. */
         internal fun scheduleAlarm(
             backend: AlarmSchedulingBackend,
             fireAtMillis: Long,
             sdkInt: Int,
-        ) {
+        ): Boolean {
             if (sdkInt < Build.VERSION_CODES.M) {
                 backend.scheduleLegacy(fireAtMillis)
             } else if (sdkInt >= Build.VERSION_CODES.S && !backend.canScheduleExactAlarms()) {
                 backend.scheduleInexact(fireAtMillis)
+                return true
             } else {
                 backend.scheduleExact(fireAtMillis)
             }
+            return false
         }
     }
 }
