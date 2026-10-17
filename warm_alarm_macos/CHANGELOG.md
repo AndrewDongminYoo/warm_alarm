@@ -1,5 +1,6 @@
 # Unreleased
 
+- Ignore a default tap on an occurrence the foreground already handled, so the tap neither restarts playback nor emits a duplicate `WarmAlarmFired`, including for alarms that fell back to the notification sound.
 - Preserve host notification categories and apply distinct custom Stop/Snooze titles in the User Notifications backend.
 - Report missing or failed custom audio and request notification sound for foreground fallback.
 - Scope Stop and Snooze playback teardown to the matching alarm occurrence, and let an accepted delivery replace earlier playback before resolving its own source.

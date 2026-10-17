@@ -40,6 +40,7 @@ If the system also rejects restoration, it attempts every previous request, keep
 Pending rollback cannot recall notifications that already fired during the replacement attempt.
 Stop, Snooze, and default taps reject notifications from a replaced schedule generation.
 Retained one-shot notifications cannot change a later Snooze, and older actions cannot change the current playing occurrence.
+A default tap on an occurrence that the foreground already handled (through `willPresent` or an earlier tap) is ignored, so it neither restarts or replaces the current playback nor emits a second `WarmAlarmFired`, including when that occurrence fell back to the notification sound or its one-shot audio has already finished.
 Successful Snooze records the consumed occurrence so its retained repeating notification is ignored, while later recurring occurrences can still fire during a long Snooze.
 Snooze shares the scheduling/cancellation mutation queue and saves its deadline and emits `WarmAlarmSnoozed` only after notification registration succeeds.
 Registration failure retains the previous saved intent, attempts to restore any previous request with the same identifier, and emits `WarmAlarmFailed`.
