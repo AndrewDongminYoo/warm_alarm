@@ -25,6 +25,9 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     private var activePlayer: AVAudioPlayer?
     private var activeAlarmId: Int64?
     private var activeOccurrenceToken: String?
+    // The last occurrence per alarm that a foreground delivery or a default tap already handled, whether
+    // custom audio started or the notification sound was used. A default tap on it is ignored.
+    private var handledForegroundOccurrenceTokens = [Int64: String]()
     private var fadeWorkItems: [DispatchWorkItem] = []
     private var volumeEnforcerTimer: Timer?
 
@@ -134,6 +137,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         guard let didStartAudio = startAudio(alarmId: alarmId, occurrenceToken: occurrenceToken, for: schedule) else {
             return nil
         }
+        handledForegroundOccurrenceTokens[alarmId] = occurrenceToken
         return (schedule, didStartAudio)
     }
 
@@ -191,8 +195,13 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
                 self.handleSnooze(alarmId: alarmId, deliveredIdentifier: deliveredIdentifier,
                                   content: content, occurrenceToken: token, completion: completed)
             case UNNotificationDefaultActionIdentifier:
-                _ = self.handleForegroundDelivery(content: content, identifier: deliveredIdentifier,
-                                                  deliveredAtMillis: deliveredAtMillis)
+                // willPresent (or an earlier tap) already handled this occurrence; a tap on its banner keeps
+                // the current playback and does not emit a second `fired`, even when audio fell back to the
+                // notification sound or has already finished.
+                if !self.hasHandledForegroundOccurrence(alarmId: alarmId, occurrenceToken: token) {
+                    _ = self.handleForegroundDelivery(content: content, identifier: deliveredIdentifier,
+                                                      deliveredAtMillis: deliveredAtMillis)
+                }
                 completed()
             default:
                 completed()
@@ -210,11 +219,15 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     func stopIfPlaying(alarmId: Int64) {
         playbackLock.lock()
         defer { playbackLock.unlock() }
+        handledForegroundOccurrenceTokens.removeValue(forKey: alarmId)
         guard activeAlarmId == alarmId else { return }
         stopAudio()
     }
 
     func stopAllIfPlaying() {
+        playbackLock.lock()
+        defer { playbackLock.unlock() }
+        handledForegroundOccurrenceTokens.removeAll()
         stopAudio()
     }
 
@@ -302,6 +315,12 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
                deliveredAt < activeDeliveredAt { return nil }
         }
         return schedule
+    }
+
+    private func hasHandledForegroundOccurrence(alarmId: Int64, occurrenceToken: String) -> Bool {
+        playbackLock.lock()
+        defer { playbackLock.unlock() }
+        return handledForegroundOccurrenceTokens[alarmId] == occurrenceToken
     }
 
     private func stopAudioIfPlaying(alarmId: Int64, occurrenceToken: String?) {

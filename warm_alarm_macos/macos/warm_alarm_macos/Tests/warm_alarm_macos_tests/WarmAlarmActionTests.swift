@@ -271,6 +271,112 @@ final class WarmAlarmActionTests: XCTestCase {
         XCTAssertEqual(fixture.events.map(\.type), [.fired])
     }
 
+    func testDefaultTapOnPlayingOccurrenceKeepsPlaybackAndEmitsNoSecondFired() throws {
+        let fixture = try fixture()
+        let identifier = String(fixture.schedule.id)
+        _ = fixture.delegate.handleForegroundDelivery(content: fixture.content, identifier: identifier, deliveredAtMillis: 2_000)
+        let player = try XCTUnwrap(fixture.delegate.audioPlayer)
+        var completions = 0
+        let done = expectation(description: "tap on playing occurrence completed")
+        fixture.delegate.handleNotificationResponse(
+            actionIdentifier: UNNotificationDefaultActionIdentifier,
+            deliveredIdentifier: identifier, content: fixture.content, deliveredAtMillis: 2_000
+        ) {
+            completions += 1
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 2)
+        XCTAssertEqual(completions, 1)
+        XCTAssertTrue(fixture.delegate.audioPlayer === player)
+        XCTAssertTrue(player.isPlaying)
+        XCTAssertEqual(fixture.delegate.currentlyPlayingAlarmId, fixture.schedule.id)
+        XCTAssertEqual(fixture.events.map(\.type), [.fired])
+    }
+
+    func testDefaultTapWithoutActivePlayerStartsAudioAndEmitsFired() throws {
+        let fixture = try fixture()
+        XCTAssertNil(fixture.delegate.currentlyPlayingAlarmId)
+        let done = expectation(description: "tap without active player completed")
+        fixture.delegate.handleNotificationResponse(
+            actionIdentifier: UNNotificationDefaultActionIdentifier,
+            deliveredIdentifier: String(fixture.schedule.id), content: fixture.content, deliveredAtMillis: 2_000
+        ) { done.fulfill() }
+        wait(for: [done], timeout: 2)
+        XCTAssertEqual(fixture.delegate.currentlyPlayingAlarmId, fixture.schedule.id)
+        XCTAssertTrue(try XCTUnwrap(fixture.delegate.audioPlayer).isPlaying)
+        XCTAssertEqual(fixture.events.map(\.type), [.fired])
+    }
+
+    func testDefaultTapOnHandledNotificationSoundOccurrenceEmitsNoSecondFired() throws {
+        let fixture = try fixture()
+        var silentWire = fixture.wire
+        silentWire.audio = WarmAlarmAudioWire(loop: true, volume: 0, vibrate: false, volumeEnforced: false)
+        let silent = WarmAlarmScheduleData.from(wire: silentWire)
+        WarmAlarmStore.shared.save(silent)
+        let content = fixture.delegate.makeContent(from: silent)
+        let identifier = String(silent.id)
+        XCTAssertEqual(
+            fixture.delegate.handleForegroundDelivery(content: content, identifier: identifier, deliveredAtMillis: 2_000),
+            [.alert, .sound]
+        )
+        XCTAssertNil(fixture.delegate.currentlyPlayingAlarmId)
+        var completions = 0
+        let done = expectation(description: "tap on notification-sound occurrence completed")
+        fixture.delegate.handleNotificationResponse(
+            actionIdentifier: UNNotificationDefaultActionIdentifier,
+            deliveredIdentifier: identifier, content: content, deliveredAtMillis: 2_000
+        ) {
+            completions += 1
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 2)
+        XCTAssertEqual(completions, 1)
+        XCTAssertNil(fixture.delegate.currentlyPlayingAlarmId)
+        XCTAssertNil(fixture.delegate.audioPlayer)
+        XCTAssertEqual(fixture.events.map(\.type), [.fired])
+    }
+
+    func testDefaultTapOnHandledMissingFileOccurrenceEmitsNoSecondFailure() throws {
+        let fixture = try fixture()
+        var missingWire = fixture.wire
+        missingWire.audio = WarmAlarmAudioWire(
+            filePath: fixture.directory.appendingPathComponent("missing.caf").path,
+            loop: true, volume: 0, vibrate: false, volumeEnforced: false
+        )
+        let missing = WarmAlarmScheduleData.from(wire: missingWire)
+        WarmAlarmStore.shared.save(missing)
+        let content = fixture.delegate.makeContent(from: missing)
+        let identifier = String(missing.id)
+        XCTAssertEqual(
+            fixture.delegate.handleForegroundDelivery(content: content, identifier: identifier, deliveredAtMillis: 2_000),
+            [.alert, .sound]
+        )
+        XCTAssertEqual(fixture.events.map(\.type), [.failed, .fired])
+        let done = expectation(description: "tap on missing-file occurrence completed")
+        fixture.delegate.handleNotificationResponse(
+            actionIdentifier: UNNotificationDefaultActionIdentifier,
+            deliveredIdentifier: identifier, content: content, deliveredAtMillis: 2_000
+        ) { done.fulfill() }
+        wait(for: [done], timeout: 2)
+        XCTAssertNil(fixture.delegate.currentlyPlayingAlarmId)
+        XCTAssertEqual(fixture.events.map(\.type), [.failed, .fired])
+    }
+
+    func testDefaultTapOnAnotherAlarmReplacesCurrentPlayback() throws {
+        let fixture = try fixture()
+        _ = fixture.delegate.handleForegroundDelivery(content: fixture.delegate.makeContent(from: fixture.other))
+        let otherPlayer = try XCTUnwrap(fixture.delegate.audioPlayer)
+        let done = expectation(description: "tap on another alarm completed")
+        fixture.delegate.handleNotificationResponse(
+            actionIdentifier: UNNotificationDefaultActionIdentifier,
+            deliveredIdentifier: String(fixture.schedule.id), content: fixture.content, deliveredAtMillis: 2_000
+        ) { done.fulfill() }
+        wait(for: [done], timeout: 2)
+        XCTAssertFalse(otherPlayer.isPlaying)
+        XCTAssertEqual(fixture.delegate.currentlyPlayingAlarmId, fixture.schedule.id)
+        XCTAssertEqual(fixture.events.map(\.type), [.fired, .fired])
+    }
+
     func testCancellationWaitsForSnoozeRegistration() throws {
         let fixture = try fixture()
         let entered = expectation(description: "snooze registration entered")
