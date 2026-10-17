@@ -21,7 +21,7 @@ dependencies:
   warm_alarm_android:
     path: ../../warm_alarm_android
 
-  warm_alarm_platform_interface: ^0.1.5
+  warm_alarm_platform_interface: ^0.1.7
 dev_dependencies:
   flutter_driver:
     sdk: flutter

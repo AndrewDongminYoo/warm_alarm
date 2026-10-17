@@ -27,7 +27,7 @@ dependencies:
     sdk: flutter
   warm_alarm_android: ^0.1.5
   warm_alarm_ios: ^0.1.12
-  warm_alarm_macos: ^0.1.6
+  warm_alarm_macos: ^0.1.7
   warm_alarm_platform_interface: ^0.1.7
 
 dev_dependencies:
