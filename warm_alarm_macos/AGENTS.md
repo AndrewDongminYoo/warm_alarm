@@ -11,8 +11,9 @@ pigeons/{messages.dart,copyright.txt}                      # Pigeon source of tr
 macos/
   warm_alarm_macos.podspec                                 # CocoaPods: FlutterMacOS dep, osx 10.15, Swift 6.1
   warm_alarm_macos/
-    Package.swift                                          # SwiftPM manifest (PrivacyInfo.xcprivacy is a TODO placeholder)
+    Package.swift                                          # SwiftPM manifest with privacy resource processing
     Sources/warm_alarm_macos/
+      PrivacyInfo.xcprivacy                                # app-local UserDefaults declaration (CA92.1)
       WarmAlarmPlugin.swift                                # plugin entry; AppKit lifecycle hooks; kill-warning
       WarmAlarmNotificationCenterDelegate.swift            # host callback routing and delegate restoration
       WarmAlarmDelegate.swift                              # UNUserNotificationCenter delegate; AVAudioPlayer; fade; snooze reschedule

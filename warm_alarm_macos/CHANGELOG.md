@@ -1,3 +1,7 @@
+# Unreleased
+
+- Ship a `PrivacyInfo.xcprivacy` manifest through SwiftPM and CocoaPods that declares app-local `UserDefaults` access (`CA92.1`).
+
 # 0.1.6
 
 - Ignore a default tap on an occurrence the foreground already handled, so the tap neither restarts playback nor emits a duplicate `WarmAlarmFired`, including for alarms that fell back to the notification sound.

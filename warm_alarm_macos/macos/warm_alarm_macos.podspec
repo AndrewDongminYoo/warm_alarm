@@ -13,6 +13,9 @@ Pod::Spec.new do |s|
   s.author           = { 'Com Andrew Alarm' => 'email@example.com' }
   s.source           = { :path => '.' }
   s.source_files = 'warm_alarm_macos/Sources/**/*.swift'
+  s.resource_bundles = {
+    'warm_alarm_macos_privacy' => ['warm_alarm_macos/Sources/warm_alarm_macos/PrivacyInfo.xcprivacy']
+  }
   s.dependency 'FlutterMacOS'
   s.platform = :osx
   s.osx.deployment_target = '10.15'
