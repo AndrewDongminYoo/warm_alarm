@@ -1,4 +1,4 @@
-# Unreleased
+# 0.1.7
 
 - Complete the public contract reference with Live Activity operations, notification settings, warning and failure models, and asynchronous return types.
 - Clarify that kill-warning methods configure text rather than posting or removing notifications.
