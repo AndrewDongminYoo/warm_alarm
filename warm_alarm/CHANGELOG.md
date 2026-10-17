@@ -1,8 +1,9 @@
-# Unreleased
+# 0.1.8
 
 - Align public API tables with asynchronous signatures, complete model fields, and Live Activity operations.
 - Document event timestamps and the optional payloads exposed by fired, stopped, snoozed, and retriggered events.
 - Clarify kill-warning configuration, platform lifecycle triggers, and readiness demo CI coverage.
+- Require platform interface 0.1.7, Android 0.1.5, iOS 0.1.12, and macOS 0.1.6 so apps receive the alarm action, audio failure, and legacy Android fixes.
 
 # 0.1.7
 
