@@ -232,6 +232,9 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         let isRecurring = !(schedule.recurrenceWeekdays?.isEmpty ?? true)
         if !isRecurring {
             WarmAlarmStore.shared.remove(id: alarmId)
+        } else if let consumed = occurrenceToken.flatMap({ Int64($0.split(separator: "#").last ?? "") }) {
+            // A retained notification of a stopped occurrence must not snooze or replay it later.
+            WarmAlarmStore.shared.save(schedule.withConsumedOccurrence(consumed))
         }
         if schedule.keepNotificationAfterAlarmEnds != true {
             UNUserNotificationCenter.current().removeDeliveredNotifications(
@@ -292,7 +295,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             let isRecurringRequest = (schedule.recurrenceWeekdays ?? []).contains {
                 deliveredIdentifier == "\(alarmId)#\($0)"
             }
-            if let consumed = schedule.snoozedOccurrenceMillis, deliveredAt <= consumed { return nil }
+            if let consumed = schedule.consumedOccurrenceMillis, deliveredAt <= consumed { return nil }
             if !isRecurringRequest, let snoozeUntil = schedule.activeSnoozeUntilMillis, deliveredAt < snoozeUntil { return nil }
             if activeAlarmId == alarmId, let activeOccurrenceToken,
                let activeDeliveredAt = Int64(activeOccurrenceToken.split(separator: "#").last ?? ""),
@@ -410,6 +413,8 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         guard let schedule,
               let storedSchedule = WarmAlarmStore.shared.load(id: alarmId),
               storedSchedule.occurrenceSeriesToken == schedule.occurrenceSeriesToken else { return nil }
+        // An accepted delivery owns audio from here on, even when it falls back to the notification sound.
+        stopAudio()
         let url: URL?
         switch WarmAlarmAudioSource.select(filePath: schedule.filePath, assetPath: schedule.assetPath) {
         case let .file(path):
@@ -425,7 +430,6 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         }
         do {
             let player = try audioPlayerFactory(url)
-            stopAudio()
             let steps = schedule.fadeSteps
             if let first = steps?.first, first.timeMillis == 0 {
                 player.volume = max(0.0, min(1.0, Float(first.volume)))

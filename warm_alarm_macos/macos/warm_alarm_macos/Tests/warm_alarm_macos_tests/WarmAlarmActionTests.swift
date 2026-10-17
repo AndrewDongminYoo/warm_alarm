@@ -70,7 +70,7 @@ final class WarmAlarmActionTests: XCTestCase {
         try XCTUnwrap(register)(nil)
         XCTAssertTrue(completed)
         XCTAssertNotNil(WarmAlarmStore.shared.load(id: fixture.schedule.id)?.activeSnoozeUntilMillis)
-        XCTAssertEqual(WarmAlarmStore.shared.load(id: fixture.schedule.id)?.snoozedOccurrenceMillis, 1_000)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: fixture.schedule.id)?.consumedOccurrenceMillis, 1_000)
         XCTAssertEqual(fixture.events.map(\.type), [.snoozed])
     }
 
@@ -159,6 +159,51 @@ final class WarmAlarmActionTests: XCTestCase {
         }
     }
 
+    func testStopOnRetainedRecurringOccurrenceBlocksLaterSnoozeAndTap() throws {
+        let fixture = try fixture()
+        var wire = fixture.wire
+        wire.recurrence = WarmAlarmRecurrenceWire(weekdays: [1])
+        let repeating = WarmAlarmScheduleData.from(wire: wire)
+        WarmAlarmStore.shared.save(repeating)
+        let content = fixture.delegate.makeContent(from: repeating)
+        let identifier = "\(repeating.id)#1"
+        XCTAssertEqual(fixture.delegate.handleForegroundDelivery(content: content, identifier: identifier, deliveredAtMillis: 1_000), [.alert])
+        let stopped = expectation(description: "stop completed")
+        fixture.delegate.handleNotificationResponse(
+            actionIdentifier: WarmAlarmDelegate.stopActionIdentifier, deliveredIdentifier: identifier,
+            content: content, deliveredAtMillis: 1_000
+        ) { stopped.fulfill() }
+        wait(for: [stopped], timeout: 2)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: repeating.id)?.consumedOccurrenceMillis, 1_000)
+        XCTAssertEqual(fixture.events.map(\.type), [.fired, .stopped])
+        fixture.add = { _, _ in XCTFail("A stopped occurrence must not register a snooze") }
+        for action in [WarmAlarmDelegate.snoozeActionIdentifier, UNNotificationDefaultActionIdentifier] {
+            let done = expectation(description: "retained stopped occurrence ignored")
+            fixture.delegate.handleNotificationResponse(
+                actionIdentifier: action, deliveredIdentifier: identifier, content: content, deliveredAtMillis: 1_000
+            ) { done.fulfill() }
+            wait(for: [done], timeout: 2)
+        }
+        XCTAssertNil(WarmAlarmStore.shared.load(id: repeating.id)?.activeSnoozeUntilMillis)
+        XCTAssertNil(fixture.delegate.currentlyPlayingAlarmId)
+        XCTAssertEqual(fixture.events.map(\.type), [.fired, .stopped])
+        XCTAssertEqual(fixture.delegate.handleForegroundDelivery(content: content, identifier: identifier, deliveredAtMillis: 2_000), [.alert])
+        XCTAssertEqual(fixture.events.map(\.type), [.fired, .stopped, .fired])
+    }
+
+    func testNewDeliveryWithoutSourceReplacesPriorPlayback() throws {
+        let fixture = try fixture()
+        _ = fixture.delegate.handleForegroundDelivery(content: fixture.delegate.makeContent(from: fixture.other))
+        XCTAssertEqual(fixture.delegate.currentlyPlayingAlarmId, fixture.other.id)
+        var silentWire = fixture.wire
+        silentWire.audio = WarmAlarmAudioWire(loop: true, volume: 0, vibrate: false, volumeEnforced: false)
+        let silent = WarmAlarmScheduleData.from(wire: silentWire)
+        WarmAlarmStore.shared.save(silent)
+        XCTAssertEqual(fixture.delegate.handleForegroundDelivery(content: fixture.delegate.makeContent(from: silent)), [.alert, .sound])
+        XCTAssertNil(fixture.delegate.currentlyPlayingAlarmId)
+        XCTAssertEqual(fixture.events.map(\.type), [.fired, .fired])
+    }
+
     func testRepeatingOccurrenceBeforeSnoozeDeadlineStillFires() throws {
         let fixture = try fixture()
         var wire = fixture.wire
@@ -180,7 +225,7 @@ final class WarmAlarmActionTests: XCTestCase {
             content: fixture.delegate.makeContent(from: repeating), deliveredAtMillis: 1_500
         ) { done.fulfill() }
         wait(for: [done], timeout: 2)
-        XCTAssertEqual(WarmAlarmStore.shared.load(id: repeating.id)?.snoozedOccurrenceMillis, 1_500)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: repeating.id)?.consumedOccurrenceMillis, 1_500)
         XCTAssertEqual(fixture.events.map(\.type), [.fired, .snoozed])
     }
 
@@ -189,13 +234,13 @@ final class WarmAlarmActionTests: XCTestCase {
         let snoozed = fixture.schedule.withActiveSnooze(untilMillis: 3_000, consumingOccurrenceMillis: 1_000)
             .withRecurrenceTime(hour: 7, minute: 0)
         WarmAlarmStore.shared.save(snoozed)
-        XCTAssertEqual(WarmAlarmStore.shared.load(id: snoozed.id)?.snoozedOccurrenceMillis, 1_000)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: snoozed.id)?.consumedOccurrenceMillis, 1_000)
         var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(snoozed)) as? [String: Any])
-        legacy.removeValue(forKey: "snoozedOccurrenceMillis")
+        legacy.removeValue(forKey: "consumedOccurrenceMillis")
         let decoded = try JSONDecoder().decode(
             WarmAlarmScheduleData.self, from: JSONSerialization.data(withJSONObject: legacy)
         )
-        XCTAssertNil(decoded.snoozedOccurrenceMillis)
+        XCTAssertNil(decoded.consumedOccurrenceMillis)
         XCTAssertEqual(decoded.activeSnoozeUntilMillis, 3_000)
     }
 

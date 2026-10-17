@@ -108,14 +108,27 @@ final class WarmAlarmRequestRegistrationTests: XCTestCase {
         XCTAssertEqual(firstCategory.actions.map(\.identifier), ["STOP", "SNOOZE"])
     }
 
+    func testForegroundFallbackReplacesPriorPlayback() throws {
+        let file = try foregroundAudioFile()
+        let (delegate, playing) = try foregroundAudioFixture(filePath: file.path)
+        XCTAssertEqual(foregroundOptions(delegate: delegate, notification: playing), [.alert])
+        XCTAssertEqual(delegate.currentlyPlayingAlarmId, 7_070_001)
+        let (_, silent) = try foregroundAudioFixture(id: 7_070_003, delegate: delegate)
+
+        XCTAssertEqual(foregroundOptions(delegate: delegate, notification: silent), [.alert, .sound])
+        XCTAssertNil(delegate.currentlyPlayingAlarmId)
+    }
+
     private func foregroundAudioFixture(
+        id: Int64 = 7_070_001,
         filePath: String? = nil,
         assetPath: String? = nil,
         playAudio: @escaping (AVAudioPlayer) -> Bool = { $0.play() },
-        eventsApi: RecordingWarmAlarmEventsApi = RecordingWarmAlarmEventsApi()
+        eventsApi: RecordingWarmAlarmEventsApi = RecordingWarmAlarmEventsApi(),
+        delegate existingDelegate: WarmAlarmDelegate? = nil
     ) throws -> (WarmAlarmDelegate, UNNotification) {
         let wire = WarmAlarmScheduleWire(
-            id: 7_070_001,
+            id: id,
             scheduledAtMillis: 1_900_000_000_000,
             notification: WarmAlarmNotificationWire(
                 title: "Foreground audio", body: "Alarm", keepNotificationAfterAlarmEnds: true
@@ -125,7 +138,7 @@ final class WarmAlarmRequestRegistrationTests: XCTestCase {
             )
         )
         let schedule = WarmAlarmScheduleData.from(wire: wire)
-        let delegate = WarmAlarmDelegate(
+        let delegate = existingDelegate ?? WarmAlarmDelegate(
             eventsApi: eventsApi,
             notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.foreground_audio"),
             playAudio: playAudio

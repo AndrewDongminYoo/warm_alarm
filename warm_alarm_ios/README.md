@@ -217,6 +217,7 @@ Foreground delivery then requests the notification sound instead of suppressing 
 `WarmAlarmFired` records the accepted delivery, not proof of audible output; system settings can still silence the notification.
 A default notification tap cannot replay the original system notification sound, so custom-audio failure remains observable through the failure event.
 Stop and Snooze only stop a player owned by the same alarm and occurrence.
+An accepted foreground delivery stops any earlier playback before it resolves its own source, so the newest alarm owns audio even when it falls back to the notification sound.
 
 ### Recurrence
 

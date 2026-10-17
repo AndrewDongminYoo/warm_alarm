@@ -689,6 +689,8 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         occurrenceToken: String,
         for schedule: WarmAlarmScheduleData?
     ) -> Bool {
+        // An accepted delivery owns audio from here on, even when it falls back to the notification sound.
+        stopAudio()
         let url: URL?
         switch WarmAlarmAudioSource.select(filePath: schedule?.filePath, assetPath: schedule?.assetPath) {
         case let .file(path):
@@ -704,7 +706,6 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         }
         do {
             let player = try AVAudioPlayer(contentsOf: url)
-            stopAudio()
             try configureAudioSession()
             let steps = schedule?.fadeSteps
             if let first = steps?.first, first.timeMillis == 0 {
