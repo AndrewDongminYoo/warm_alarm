@@ -207,8 +207,9 @@ class WarmAlarmForegroundService : Service() {
             Notification.FLAG_ONLY_ALERT_ONCE
         val notifications = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            notifications.notify(NOTIF_ID, retained)
+            // Detach first so the service no longer owns the record when the retained content replaces it.
             stopForeground(STOP_FOREGROUND_DETACH)
+            notifications.notify(NOTIF_ID, retained)
         } else {
             // This is a new notification record, so ONLY_ALERT_ONCE cannot silence its first alert.
             retained.priority = Notification.PRIORITY_LOW
