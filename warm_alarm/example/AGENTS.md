@@ -29,7 +29,9 @@ android/, ios/, macos/                       # default Flutter native shells (re
 - This package is part of the root Dart workspace (declared in root `pubspec.yaml`) **and** is included in Melos's package list, so Melos scripts (`format`, `test`, `generate`-if-applicable) target it.
 - The nested `actions/check_readiness/` package is in the root Dart workspace and is discovered by Melos even though it is absent from the `melos.packages` list.
   Melos test commands include it; use `melos list` to inspect the resolved package set.
-- CI runs the readiness flow on Android (API 29 emulator), iPhone simulator, and macOS-15 — see `.github/workflows/warm_alarm.yaml`. New flows must work on all three.
+- The readiness CI flow runs on an Android API 29 emulator and an iPhone simulator only for `workflow_dispatch` or a `v*` tag — see `.github/workflows/warm_alarm.yaml`.
+  Ordinary PRs and package publication tags such as `warm_alarm-v0.1.8` do not run these E2E jobs.
+  macOS readiness remains a manual Fluttium check; the separate native macOS workflow does not run this UI flow.
 - `lib/main.dart` is a State-driven `MaterialApp` with no routing/DI. Keep it minimal — this is a smoke target, not a showcase app.
 
 ## ANTI-PATTERNS

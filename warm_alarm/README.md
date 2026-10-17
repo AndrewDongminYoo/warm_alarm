@@ -195,15 +195,15 @@ Custom activities use a separate opt-in from AlarmKit countdown presentation.
 | `updateLiveActivity(id, state)`   | `Future<WarmAlarmLiveActivityResult>` | Update activity content without rescheduling the alarm      |
 | `endLiveActivity(id)`             | `Future<WarmAlarmLiveActivityResult>` | End a custom activity by its identifier                     |
 | `prepareSystemSound(...)`         | `Future<String?>`                     | Prepare an AlarmKit sound; return null if unsupported       |
-| `getCapabilities()`               | `WarmAlarmCapabilities`               | Per-feature support status for the current platform         |
-| `getPermissionState()`            | `WarmAlarmPermissionState`            | Current notification and exact-alarm permission grants      |
-| `getReadiness()`                  | `WarmAlarmReadiness`                  | Overall system readiness with actionable reason codes       |
-| `requestNotificationPermission()` | `WarmAlarmRemediationResult`          | Request notification authorization and return current state |
-| `openReadinessSettings(reason)`   | `WarmAlarmRemediationResult`          | Open supported native settings and return current state     |
-| `scheduleAlarm(schedule)`         | `WarmAlarmScheduleResult`             | Schedule an alarm; returns the assigned ID and any warnings |
+| `getCapabilities()`               | `Future<WarmAlarmCapabilities>`       | Per-feature support status for the current platform         |
+| `getPermissionState()`            | `Future<WarmAlarmPermissionState>`    | Current notification and exact-alarm permission grants      |
+| `getReadiness()`                  | `Future<WarmAlarmReadiness>`          | Overall system readiness with actionable reason codes       |
+| `requestNotificationPermission()` | `Future<WarmAlarmRemediationResult>`  | Request notification authorization and return current state |
+| `openReadinessSettings(reason)`   | `Future<WarmAlarmRemediationResult>`  | Open supported native settings and return current state     |
+| `scheduleAlarm(schedule)`         | `Future<WarmAlarmScheduleResult>`     | Schedule an alarm; returns the assigned ID and any warnings |
 | `cancelAlarm(id)`                 | `Future<void>`                        | Cancel a specific alarm by ID                               |
 | `cancelAllAlarms()`               | `Future<void>`                        | Cancel all scheduled alarms                                 |
-| `getScheduledAlarms()`            | `List<WarmAlarmSnapshot>`             | List all currently scheduled alarms                         |
+| `getScheduledAlarms()`            | `Future<List<WarmAlarmSnapshot>>`     | List all currently scheduled alarms                         |
 | `hasAlarm()`                      | `Future<bool>`                        | Whether any future alarm is currently scheduled             |
 | `getAlarm(id)`                    | `Future<WarmAlarmSnapshot?>`          | Fetch a single future scheduled alarm by ID                 |
 | `isRinging({id})`                 | `Future<bool>`                        | Whether an alarm (or any alarm) is currently ringing        |
@@ -228,21 +228,26 @@ user's answer.
 
 ### Key data classes
 
-| Class                        | Purpose                                                                                                                            |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `WarmAlarmSchedule`          | Full alarm configuration: timing, notification, audio, snooze, recurrence, payload, wake-check                                     |
-| `WarmAlarmCapabilities`      | `WarmAlarmSupportStatus` per feature: notification & exact scheduling, background audio, full-screen, wake-check, Live Activity    |
-| `WarmAlarmReadiness`         | Readiness level, reason list, and optional granular notification settings                                                          |
-| `WarmAlarmPermissionState`   | Boolean flags: `notificationsGranted`, `exactAlarmGranted`, `fullScreenIntentGranted`                                              |
-| `WarmAlarmRemediationResult` | Action status plus permission and readiness state when the action returns                                                          |
-| `WarmAlarmScheduleResult`    | `alarmId`, `readiness`, optional `WarmAlarmWarning`                                                                                |
-| `WarmAlarmAudio`             | `filePath?`, `assetPath?`, `systemSoundFilePath?`, `loop`, `volume?`, `fadeInDuration?`, `fadeSteps?`, `volumeEnforced`, `vibrate` |
-| `WarmAlarmNotification`      | `title`, `body`, `stopActionTitle?`, `snoozeActionTitle?`, `androidIcon?`, `androidIconColor?`, `keepNotificationAfterAlarmEnds`   |
-| `WarmAlarmSnooze`            | `duration`                                                                                                                         |
-| `WarmAlarmRecurrence`        | `weekdays` — list of ISO weekday numbers (1 = Monday … 7 = Sunday)                                                                 |
-| `WarmAlarmWakeCheck`         | `checkDelay`, `retriggerDelay?`, `maxRetriggers` (Android only)                                                                    |
-| `WarmAlarmVolumeFadeStep`    | `time` (offset from alarm start), `volume` (0.0–1.0) — element of `WarmAlarmAudio.fadeSteps`                                       |
-| `WarmAlarmSnapshot`          | Full scheduled-alarm record returned by `getScheduledAlarms()` — mirrors `WarmAlarmSchedule` fields                                |
+| Class                           | Purpose                                                                                                                                                                                |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WarmAlarmSchedule`             | `id`, `scheduledAt`, `notification`, `audio`, `recurrence?`, `snooze?`, `wakeCheck?`, `payload?`, `androidFullScreenIntent` (default `true`)                                           |
+| `WarmAlarmCapabilities`         | `WarmAlarmSupportStatus` for notification scheduling, exact scheduling, background audio, full-screen intents, wake-check, and Live Activity                                           |
+| `WarmAlarmReadiness`            | `level`, `reasons`, and optional `notificationSettings`                                                                                                                                |
+| `WarmAlarmNotificationSettings` | `authorizationStatus`, `alertsEnabled`, `soundsEnabled`, and nullable `timeSensitiveEnabled`                                                                                           |
+| `WarmAlarmPermissionState`      | `notificationsGranted`, `exactAlarmGranted`, `fullScreenIntentGranted`                                                                                                                 |
+| `WarmAlarmRemediationResult`    | `status`, `permissionState`, `readiness`                                                                                                                                               |
+| `WarmAlarmScheduleResult`       | `alarmId`, `readiness`, optional `warning`                                                                                                                                             |
+| `WarmAlarmWarning`              | `message`, optional `code`; a null code still represents a warning                                                                                                                     |
+| `WarmAlarmFailure`              | `code`, optional `message`                                                                                                                                                             |
+| `WarmAlarmAudio`                | `filePath?`, `assetPath?`, `systemSoundFilePath?`, `loop` (default `true`), `volume?`, `fadeInDuration?`, `fadeSteps?`, `volumeEnforced` (default `false`), `vibrate` (default `true`) |
+| `WarmAlarmNotification`         | `title`, `body`, `stopActionTitle?`, `snoozeActionTitle?`, `androidIcon?`, `androidIconColor?`, `keepNotificationAfterAlarmEnds` (default `false`)                                     |
+| `WarmAlarmSnooze`               | `duration`                                                                                                                                                                             |
+| `WarmAlarmRecurrence`           | `weekdays`: ISO weekday numbers from 1 (Monday) through 7 (Sunday)                                                                                                                     |
+| `WarmAlarmWakeCheck`            | `checkDelay`, `retriggerDelay?`, `maxRetriggers?` (default `1`, Android only)                                                                                                          |
+| `WarmAlarmVolumeFadeStep`       | `time` (offset from alarm start), `volume` (0.0–1.0)                                                                                                                                   |
+| `WarmAlarmSnapshot`             | Schedule fields plus `systemManagedAudio` (default `false`), which reports actual system playback ownership                                                                            |
+| `WarmAlarmLiveActivityState`    | `alarmId`, `title`, `status`, optional `scheduledAt`; content for a host-provided widget, not an alarm schedule                                                                        |
+| `WarmAlarmLiveActivityResult`   | `status`, optional `activityId`                                                                                                                                                        |
 
 ### Scheduling validation
 
@@ -287,17 +292,17 @@ iOS and macOS use their native notification or AlarmKit sound behavior.
 
 ### `WarmAlarmEvent` — sealed event types
 
-| Subtype                       | Payload                                         |
-| ----------------------------- | ----------------------------------------------- |
-| `WarmAlarmScheduled`          | `alarmId`, `occurredAt`                         |
-| `WarmAlarmFired`              | `alarmId`, `occurredAt`, `payload?`             |
-| `WarmAlarmStopped`            | `alarmId`, `occurredAt`, `payload?`             |
-| `WarmAlarmSnoozed`            | `alarmId`, `occurredAt`, `duration`, `payload?` |
-| `WarmAlarmFailed`             | `alarmId`, `occurredAt`, `WarmAlarmFailure`     |
-| `WarmAlarmWakeCheckShown`     | `alarmId`, `occurredAt` (Android)               |
-| `WarmAlarmWakeCheckDismissed` | `alarmId`, `occurredAt` (Android)               |
-| `WarmAlarmWakeCheckExpired`   | `alarmId`, `occurredAt` (Android)               |
-| `WarmAlarmRetriggered`        | `alarmId`, `occurredAt`, `payload?` (Android)   |
+| Subtype                       | Payload                                                 |
+| ----------------------------- | ------------------------------------------------------- |
+| `WarmAlarmScheduled`          | `alarmId`, `occurredAt`                                 |
+| `WarmAlarmFired`              | `alarmId`, `occurredAt`, `payload?`                     |
+| `WarmAlarmStopped`            | `alarmId`, `occurredAt`, `payload?`                     |
+| `WarmAlarmSnoozed`            | `alarmId`, `occurredAt`, `duration`, `payload?`         |
+| `WarmAlarmFailed`             | `alarmId`, `occurredAt`, `failure` (`WarmAlarmFailure`) |
+| `WarmAlarmWakeCheckShown`     | `alarmId`, `occurredAt` (Android)                       |
+| `WarmAlarmWakeCheckDismissed` | `alarmId`, `occurredAt` (Android)                       |
+| `WarmAlarmWakeCheckExpired`   | `alarmId`, `occurredAt` (Android)                       |
+| `WarmAlarmRetriggered`        | `alarmId`, `occurredAt`, `payload?` (Android)           |
 
 ---
 

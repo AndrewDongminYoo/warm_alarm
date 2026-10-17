@@ -26,10 +26,13 @@ This package is [endorsed][endorsed_link], which means you do **not** add it dir
 
 ### Scheduling
 
-Alarms are scheduled via `AlarmManager.setExactAndAllowWhileIdle()` so they fire even when the
-device is in Doze mode. The exact-alarm permission (either `USE_EXACT_ALARM` for system apps or
-`SCHEDULE_EXACT_ALARM` with user approval) is declared in the manifest and checked at runtime
-through `getPermissionState()`.
+The plugin uses `AlarmManager.setExactAndAllowWhileIdle()` when exact-alarm access is available.
+On Android 12 or later without that access, it uses `setAndAllowWhileIdle()` and returns limited readiness plus a warning that the alarm may fire late.
+`getPermissionState()` reports the current exact-alarm grant.
+The manifest declares `SCHEDULE_EXACT_ALARM` and `USE_EXACT_ALARM`; their grant rules and eligible uses differ, as described in [Android’s exact-alarm permission guidance](https://developer.android.com/develop/background-work/services/alarms).
+
+The module declares minimum API 19, but initial scheduling and startup/boot recovery currently call an API 23 method without a legacy guard.
+API 19–22 compatibility is therefore a known release blocker; the existing legacy branch covers rescheduling only.
 
 Android alarm IDs must be signed 32-bit integers (`-2147483648` through `2147483647`, inclusive).
 Negative IDs, including `-1`, are supported.

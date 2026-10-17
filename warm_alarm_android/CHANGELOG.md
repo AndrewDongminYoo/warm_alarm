@@ -1,3 +1,10 @@
+# Unreleased
+
+- Release the previous player, callbacks, and vibration before an overlapping alarm starts, including repeated delivery for the same alarm ID.
+- Attempt to release a newly allocated player when initialization fails, preserving the original playback error if cleanup also fails.
+- Reject alarm IDs outside the signed 32-bit range instead of truncating them, and keep alarm and wake-check PendingIntent identities distinct.
+- Clarify kill-warning triggers, notification dismissal, and the Android alarm ID contract.
+
 # 0.1.4
 
 - Require platform interface 0.1.5 for the coordinated wake-check warning release.

@@ -1,3 +1,9 @@
+# Unreleased
+
+- Align public API tables with asynchronous signatures, complete model fields, and Live Activity operations.
+- Document event timestamps and the optional payloads exposed by fired, stopped, snoozed, and retriggered events.
+- Clarify kill-warning configuration, platform lifecycle triggers, and readiness demo CI coverage.
+
 # 0.1.7
 
 - Publish expanded API documentation for capabilities, readiness, and scheduling warnings.

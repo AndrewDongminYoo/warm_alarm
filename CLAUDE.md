@@ -62,7 +62,7 @@ for API stability. Pigeon-generated DTO types stay in `lib/src/` (private) and a
 ### Platform implementation pattern
 
 Each platform package: (1) extends `WarmAlarmPlatform` from the interface package, (2) registers
-via `static void registerWith(Registrar)`, (3) delegates to the Pigeon-generated `WarmAlarmApi`.
+via `static void registerWith()`, (3) delegates to the Pigeon-generated `WarmAlarmApi`.
 
 ## Before committing
 

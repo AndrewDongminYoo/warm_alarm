@@ -1,3 +1,12 @@
+# Unreleased
+
+- Restore native default sound for foreground notifications when no custom player owns audio.
+- Preserve unrelated host notifications during cancellation and forward their delegate callbacks without replacing host presentation or completion behavior.
+- Validate foreground notification ownership and suppress cancelled or superseded deliveries before playback starts.
+- Stop active playback on cancellation and serialize startup with cancellation so stale callbacks cannot restart audio.
+- Restore the previous schedule and exact pending requests when replacement registration fails, and report incomplete recovery as a scheduling rollback failure.
+- Clarify kill-warning triggers and pending-only cancellation on reactivation.
+
 # 0.1.5
 
 - Report an unsupported wake-check request in the typed schedule warning while preserving native warning text.
