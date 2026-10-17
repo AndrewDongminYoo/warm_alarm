@@ -1,4 +1,4 @@
-# Unreleased
+# 0.1.7
 
 - Ship a `PrivacyInfo.xcprivacy` manifest through SwiftPM and CocoaPods that declares app-local `UserDefaults` access (`CA92.1`).
 
