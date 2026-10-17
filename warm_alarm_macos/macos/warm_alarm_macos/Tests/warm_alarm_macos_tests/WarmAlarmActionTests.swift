@@ -340,7 +340,8 @@ private final class ActionFixture: @unchecked Sendable {
             eventsApi: WarmAlarmEventsApi(binaryMessenger: ActionTestMessenger()),
             eventQueue: queue,
             pendingNotificationReader: { [weak self] completion in completion(self?.pending ?? []) },
-            notificationAdder: { [weak self] request, completion in self?.add(request, completion) }
+            notificationAdder: { [weak self] request, completion in self?.add(request, completion) },
+            categoryRegistrar: { _, completion in completion() }
         )
         WarmAlarmStore.shared.save(schedule)
         WarmAlarmStore.shared.save(other)

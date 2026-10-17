@@ -226,7 +226,10 @@ final class WarmAlarmCancellationTests: XCTestCase {
     }
 
     private func makeDelegate() -> WarmAlarmDelegate {
-        WarmAlarmDelegate(eventsApi: WarmAlarmEventsApi(binaryMessenger: CancellationTestMessenger()))
+        WarmAlarmDelegate(
+            eventsApi: WarmAlarmEventsApi(binaryMessenger: CancellationTestMessenger()),
+            categoryRegistrar: { _, completion in completion() }
+        )
     }
 
     private func playingAlarmFixture() throws -> (WarmAlarmPlugin, WarmAlarmDelegate, AVAudioPlayer, Int64) {
@@ -268,7 +271,8 @@ final class WarmAlarmCancellationTests: XCTestCase {
             eventsApi: WarmAlarmEventsApi(binaryMessenger: CancellationTestMessenger()),
             eventQueue: eventQueue,
             playbackLock: playbackLock,
-            audioPlayerFactory: audioPlayerFactory
+            audioPlayerFactory: audioPlayerFactory,
+            categoryRegistrar: { _, completion in completion() }
         )
         let schedule = WarmAlarmScheduleData.from(wire: WarmAlarmScheduleWire(
             id: 7_730_001,

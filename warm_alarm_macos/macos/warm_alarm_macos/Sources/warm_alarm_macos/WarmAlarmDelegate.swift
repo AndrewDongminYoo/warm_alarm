@@ -11,7 +11,11 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     static let snoozeActionIdentifier = "SNOOZE"
     private static let categoryMutationQueue = WarmAlarmMutationQueue(label: "warm_alarm.categories")
 
+    typealias CategoryRegistrar = ([UNNotificationContent], @escaping () -> Void) -> Void
+
     let notificationMutationQueue: WarmAlarmMutationQueue
+    // Unit tests inject a no-op registrar; the real one needs an app bundle identity.
+    let categoryRegistrar: CategoryRegistrar
     private let pendingNotificationReader: WarmAlarmPlugin.PendingNotificationReader
     private let notificationAdder: WarmAlarmPlugin.NotificationAdder
     private let playAudio: (AVAudioPlayer) -> Bool
@@ -48,14 +52,18 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         playAudio: @escaping (AVAudioPlayer) -> Bool = { $0.play() },
         notificationAdder: @escaping WarmAlarmPlugin.NotificationAdder = { request, completion in
             UNUserNotificationCenter.current().add(request, withCompletionHandler: completion)
+        },
+        categoryRegistrar: @escaping CategoryRegistrar = { contents, completion in
+            WarmAlarmDelegate.registerCategories(for: contents, completion: completion)
         }
     ) {
         self.playbackLock = playbackLock
         self.audioPlayerFactory = audioPlayerFactory
         self.notificationMutationQueue = notificationMutationQueue
         self.pendingNotificationReader = pendingNotificationReader
+        self.categoryRegistrar = categoryRegistrar
         self.notificationAdder = { request, completion in
-            Self.registerCategories(for: [request.content], completion: { notificationAdder(request, completion) })
+            categoryRegistrar([request.content]) { notificationAdder(request, completion) }
         }
         self.playAudio = playAudio
         self.eventQueue = eventQueue ?? WarmAlarmEventQueue { event, completion in

@@ -160,8 +160,9 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
         }
     ) {
         self.notificationMutationQueue = delegate.notificationMutationQueue
+        let categoryRegistrar = delegate.categoryRegistrar
         self.notificationAdder = { request, completion in
-            WarmAlarmDelegate.registerCategories(for: [request.content], completion: { notificationAdder(request, completion) })
+            categoryRegistrar([request.content]) { notificationAdder(request, completion) }
         }
         self.authorizationStatusReader = authorizationStatusReader
         self.delegate = delegate

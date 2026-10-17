@@ -249,7 +249,8 @@ private final class ReplacementFixture {
             }
         )
         let delegate = WarmAlarmDelegate(
-            eventsApi: WarmAlarmEventsApi(binaryMessenger: ReplacementTestMessenger()), eventQueue: queue
+            eventsApi: WarmAlarmEventsApi(binaryMessenger: ReplacementTestMessenger()), eventQueue: queue,
+            categoryRegistrar: { _, completion in completion() }
         )
         let content = delegate.makeContent(from: previous)
         pending = ([1, 5] as [Int]).map {
