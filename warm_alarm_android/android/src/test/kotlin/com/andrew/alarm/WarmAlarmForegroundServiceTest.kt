@@ -4,6 +4,7 @@ import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -14,6 +15,7 @@ import android.net.Uri
 import android.os.Handler
 import androidx.core.app.NotificationCompat
 import org.json.JSONArray
+import org.mockito.ArgumentCaptor
 import org.mockito.Mockito
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -21,6 +23,90 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class WarmAlarmForegroundServiceTest {
+    @Test
+    fun retainedNotificationsDetachOnApi24AndLater() {
+        for (sdk in listOf(24, 29)) {
+            for (action in listOf(WarmAlarmForegroundService.ACTION_STOP, WarmAlarmForegroundService.ACTION_SNOOZE)) {
+                AndroidSdkOverride(sdk).use {
+                    PlaybackHarness(keepNotification = true).use { harness ->
+                        harness.fire(72)
+                        harness.command(action, 72)
+                        val order = Mockito.inOrder(harness.service, harness.notifications)
+                        order.verify(harness.notifications).notify(Mockito.eq(2001), Mockito.any(Notification::class.java))
+                        order.verify(harness.service).stopForeground(Service.STOP_FOREGROUND_DETACH)
+                        order.verify(harness.service).stopSelf()
+                        @Suppress("DEPRECATION")
+                        Mockito.verify(harness.service, Mockito.never()).stopForeground(false)
+                        Mockito.verify(harness.service).stopSelf()
+                        assertCompletedNotification(harness)
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun retainedNotificationsBecomeOrdinaryNotificationsBeforeApi24() {
+        for (sdk in listOf(19, 22, 23)) {
+            for (action in listOf(WarmAlarmForegroundService.ACTION_STOP, WarmAlarmForegroundService.ACTION_SNOOZE)) {
+                AndroidSdkOverride(sdk).use {
+                    PlaybackHarness(keepNotification = true).use { harness ->
+                        harness.fire(72)
+                        harness.command(action, 72)
+                        val order = Mockito.inOrder(harness.service, harness.notifications)
+                        @Suppress("DEPRECATION")
+                        order.verify(harness.service).stopForeground(true)
+                        order.verify(harness.notifications).notify(Mockito.eq(2001), Mockito.any(Notification::class.java))
+                        order.verify(harness.service).stopSelf()
+                        Mockito.verify(harness.service, Mockito.never()).stopForeground(Mockito.anyInt())
+                        Mockito.verify(harness.notifications).notify(Mockito.eq(2001), Mockito.any(Notification::class.java))
+                        Mockito.verify(harness.service).stopSelf()
+                        val retained = assertCompletedNotification(harness)
+                        assertTrue(retained.priority <= Notification.PRIORITY_LOW)
+                        assertEquals(null, retained.sound)
+                        assertEquals(null, retained.vibrate)
+                        assertEquals(0, retained.defaults)
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun completedNotificationsAreRemovedWhenRetentionIsDisabled() {
+        for (sdk in listOf(19, 24, 29)) {
+            for (action in listOf(WarmAlarmForegroundService.ACTION_STOP, WarmAlarmForegroundService.ACTION_SNOOZE)) {
+                AndroidSdkOverride(sdk).use {
+                    PlaybackHarness().use { harness ->
+                        harness.fire(72)
+                        harness.command(action, 72)
+                        @Suppress("DEPRECATION")
+                        Mockito.verify(harness.service).stopForeground(true)
+                        Mockito
+                            .verify(
+                                harness.notifications,
+                                Mockito.never(),
+                            ).notify(Mockito.anyInt(), Mockito.any(Notification::class.java))
+                    }
+                }
+            }
+        }
+    }
+
+    private fun assertCompletedNotification(harness: PlaybackHarness): Notification {
+        val capture = ArgumentCaptor.forClass(Notification::class.java)
+        Mockito.verify(harness.notifications).notify(Mockito.eq(2001), capture.capture())
+        val retained = capture.value
+        assertTrue(retained.actions.isEmpty())
+        assertEquals(null, retained.fullScreenIntent)
+        assertEquals(
+            0,
+            retained.flags and (Notification.FLAG_FOREGROUND_SERVICE or Notification.FLAG_ONGOING_EVENT or Notification.FLAG_NO_CLEAR),
+        )
+        assertTrue(retained.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0)
+        return retained
+    }
+
     @Test
     fun api19PlaybackUsesTheLegacyAlarmStream() {
         AndroidSdkOverride(19).use {
@@ -255,7 +341,9 @@ class WarmAlarmForegroundServiceTest {
 
 private class PlaybackHarness(
     configurePlayer: (MediaPlayer) -> Unit = {},
+    private val keepNotification: Boolean = false,
 ) : AutoCloseable {
+    val notifications = Mockito.mock(NotificationManager::class.java)
     val service = Mockito.mock(WarmAlarmForegroundService::class.java, Mockito.CALLS_REAL_METHODS)
     val fadeCallbacks = mutableListOf<Runnable>()
     val enforcementCallbacks = mutableListOf<Runnable>()
@@ -295,6 +383,8 @@ private class PlaybackHarness(
         setField("volumeEnforcerHandler", handler(enforcementCallbacks))
         setField("vibrationController", WarmAlarmVibrationController(vibration))
 
+        Mockito.doReturn(service).`when`(service).createDeviceProtectedStorageContext()
+        Mockito.doReturn(null).`when`(service).getSystemService(Context.USER_SERVICE)
         val preferences = Mockito.mock(SharedPreferences::class.java)
         val editor = Mockito.mock(SharedPreferences.Editor::class.java, Mockito.RETURNS_SELF)
         val schedules =
@@ -320,14 +410,25 @@ private class PlaybackHarness(
         Mockito.doNothing().`when`(service).startForeground(Mockito.anyInt(), Mockito.any(Notification::class.java))
         @Suppress("DEPRECATION")
         Mockito.doNothing().`when`(service).stopForeground(Mockito.anyBoolean())
+        Mockito.doNothing().`when`(service).stopForeground(Mockito.anyInt())
         Mockito.doNothing().`when`(service).stopSelf()
         val audioManager = Mockito.mock(AudioManager::class.java)
         Mockito.`when`(audioManager.getStreamMaxVolume(AudioManager.STREAM_ALARM)).thenReturn(10)
         Mockito.doReturn(audioManager).`when`(service).getSystemService(Context.AUDIO_SERVICE)
         Mockito.doReturn(Mockito.mock(AlarmManager::class.java)).`when`(service).getSystemService(Context.ALARM_SERVICE)
-        Mockito.doReturn(Mockito.mock(NotificationManager::class.java)).`when`(service).getSystemService(Context.NOTIFICATION_SERVICE)
+        Mockito.doReturn(notifications).`when`(service).getSystemService(Context.NOTIFICATION_SERVICE)
 
-        resources += Mockito.mockStatic(PendingIntent::class.java)
+        val pendingIntents = Mockito.mockStatic(PendingIntent::class.java)
+        resources += pendingIntents
+        pendingIntents
+            .`when`<PendingIntent> {
+                PendingIntent.getBroadcast(
+                    Mockito.any(Context::class.java),
+                    Mockito.anyInt(),
+                    Mockito.any(Intent::class.java),
+                    Mockito.anyInt(),
+                )
+            }.thenReturn(Mockito.mock(PendingIntent::class.java))
         resources += Mockito.mockStatic(Uri::class.java)
         resources += Mockito.mockConstruction(Intent::class.java)
         resources +=
@@ -335,7 +436,17 @@ private class PlaybackHarness(
                 builder,
                 _,
                 ->
-                Mockito.`when`(builder.build()).thenReturn(Mockito.mock(Notification::class.java))
+                val notification =
+                    Notification().apply {
+                        priority = Notification.PRIORITY_HIGH
+                        flags = Notification.FLAG_ONGOING_EVENT or Notification.FLAG_NO_CLEAR or Notification.FLAG_FOREGROUND_SERVICE
+                        defaults = Notification.DEFAULT_ALL
+                        sound = Mockito.mock(Uri::class.java)
+                        vibrate = longArrayOf(0, 200)
+                        fullScreenIntent = Mockito.mock(PendingIntent::class.java)
+                        actions = arrayOf(Mockito.mock(Notification.Action::class.java))
+                    }
+                Mockito.`when`(builder.build()).thenReturn(notification)
             }
         resources +=
             Mockito.mockConstruction(AudioAttributes.Builder::class.java, Mockito.withSettings().defaultAnswer(Mockito.RETURNS_SELF)) {
@@ -391,7 +502,7 @@ private class PlaybackHarness(
         WarmAlarmScheduleWire(
             id = id,
             scheduledAtMillis = 1_234,
-            notification = WarmAlarmNotificationWire(title = "Alarm", body = "Overlap", keepNotificationAfterAlarmEnds = false),
+            notification = WarmAlarmNotificationWire(title = "Alarm", body = "Overlap", keepNotificationAfterAlarmEnds = keepNotification),
             audio =
                 WarmAlarmAudioWire(
                     filePath = "/alarm.wav",

@@ -1,5 +1,6 @@
 # Unreleased
 
+- Preserve completed alarm notifications after service exit across supported Android versions, removing stale controls and full-screen intent.
 - Ignore locked-boot broadcasts below API 24 before accessing stored alarms; ordinary boot recovery remains available on API 19–23.
 - Use supported inexact wake-check scheduling on API 19–22 and the legacy alarm audio stream on API 19–20.
 - Use the API 19–22 exact-alarm API for initial scheduling, initialization recovery, and boot recovery while retaining modern exact/inexact scheduling and warnings.

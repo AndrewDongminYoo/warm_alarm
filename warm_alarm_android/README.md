@@ -64,6 +64,12 @@ A newly fired alarm replaces the current playback, including another fire of the
 Replacement releases the previous player and clears its fade callbacks, vibration, and volume-enforcement timer before the next playback starts.
 It does not perform a Stop or Snooze action on the replaced alarm's stored schedule.
 
+When `notification.keepNotificationAfterAlarmEnds` is `true`, Stop and Snooze retain the notification content after the service exits.
+API 24 and later detach it from the foreground-service lifetime; API 19–23 remove the foreground notification and post an ordinary replacement.
+The retained notification is dismissible and has no Stop/Snooze actions or full-screen intent.
+The ordinary replacement uses low priority with sound, vibration, and default alerts disabled.
+With retention disabled, completion removes the foreground notification.
+
 ### Wake-check
 
 When `WarmAlarmWakeCheck` is configured, stopping the primary alarm schedules a secondary alarm for `checkDelay` later.
