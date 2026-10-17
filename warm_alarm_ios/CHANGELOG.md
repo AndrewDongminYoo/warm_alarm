@@ -1,4 +1,4 @@
-# Unreleased
+# 0.1.12
 
 - Preserve host notification categories and apply distinct custom Stop/Snooze titles in the User Notifications backend.
 - Report missing or failed custom audio and request notification sound for foreground fallback.
@@ -8,6 +8,7 @@
 - Restore the previous User Notifications schedule and pending requests when replacement registration fails, and report incomplete recovery as a scheduling rollback failure.
 - Bundle required-reason privacy declarations for app-local UserDefaults and generated-sound file timestamps in CocoaPods and SwiftPM distributions.
 - Clarify kill-warning lifecycle behavior and pending-only cancellation on reactivation.
+- Require platform interface 0.1.7 for the coordinated 0.1.7 / 0.1.8 release.
 
 # 0.1.11
 
