@@ -1,3 +1,8 @@
+# Unreleased
+
+- Add `WarmAlarmScheduleResult.warnings`, which lists every scheduling warning in detection order.
+  `warning` stays and returns the first entry, so existing callers and implementations keep working.
+
 # 0.1.7
 
 - Complete the public contract reference with Live Activity operations, notification settings, warning and failure models, and asynchronous return types.
