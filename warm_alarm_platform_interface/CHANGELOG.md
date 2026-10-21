@@ -1,4 +1,4 @@
-# Unreleased
+# 0.1.8
 
 - Add `WarmAlarmScheduleResult.warnings`, which lists every scheduling warning in detection order.
   `warning` stays and returns the first entry, so existing callers and implementations keep working.

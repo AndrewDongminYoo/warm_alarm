@@ -93,7 +93,8 @@ New implementations should use `WarmAlarmScheduleResult.withWarnings(warnings: .
 This constructor copies the supplied list so callers can reuse their warning accumulator without changing a returned result.
 The separate constructors keep the existing const-construction path and prevent combining the single-warning and list arguments.
 An empty list does not guarantee that every requested option was applied.
-The list API is currently unreleased, and the platform implementations still use the single-warning constructor until their separate migration.
+The list API requires `warm_alarm_platform_interface` 0.1.8 or later.
+The platform implementations still use the single-warning constructor until their separate migration.
 
 ---
 

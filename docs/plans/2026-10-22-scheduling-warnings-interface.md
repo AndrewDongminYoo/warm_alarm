@@ -8,8 +8,8 @@ Use `WarmAlarmScheduleResult.withWarnings` to copy a supplied warning list into 
 Separate constructors prevent combining the single-warning and list arguments.
 The operator approved proceeding with #122 on 2026-10-22.
 
-The current branch already contains an uncommitted interface draft and model tests.
-Preserve that work and complete it in the main workspace.
+The interface implementation started from an uncommitted draft and model tests.
+That work was completed in the main workspace and merged in PR #130.
 This stage owns the result model, its model tests, the interface README and CHANGELOG, and this plan.
 No Pigeon schema changes are required for this interface stage.
 
@@ -37,3 +37,20 @@ Oracle returned the federated-release precedent at `wiki/sources/claude--project
 It confirms the separate interface-first release stages already required by AGENTS.md and the approved spec.
 The scheduling-warning and constructor compatibility query returned \[no precedent found\]; those choices follow the approved spec and current model compatibility requirements.
 Oracle's general API-preservation precedent at `wiki/sources/claude--claude.md` confirms retaining the existing const constructor while adding the separate snapshot constructor.
+
+## Interface 0.1.8 release preparation
+
+PR #130 merged the interface API and regression coverage.
+The pub.dev package API reported 0.1.7 as the latest published interface version when this stage was prepared.
+Prepare 0.1.8 before changing any platform dependency floor.
+This stage owns only the interface pubspec, CHANGELOG, README, and this plan.
+
+1. Set the interface version and top CHANGELOG heading to 0.1.8, and document the README availability floor.
+2. Run `flutter pub get` at the root to resolve the manifest change.
+   The root lockfile remains ignored under the repository policy.
+3. Run the interface test suite, root analysis, scoped Dart format check, and Trunk checks for the four owned paths.
+4. Commit the release preparation, then run `flutter pub publish --dry-run` from the interface package with a clean Git tree.
+   The dry run validates package contents without publishing.
+5. Open the release-preparation PR and complete current-head CI and review gates before requesting operator merge.
+   Publication remains a separate operator approval and uses tag `warm_alarm_platform_interface-v0.1.8`.
+   Start platform consumers only after the pub.dev API confirms that 0.1.8 is published.
