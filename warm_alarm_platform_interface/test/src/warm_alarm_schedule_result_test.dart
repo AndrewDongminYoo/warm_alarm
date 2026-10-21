@@ -34,7 +34,7 @@ void main() {
     });
 
     test('exposes one listed warning through the single field', () {
-      const result = WarmAlarmScheduleResult(
+      final result = WarmAlarmScheduleResult.withWarnings(
         alarmId: 1,
         readiness: _readiness,
         warnings: <WarmAlarmWarning>[_wakeCheckWarning],
@@ -45,7 +45,7 @@ void main() {
     });
 
     test('reports no warning for an explicitly empty list', () {
-      final result = WarmAlarmScheduleResult(
+      final result = WarmAlarmScheduleResult.withWarnings(
         alarmId: 1,
         readiness: _readiness,
         warnings: List<WarmAlarmWarning>.empty(),
@@ -56,7 +56,7 @@ void main() {
     });
 
     test('keeps several warnings in detection order and the first as the single field', () {
-      const result = WarmAlarmScheduleResult(
+      final result = WarmAlarmScheduleResult.withWarnings(
         alarmId: 1,
         readiness: _readiness,
         warnings: <WarmAlarmWarning>[_wakeCheckWarning, _nativeWarning],
@@ -68,7 +68,7 @@ void main() {
     });
 
     test('returns a list that callers cannot modify', () {
-      const result = WarmAlarmScheduleResult(
+      final result = WarmAlarmScheduleResult.withWarnings(
         alarmId: 1,
         readiness: _readiness,
         warnings: <WarmAlarmWarning>[_nativeWarning],
@@ -85,28 +85,20 @@ void main() {
       );
     });
 
-    test('rejects a single warning together with a warnings list', () {
-      expect(
-        () => WarmAlarmScheduleResult(
-          alarmId: 1,
-          readiness: _readiness,
-          warning: _nativeWarning,
-          warnings: List<WarmAlarmWarning>.of(const <WarmAlarmWarning>[_wakeCheckWarning]),
-        ),
-        throwsAssertionError,
+    test('keeps the result stable when the caller reuses its warning accumulator', () {
+      final accumulator = <WarmAlarmWarning>[_wakeCheckWarning, _nativeWarning];
+      final result = WarmAlarmScheduleResult.withWarnings(
+        alarmId: 1,
+        readiness: _readiness,
+        warnings: accumulator,
       );
-    });
 
-    test('rejects a single warning together with an explicitly empty const list', () {
-      expect(
-        () => WarmAlarmScheduleResult(
-          alarmId: 1,
-          readiness: _readiness,
-          warning: _nativeWarning,
-          warnings: const <WarmAlarmWarning>[],
-        ),
-        throwsAssertionError,
-      );
+      accumulator
+        ..clear()
+        ..add(_nativeWarning);
+
+      expect(result.warnings, <WarmAlarmWarning>[_wakeCheckWarning, _nativeWarning]);
+      expect(result.warning, same(_wakeCheckWarning));
     });
   });
 }

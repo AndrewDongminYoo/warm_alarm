@@ -89,7 +89,9 @@ are never exposed here.
 `WarmAlarmScheduleResult.warnings` is a read-only list in detection order.
 The existing `warning` getter returns the first entry, or null when the list is empty.
 Existing implementations can keep passing the single `warning` constructor argument; it becomes the only list entry.
-New implementations should pass the `warnings` argument instead; an assertion rejects supplying both non-null arguments.
+New implementations should use `WarmAlarmScheduleResult.withWarnings(warnings: ..., alarmId: ..., readiness: ...)`.
+This constructor copies the supplied list so callers can reuse their warning accumulator without changing a returned result.
+The separate constructors keep the existing const-construction path and prevent combining the single-warning and list arguments.
 An empty list does not guarantee that every requested option was applied.
 The list API is currently unreleased, and the platform implementations still use the single-warning constructor until their separate migration.
 

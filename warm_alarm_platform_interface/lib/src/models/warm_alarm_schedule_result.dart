@@ -6,21 +6,23 @@ import 'package:warm_alarm_platform_interface/src/models/warm_alarm_support.dart
 final class WarmAlarmScheduleResult {
   /// Creates a result for an alarm and its readiness snapshot.
   ///
-  /// Pass every reported warning through [warnings].
-  /// The single [warning] argument remains for implementations built against earlier versions,
-  /// and becomes the only entry of [warnings].
-  /// Supply one of the two arguments, not both.
+  /// The optional [warning] becomes the only entry of [warnings].
+  /// Use [WarmAlarmScheduleResult.withWarnings] to report several warnings.
   const WarmAlarmScheduleResult({
     required this.alarmId,
     required this.readiness,
     WarmAlarmWarning? warning,
-    List<WarmAlarmWarning>? warnings,
-  }) : assert(
-         warning == null || warnings == null,
-         'Pass either warning or warnings, not both.',
-       ),
-       _warning = warning,
-       _warnings = warnings ?? const <WarmAlarmWarning>[];
+  }) : _warning = warning,
+       _warnings = const <WarmAlarmWarning>[];
+
+  /// Creates a result with a snapshot of every reported warning.
+  /// Copies [warnings] so later changes to the supplied list cannot change this result.
+  WarmAlarmScheduleResult.withWarnings({
+    required this.alarmId,
+    required this.readiness,
+    required List<WarmAlarmWarning> warnings,
+  }) : _warning = null,
+       _warnings = List<WarmAlarmWarning>.unmodifiable(warnings);
 
   /// The identifier associated with the scheduling request.
   final int alarmId;
@@ -39,7 +41,6 @@ final class WarmAlarmScheduleResult {
   /// Every scheduling warning, in the order the platform detected them.
   /// The list is empty when the platform reports no warning, and it cannot be modified.
   /// An empty list does not guarantee that every platform-specific option was applied.
-  List<WarmAlarmWarning> get warnings => List<WarmAlarmWarning>.unmodifiable(
-    _warning == null ? _warnings : <WarmAlarmWarning>[_warning],
-  );
+  List<WarmAlarmWarning> get warnings =>
+      _warning == null ? _warnings : List<WarmAlarmWarning>.unmodifiable(<WarmAlarmWarning>[_warning]);
 }

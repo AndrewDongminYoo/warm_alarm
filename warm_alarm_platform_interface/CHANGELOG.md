@@ -2,6 +2,7 @@
 
 - Add `WarmAlarmScheduleResult.warnings`, which lists every scheduling warning in detection order.
   `warning` stays and returns the first entry, so existing callers and implementations keep working.
+- Add `WarmAlarmScheduleResult.withWarnings` to copy a warning list into a stable, read-only result while preserving the existing const constructor.
 
 # 0.1.7
 
