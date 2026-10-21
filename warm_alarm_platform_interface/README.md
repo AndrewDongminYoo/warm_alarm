@@ -77,7 +77,7 @@ are never exposed here.
 | `WarmAlarmPermissionState`      | Runtime permission grant flags                                                                                                  |
 | `WarmAlarmReadiness`            | Aggregated readiness level plus a list of actionable `WarmAlarmReadinessReason` codes                                           |
 | `WarmAlarmRemediationResult`    | Action status plus permission and readiness state when the action returns                                                       |
-| `WarmAlarmScheduleResult`       | Schedule outcome: `alarmId`, `readiness` snapshot, optional `WarmAlarmWarning`                                                  |
+| `WarmAlarmScheduleResult`       | Schedule outcome: `alarmId`, `readiness` snapshot, `warnings` list, and `warning` (its first entry)                             |
 | `WarmAlarmEvent`                | Sealed class hierarchy covering every alarm lifecycle transition                                                                |
 | `WarmAlarmVolumeFadeStep`       | A single (time, volume) breakpoint in a custom fade curve                                                                       |
 | `WarmAlarmNotificationSettings` | Granular notification authorization, alert, sound, and Time Sensitive settings                                                  |
@@ -85,6 +85,15 @@ are never exposed here.
 | `WarmAlarmFailure`              | `WarmAlarmFailureCode` and an optional diagnostic message                                                                       |
 | `WarmAlarmLiveActivityState`    | Host-widget content: alarm ID, title, `WarmAlarmLiveActivityStatus`, and optional next occurrence                               |
 | `WarmAlarmLiveActivityResult`   | `WarmAlarmLiveActivityResultStatus` and optional ActivityKit identifier                                                         |
+
+`WarmAlarmScheduleResult.warnings` is a read-only list in detection order.
+The existing `warning` getter returns the first entry, or null when the list is empty.
+Existing implementations can keep passing the single `warning` constructor argument; it becomes the only list entry.
+New implementations should use `WarmAlarmScheduleResult.withWarnings(warnings: ..., alarmId: ..., readiness: ...)`.
+This constructor copies the supplied list so callers can reuse their warning accumulator without changing a returned result.
+The separate constructors keep the existing const-construction path and prevent combining the single-warning and list arguments.
+An empty list does not guarantee that every requested option was applied.
+The list API is currently unreleased, and the platform implementations still use the single-warning constructor until their separate migration.
 
 ---
 
