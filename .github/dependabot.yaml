@@ -5,27 +5,48 @@ updates:
     directory: /
     schedule:
       interval: daily
+    groups:
+      actions:
+        patterns: ["*"]
   - package-ecosystem: pub
     directory: /warm_alarm
     schedule:
       interval: daily
+    groups:
+      core:
+        patterns: ["*"]
   - package-ecosystem: pub
     directory: /warm_alarm/example
     schedule:
       interval: daily
+    groups:
+      example:
+        patterns: ["*"]
   - package-ecosystem: pub
     directory: /warm_alarm_platform_interface
     schedule:
       interval: daily
+    groups:
+      interface:
+        patterns: ["*"]
   - package-ecosystem: pub
     directory: /warm_alarm_android
     schedule:
       interval: daily
+    groups:
+      android:
+        patterns: ["*"]
   - package-ecosystem: pub
     directory: /warm_alarm_ios
     schedule:
       interval: daily
+    groups:
+      ios:
+        patterns: ["*"]
   - package-ecosystem: pub
     directory: /warm_alarm_macos
     schedule:
       interval: daily
+    groups:
+      macos:
+        patterns: ["*"]
