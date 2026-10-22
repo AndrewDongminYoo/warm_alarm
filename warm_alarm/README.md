@@ -216,7 +216,10 @@ Custom activities use a separate opt-in from AlarmKit countdown presentation.
 See the platform-specific triggers and removal behavior for [Android](../warm_alarm_android/README.md#kill-warning), [iOS](../warm_alarm_ios/README.md#kill-warning), and [macOS](../warm_alarm_macos/README.md#kill-warning).
 
 On iOS and macOS, a schedule with `wakeCheck` returns `warning.code == WarmAlarmWarningCode.unsupportedWakeCheck` because wake-check cannot run there.
-The wake-check request is ignored, and `warning.message` also retains any native scheduling warning.
+The wake-check request is ignored.
+The iOS 0.1.13 and macOS 0.1.8 releases prepared here keep native scheduling warnings as separate entries in `result.warnings`, after the wake-check entry.
+Those releases require interface 0.1.8 and must be published before consumers can resolve them from pub.dev.
+The legacy `warning` getter returns the first entry; earlier Apple versions retain native messages inside that single warning instead.
 `unsupportedWakeCheck` is currently the only structured warning code; other native warnings can have a null code.
 Warnings do not cover every ignored option; see the [audio contract](#audio-contract) for reserved fields and platform-specific behavior.
 

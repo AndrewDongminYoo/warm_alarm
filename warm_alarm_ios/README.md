@@ -55,6 +55,15 @@ When notification settings are healthy, ignore `backgroundExecutionLimited` for 
 A `null` settings snapshot means that the current platform implementation does not report granular notification settings.
 `openReadinessSettings(backgroundExecutionLimited)` opens the notification-specific settings screen when iOS provides one and otherwise falls back to the app settings screen.
 
+## Scheduling warnings
+
+Version 0.1.13 requires platform interface 0.1.8 and reports scheduling diagnostics through the read-only `WarmAlarmScheduleResult.warnings` list.
+The legacy `warning` getter returns the first entry, or null when the list is empty.
+An unsupported wake-check request is the first entry, followed by native warnings in detection order.
+AlarmKit configuration fallback, runtime scheduling fallback, and notification-capacity warnings remain separate entries with null codes.
+An empty list does not guarantee that every requested option was applied.
+This version is prepared for publication; earlier released versions combine wake-check and native messages into one warning.
+
 ## AlarmKit opt-in
 
 The plugin uses AlarmKit when the app runs on iOS 26 or later, the build SDK contains AlarmKit, the host app has a non-empty `NSAlarmKitUsageDescription`, and AlarmKit authorization is not denied.
@@ -62,7 +71,7 @@ The first AlarmKit schedule can show the system authorization prompt while the a
 If AlarmKit is unavailable, unconfigured, or denied, the plugin uses the existing User Notifications backend.
 If AlarmKit fails to schedule, the plugin removes any native alarm with the same stable ID before it installs the User Notifications fallback.
 The scheduling call fails instead of installing a second backend when native cleanup cannot be confirmed.
-`WarmAlarmScheduleResult.warning` identifies a runtime fallback caused by an AlarmKit scheduling error.
+`WarmAlarmScheduleResult.warnings` includes an entry for a runtime fallback caused by an AlarmKit scheduling error.
 
 Add a usage description to the host app's `Info.plist`.
 

@@ -93,7 +93,7 @@ final class WarmAlarmReplacementTests: XCTestCase {
                 completed.fulfill()
                 return
             }
-            XCTAssertNil(value.warning)
+            XCTAssertTrue(value.warnings.isEmpty)
             completed.fulfill()
         }
         wait(for: [completed], timeout: 2)

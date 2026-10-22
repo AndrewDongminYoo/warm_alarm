@@ -576,20 +576,20 @@ class WarmAlarmScheduleResultWire {
   WarmAlarmScheduleResultWire({
     required this.alarmId,
     required this.readiness,
-    this.warning,
+    required this.warnings,
   });
 
   int alarmId;
 
   WarmAlarmReadinessWire readiness;
 
-  WarmAlarmWarningWire? warning;
+  List<WarmAlarmWarningWire> warnings;
 
   List<Object?> _toList() {
     return <Object?>[
       alarmId,
       readiness,
-      warning,
+      warnings,
     ];
   }
 
@@ -601,7 +601,7 @@ class WarmAlarmScheduleResultWire {
     return WarmAlarmScheduleResultWire(
       alarmId: result[0]! as int,
       readiness: result[1]! as WarmAlarmReadinessWire,
-      warning: result[2] as WarmAlarmWarningWire?,
+      warnings: (result[2]! as List<Object?>).cast<WarmAlarmWarningWire>(),
     );
   }
 
@@ -614,7 +614,7 @@ class WarmAlarmScheduleResultWire {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(alarmId, other.alarmId) && _deepEquals(readiness, other.readiness) && _deepEquals(warning, other.warning);
+    return _deepEquals(alarmId, other.alarmId) && _deepEquals(readiness, other.readiness) && _deepEquals(warnings, other.warnings);
   }
 
   @override
@@ -623,7 +623,7 @@ class WarmAlarmScheduleResultWire {
 
   @override
   String toString() {
-    return 'WarmAlarmScheduleResultWire(alarmId: $alarmId, readiness: $readiness, warning: $warning)';
+    return 'WarmAlarmScheduleResultWire(alarmId: $alarmId, readiness: $readiness, warnings: $warnings)';
   }
 }
 

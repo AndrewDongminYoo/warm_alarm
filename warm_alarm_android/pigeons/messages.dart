@@ -138,12 +138,12 @@ class WarmAlarmScheduleResultWire {
   const WarmAlarmScheduleResultWire({
     required this.alarmId,
     required this.readiness,
-    this.warning,
+    required this.warnings,
   });
 
   final int alarmId;
   final WarmAlarmReadinessWire readiness;
-  final WarmAlarmWarningWire? warning;
+  final List<WarmAlarmWarningWire> warnings;
 }
 
 class WarmAlarmNotificationWire {

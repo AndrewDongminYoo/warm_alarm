@@ -3388,6 +3388,43 @@ final class WarmAlarmRequestTests: XCTestCase {
         return fixture
     }
 
+    func testSchedulingPreservesSeparateFallbackAndCapacityWarnings() throws {
+        guard #available(iOS 26.0, *) else { throw XCTSkip("AlarmKit requires iOS 26") }
+        for configurationFallback in [true, false] {
+            let error = NSError(domain: "NativeScheduleFailure", code: 1,
+                                userInfo: [NSLocalizedDescriptionKey: "native scheduling rejected"])
+            let backend = RecordingAlarmKitBackend(scheduleError: configurationFallback ? nil : error)
+            let fixture = fallbackReplacementFixture(existing: false, backend: backend)
+            for index in 0..<60 {
+                let identifier = index == 0 ? "warm_alarm_kill_warning_notif" : "occupied-\(index)"
+                fixture.pending[identifier] = UNNotificationRequest(
+                    identifier: identifier, content: UNMutableNotificationContent(), trigger: nil
+                )
+            }
+            var replacement = fixture.replacement
+            if configurationFallback {
+                replacement.snooze = WarmAlarmSnoozeWire(durationMillis: 60_000)
+            }
+            let completed = expectation(description: "fallback and capacity remain separate")
+            fixture.plugin.scheduleAlarm(schedule: replacement) { result in
+                switch result {
+                case let .success(value):
+                    XCTAssertEqual(value.warnings.map(\.message), [
+                        configurationFallback
+                            ? "AlarmKit snooze requires WarmAlarmAlarmKitLiveActivityEnabled; using User Notifications."
+                            : "AlarmKit scheduling failed; using User Notifications: native scheduling rejected",
+                        "iOS scheduled 2 of 10 fallback notifications because the app reached the 64-notification limit.",
+                    ])
+                case let .failure(error): XCTFail("Expected successful fallback: \(error)")
+                }
+                completed.fulfill()
+            }
+            wait(for: [completed], timeout: 5)
+            XCTAssertEqual(backend.scheduledPlans.count, configurationFallback ? 0 : 1)
+            XCTAssertEqual(fixture.pending.count, 64)
+        }
+    }
+
     func testFallbackCapacityFailurePreservesCallerSoundAndCleansInternalConversion() throws {
         guard #available(iOS 26.0, *) else { throw XCTSkip("AlarmKit requires iOS 26") }
         let previous = Array(WarmAlarmStore.shared.loadAll().values)

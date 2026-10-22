@@ -605,7 +605,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                         let readiness = (try? result.get())
                             ?? WarmAlarmReadinessWire(level: .limited, reasons: [.backgroundExecutionLimited])
                         WarmAlarmPlatformReply.complete(.success(WarmAlarmScheduleResultWire(
-                            alarmId: schedule.id, readiness: readiness, warning: nil)), completion: completion, finish: finish)
+                            alarmId: schedule.id, readiness: readiness, warnings: [])), completion: completion, finish: finish)
                     }
                 }
             }

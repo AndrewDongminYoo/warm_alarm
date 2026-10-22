@@ -14,7 +14,6 @@ import java.lang.reflect.Field
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class WarmAlarmSchedulingTest {
@@ -187,10 +186,13 @@ class WarmAlarmSchedulingTest {
                     if (!exactGranted) {
                         assertEquals(WarmAlarmReadinessLevelWire.LIMITED, completed.readiness.level)
                         assertTrue(WarmAlarmReadinessReasonWire.EXACT_ALARM_PERMISSION_DENIED in completed.readiness.reasons)
-                        assertNotNull(completed.warning)
+                        assertEquals(
+                            "SCHEDULE_EXACT_ALARM not granted; alarm may fire late.",
+                            completed.warnings.single().message,
+                        )
                     } else {
                         assertEquals(WarmAlarmReadinessLevelWire.READY, completed.readiness.level)
-                        assertNull(completed.warning)
+                        assertTrue(completed.warnings.isEmpty())
                     }
                     val event =
                         WarmAlarmEventQueueStore

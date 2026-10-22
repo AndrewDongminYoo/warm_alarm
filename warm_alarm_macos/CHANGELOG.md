@@ -1,3 +1,9 @@
+# 0.1.8
+
+- Return wake-check and native scheduling warnings as separate read-only list entries, keeping `warning` as the first entry or null.
+- Carry native warnings through the generated wire protocol without discarding entries.
+- Require platform interface 0.1.8 for the warning-list constructor.
+
 # 0.1.7
 
 - Ship a `PrivacyInfo.xcprivacy` manifest through SwiftPM and CocoaPods that declares app-local `UserDefaults` access (`CA92.1`).

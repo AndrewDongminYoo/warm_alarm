@@ -1,3 +1,9 @@
+# 0.1.13
+
+- Return wake-check and native scheduling warnings as separate read-only list entries, keeping `warning` as the first entry or null.
+- Preserve AlarmKit configuration, runtime fallback, and notification-capacity warnings separately instead of joining their messages.
+- Require platform interface 0.1.8 for the warning-list constructor.
+
 # 0.1.12
 
 - Preserve host notification categories and apply distinct custom Stop/Snooze titles in the User Notifications backend.

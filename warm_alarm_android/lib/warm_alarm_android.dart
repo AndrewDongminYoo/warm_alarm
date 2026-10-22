@@ -344,10 +344,10 @@ WarmAlarmRecurrenceWire? _recurrenceToWire(WarmAlarmRecurrence? recurrence) {
 WarmAlarmScheduleResult _scheduleResultFromWire(
   WarmAlarmScheduleResultWire wire,
 ) {
-  return WarmAlarmScheduleResult(
+  return WarmAlarmScheduleResult.withWarnings(
     alarmId: wire.alarmId,
     readiness: _readinessFromWire(wire.readiness),
-    warning: wire.warning == null ? null : WarmAlarmWarning(message: wire.warning!.message),
+    warnings: wire.warnings.map((warning) => WarmAlarmWarning(message: warning.message)).toList(),
   );
 }
 

@@ -587,44 +587,44 @@ struct WarmAlarmFailureWire: Hashable, CustomStringConvertible {
 struct WarmAlarmScheduleResultWire: Hashable, CustomStringConvertible {
   var alarmId: Int64
   var readiness: WarmAlarmReadinessWire
-  var warning: WarmAlarmWarningWire? = nil
+  var warnings: [WarmAlarmWarningWire]
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
   static func fromList(_ pigeonVar_list: [Any?]) -> WarmAlarmScheduleResultWire? {
     let alarmId = pigeonVar_list[0] as! Int64
     let readiness = pigeonVar_list[1] as! WarmAlarmReadinessWire
-    let warning: WarmAlarmWarningWire? = nilOrValue(pigeonVar_list[2])
+    let warnings = pigeonVar_list[2] as! [WarmAlarmWarningWire]
 
     return WarmAlarmScheduleResultWire(
       alarmId: alarmId,
       readiness: readiness,
-      warning: warning
+      warnings: warnings
     )
   }
   func toList() -> [Any?] {
     return [
       alarmId,
       readiness,
-      warning,
+      warnings,
     ]
   }
   static func == (lhs: WarmAlarmScheduleResultWire, rhs: WarmAlarmScheduleResultWire) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return MessagesPigeonInternal.deepEquals(lhs.alarmId, rhs.alarmId) && MessagesPigeonInternal.deepEquals(lhs.readiness, rhs.readiness) && MessagesPigeonInternal.deepEquals(lhs.warning, rhs.warning)
+    return MessagesPigeonInternal.deepEquals(lhs.alarmId, rhs.alarmId) && MessagesPigeonInternal.deepEquals(lhs.readiness, rhs.readiness) && MessagesPigeonInternal.deepEquals(lhs.warnings, rhs.warnings)
   }
 
   func hash(into hasher: inout Hasher) {
     hasher.combine("WarmAlarmScheduleResultWire")
     MessagesPigeonInternal.deepHash(value: alarmId, hasher: &hasher)
     MessagesPigeonInternal.deepHash(value: readiness, hasher: &hasher)
-    MessagesPigeonInternal.deepHash(value: warning, hasher: &hasher)
+    MessagesPigeonInternal.deepHash(value: warnings, hasher: &hasher)
   }
 
   public var description: String {
-    return "WarmAlarmScheduleResultWire(alarmId: \(String(describing: alarmId)), readiness: \(String(describing: readiness)), warning: \(String(describing: warning)))"
+    return "WarmAlarmScheduleResultWire(alarmId: \(String(describing: alarmId)), readiness: \(String(describing: readiness)), warnings: \(String(describing: warnings)))"
   }
 }
 

@@ -558,22 +558,22 @@ data class WarmAlarmFailureWire (
 data class WarmAlarmScheduleResultWire (
   val alarmId: Long,
   val readiness: WarmAlarmReadinessWire,
-  val warning: WarmAlarmWarningWire? = null
+  val warnings: List<WarmAlarmWarningWire>
 )
  {
   companion object {
     fun fromList(pigeonVar_list: List<Any?>): WarmAlarmScheduleResultWire {
       val alarmId = pigeonVar_list[0] as Long
       val readiness = pigeonVar_list[1] as WarmAlarmReadinessWire
-      val warning = pigeonVar_list[2] as WarmAlarmWarningWire?
-      return WarmAlarmScheduleResultWire(alarmId, readiness, warning)
+      val warnings = pigeonVar_list[2] as List<WarmAlarmWarningWire>
+      return WarmAlarmScheduleResultWire(alarmId, readiness, warnings)
     }
   }
   fun toList(): List<Any?> {
     return listOf(
       alarmId,
       readiness,
-      warning,
+      warnings,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -584,18 +584,18 @@ data class WarmAlarmScheduleResultWire (
       return true
     }
     val other = other as WarmAlarmScheduleResultWire
-    return MessagesPigeonUtils.deepEquals(this.alarmId, other.alarmId) && MessagesPigeonUtils.deepEquals(this.readiness, other.readiness) && MessagesPigeonUtils.deepEquals(this.warning, other.warning)
+    return MessagesPigeonUtils.deepEquals(this.alarmId, other.alarmId) && MessagesPigeonUtils.deepEquals(this.readiness, other.readiness) && MessagesPigeonUtils.deepEquals(this.warnings, other.warnings)
   }
 
   override fun hashCode(): Int {
     var result = javaClass.hashCode()
     result = 31 * result + MessagesPigeonUtils.deepHash(this.alarmId)
     result = 31 * result + MessagesPigeonUtils.deepHash(this.readiness)
-    result = 31 * result + MessagesPigeonUtils.deepHash(this.warning)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.warnings)
     return result
   }
   override fun toString(): String {
-    return "WarmAlarmScheduleResultWire(alarmId=$alarmId, readiness=$readiness, warning=$warning)"
+    return "WarmAlarmScheduleResultWire(alarmId=$alarmId, readiness=$readiness, warnings=$warnings)"
   }
 }
 
