@@ -132,6 +132,46 @@ void main() {
       },
     );
 
+    for (final warningCount in [0, 1, 3]) {
+      test('scheduleAlarm preserves all $warningCount warnings through the facade', () async {
+        final schedule = _schedule();
+        const expectedWarnings = [
+          WarmAlarmWarning(
+            code: WarmAlarmWarningCode.unsupportedWakeCheck,
+            message: 'Wake-check is not supported on iOS.',
+          ),
+          WarmAlarmWarning(message: 'Native scheduling fallback.'),
+          WarmAlarmWarning(message: 'Native notification capacity warning.'),
+        ];
+        final input = expectedWarnings.take(warningCount).toList();
+        const readiness = WarmAlarmReadiness(
+          level: WarmAlarmReadinessLevel.limited,
+          reasons: [WarmAlarmReadinessReason.backgroundExecutionLimited],
+        );
+        final platformResult = WarmAlarmScheduleResult.withWarnings(
+          alarmId: schedule.id,
+          readiness: readiness,
+          warnings: input,
+        );
+        input.clear();
+        when(() => warmAlarmPlatform.scheduleAlarm(schedule)).thenAnswer((_) async => platformResult);
+
+        final result = await WarmAlarm.scheduleAlarm(schedule);
+
+        expect(result, same(platformResult));
+        expect(result.alarmId, schedule.id);
+        expect(result.readiness, same(readiness));
+        expect(result.warnings, orderedEquals(expectedWarnings.take(warningCount)));
+        expect(
+          result.warnings.map((warning) => warning.code),
+          orderedEquals(expectedWarnings.take(warningCount).map((warning) => warning.code)),
+        );
+        expect(result.warning, warningCount == 0 ? isNull : same(expectedWarnings.first));
+        expect(() => result.warnings.add(expectedWarnings.first), throwsUnsupportedError);
+        verify(() => warmAlarmPlatform.scheduleAlarm(schedule)).called(1);
+      });
+    }
+
     final invalidSchedules =
         <
           ({

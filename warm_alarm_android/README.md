@@ -28,7 +28,7 @@ Version 0.1.6 requires platform interface 0.1.8 and reports scheduling diagnosti
 The legacy `warning` getter returns the first entry, or null when the list is empty.
 An exact-alarm permission fallback produces one native warning with a null code; other native entries retain their order.
 An empty list does not guarantee that every requested option was applied.
-This version is prepared for publication; earlier released versions use the single-warning constructor.
+Earlier versions use the single-warning constructor.
 
 ## Native implementation
 

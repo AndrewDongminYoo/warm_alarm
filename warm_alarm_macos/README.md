@@ -41,7 +41,7 @@ Version 0.1.8 requires platform interface 0.1.8 and reports scheduling diagnosti
 The legacy `warning` getter returns the first entry, or null when the list is empty.
 An unsupported wake-check request is the first entry, followed by any native warning entries in detection order.
 Native entries retain null codes, and an empty list does not guarantee that every requested option was applied.
-This version is prepared for publication; earlier released versions combine wake-check and native messages into one warning.
+Earlier versions combine wake-check and native messages into one warning.
 
 ## Native implementation
 

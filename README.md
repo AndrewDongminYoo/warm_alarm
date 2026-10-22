@@ -26,10 +26,11 @@
 ## Installation
 
 Add `warm_alarm` to your Flutter app.
+This checkout prepares facade 0.1.9; that release must be published before the constraint below resolves from pub.dev.
 
 ```yaml
 dependencies:
-  warm_alarm: ^0.1.8
+  warm_alarm: ^0.1.9
 ```
 
 Then run:
@@ -72,7 +73,7 @@ final schedule = WarmAlarmSchedule(
 
 final result = await WarmAlarm.scheduleAlarm(schedule);
 print('Scheduled: alarm ${result.alarmId}, readiness: ${result.readiness.level}');
-if (result.warning case final warning?) {
+for (final warning in result.warnings) {
   print('Warning (${warning.code?.name ?? 'unclassified'}): ${warning.message}');
 }
 
@@ -159,7 +160,7 @@ See the [`warm_alarm_ios` host requirements][warm_alarm_ios_requirements] for th
 | `events`                          | `Stream<WarmAlarmEvent>`              | Real-time alarm lifecycle event stream                      |
 
 Warning lists require platform interface 0.1.8 or later.
-The Android 0.1.6, iOS 0.1.13, and macOS 0.1.8 releases prepared here populate the list and must be published before consumers can resolve them from pub.dev.
+Facade 0.1.9 requires platform interface 0.1.8 and the published Android 0.1.6, iOS 0.1.13, and macOS 0.1.8 implementations that populate the list.
 On those Apple versions, scheduling with `wakeCheck` places `WarmAlarmWarningCode.unsupportedWakeCheck` first and keeps native warnings as separate entries.
 The legacy `warning` getter returns that first entry or null; earlier Apple versions combine wake-check and native messages into one warning.
 Other native warnings can have a null code.
@@ -197,7 +198,7 @@ A recurring schedule may use a past `scheduledAt` anchor because its next local 
 | `WarmAlarmNotificationSettings` | `authorizationStatus`, `alertsEnabled`, `soundsEnabled`, and nullable `timeSensitiveEnabled`                                                                                           |
 | `WarmAlarmPermissionState`      | `notificationsGranted`, `exactAlarmGranted`, `fullScreenIntentGranted`                                                                                                                 |
 | `WarmAlarmRemediationResult`    | `status`, `permissionState`, `readiness`                                                                                                                                               |
-| `WarmAlarmScheduleResult`       | `alarmId`, `readiness`, optional `warning`                                                                                                                                             |
+| `WarmAlarmScheduleResult`       | `alarmId`, `readiness`, read-only `warnings`, and `warning` (first entry or null)                                                                                                      |
 | `WarmAlarmWarning`              | `message`, optional `code`; a null code still represents a warning                                                                                                                     |
 | `WarmAlarmFailure`              | `code`, optional `message`                                                                                                                                                             |
 | `WarmAlarmAudio`                | `filePath?`, `assetPath?`, `systemSoundFilePath?`, `loop` (default `true`), `volume?`, `fadeInDuration?`, `fadeSteps?`, `volumeEnforced` (default `false`), `vibrate` (default `true`) |

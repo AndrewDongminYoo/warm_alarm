@@ -66,7 +66,8 @@ class WarmAlarm {
   /// Invalid one-time dates, recurrence weekdays, durations, volumes, or fade-step ordering complete with [ArgumentError] before a platform call.
   /// Recurring schedules may use a past anchor date.
   ///
-  /// Inspect the returned readiness and warning even when scheduling succeeds.
+  /// Inspect the returned readiness and every entry in [WarmAlarmScheduleResult.warnings] even when scheduling succeeds.
+  /// [WarmAlarmScheduleResult.warning] exposes only the first entry for existing callers.
   /// Apple platforms return [WarmAlarmWarningCode.unsupportedWakeCheck] when wake-check was requested.
   /// Other native warnings can have no code, and warnings do not cover every ignored option.
   static Future<WarmAlarmScheduleResult> scheduleAlarm(

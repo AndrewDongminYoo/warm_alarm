@@ -1,3 +1,9 @@
+# 0.1.9
+
+- Require platform interface 0.1.8, Android 0.1.6, iOS 0.1.13, and macOS 0.1.8 so consumers receive separate scheduling warnings.
+- Preserve every warning through the facade while the legacy `warning` getter remains the first entry or null.
+- Iterate warning lists in the quick-start examples and document the bundled example screen's first-warning-only compatibility behavior.
+
 # 0.1.8
 
 - Align public API tables with asynchronous signatures, complete model fields, and Live Activity operations.
