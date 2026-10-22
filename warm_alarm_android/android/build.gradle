@@ -38,7 +38,7 @@ android {
     }
 
     dependencies {
-        testImplementation 'org.json:json:20260522'
+        testImplementation 'org.json:json:20260814'
         testImplementation 'org.jetbrains.kotlin:kotlin-test'
         testImplementation 'org.mockito:mockito-core:5.0.0'
         // The instrumented test needs a real PendingIntent registry, nothing more:
