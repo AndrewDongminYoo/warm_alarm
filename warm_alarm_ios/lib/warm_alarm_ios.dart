@@ -443,20 +443,17 @@ WarmAlarmScheduleResult _scheduleResultFromWire(
   WarmAlarmScheduleResultWire wire, {
   required bool wakeCheckRequested,
 }) {
-  WarmAlarmWarning? warning;
-  if (wakeCheckRequested) {
-    const message = 'Wake-check is not supported on iOS.';
-    warning = WarmAlarmWarning(
-      code: WarmAlarmWarningCode.unsupportedWakeCheck,
-      message: wire.warning == null ? message : '$message ${wire.warning!.message}',
-    );
-  } else if (wire.warning case final nativeWarning?) {
-    warning = WarmAlarmWarning(message: nativeWarning.message);
-  }
-  return WarmAlarmScheduleResult(
+  return WarmAlarmScheduleResult.withWarnings(
     alarmId: wire.alarmId,
     readiness: _readinessFromWire(wire.readiness),
-    warning: warning,
+    warnings: [
+      if (wakeCheckRequested)
+        const WarmAlarmWarning(
+          code: WarmAlarmWarningCode.unsupportedWakeCheck,
+          message: 'Wake-check is not supported on iOS.',
+        ),
+      ...wire.warnings.map((warning) => WarmAlarmWarning(message: warning.message)),
+    ],
   );
 }
 

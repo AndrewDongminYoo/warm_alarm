@@ -94,7 +94,9 @@ This constructor copies the supplied list so callers can reuse their warning acc
 The separate constructors keep the existing const-construction path and prevent combining the single-warning and list arguments.
 An empty list does not guarantee that every requested option was applied.
 The list API requires `warm_alarm_platform_interface` 0.1.8 or later.
-The platform implementations still use the single-warning constructor until their separate migration.
+Android 0.1.6, iOS 0.1.13, and macOS 0.1.8 are the first platform versions prepared to use the list constructor.
+They must be published before consumers can resolve these implementations from pub.dev.
+Earlier platform versions continue to return at most one entry through the legacy constructor.
 
 ---
 

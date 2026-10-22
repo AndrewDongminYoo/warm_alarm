@@ -158,7 +158,10 @@ See the [`warm_alarm_ios` host requirements][warm_alarm_ios_requirements] for th
 | `clearKillWarning()`              | `Future<void>`                        | Clear the configured warning text                           |
 | `events`                          | `Stream<WarmAlarmEvent>`              | Real-time alarm lifecycle event stream                      |
 
-On iOS and macOS, scheduling with `wakeCheck` returns `WarmAlarmWarningCode.unsupportedWakeCheck` while retaining any native warning in the message.
+Warning lists require platform interface 0.1.8 or later.
+The Android 0.1.6, iOS 0.1.13, and macOS 0.1.8 releases prepared here populate the list and must be published before consumers can resolve them from pub.dev.
+On those Apple versions, scheduling with `wakeCheck` places `WarmAlarmWarningCode.unsupportedWakeCheck` first and keeps native warnings as separate entries.
+The legacy `warning` getter returns that first entry or null; earlier Apple versions combine wake-check and native messages into one warning.
 Other native warnings can have a null code.
 Warnings do not cover every ignored option; see the [audio contract](warm_alarm/README.md#audio-contract) for reserved fields and platform-specific behavior.
 

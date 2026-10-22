@@ -345,11 +345,11 @@ class WarmAlarmPlugin :
                 WarmAlarmScheduleResultWire(
                     alarmId = schedule.id,
                     readiness = readiness,
-                    warning =
+                    warnings =
                         if (inexact) {
-                            WarmAlarmWarningWire(message = "SCHEDULE_EXACT_ALARM not granted; alarm may fire late.")
+                            listOf(WarmAlarmWarningWire(message = "SCHEDULE_EXACT_ALARM not granted; alarm may fire late."))
                         } else {
-                            null
+                            emptyList()
                         },
                 ),
             ),

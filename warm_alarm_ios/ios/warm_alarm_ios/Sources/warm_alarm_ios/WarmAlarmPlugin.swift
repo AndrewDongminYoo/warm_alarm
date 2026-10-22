@@ -3039,29 +3039,24 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                             if didSchedule {
                                 self.delegate.emitScheduled(alarmId: schedule.id)
                             }
-                            var warning = configurationWarning
-                            if let capacityMessage = notificationOutcome?.warning?.message {
-                                warning = WarmAlarmWarningWire(
-                                    message: [warning?.message, capacityMessage]
-                                        .compactMap { $0 }
-                                        .joined(separator: " ")
-                                )
+                            var warnings = [WarmAlarmWarningWire]()
+                            if let configurationWarning {
+                                warnings.append(configurationWarning)
                             }
                             if let alarmKitError = outcome.alarmKitError,
                                notificationOutcome?.didSchedule == true {
                                 let message = "AlarmKit scheduling failed; using User Notifications: "
                                     + alarmKitError.localizedDescription
-                                if let existingMessage = warning?.message {
-                                    warning = WarmAlarmWarningWire(message: "\(message) \(existingMessage)")
-                                } else {
-                                    warning = WarmAlarmWarningWire(message: message)
-                                }
+                                warnings.append(WarmAlarmWarningWire(message: message))
+                            }
+                            if let capacityWarning = notificationOutcome?.warning {
+                                warnings.append(capacityWarning)
                             }
                             self.captureNotificationSnapshot(effectiveBackend: outcome.backend) { _, readiness in
                                 WarmAlarmPlatformReply.complete(.success(WarmAlarmScheduleResultWire(
                                     alarmId: schedule.id,
                                     readiness: readiness,
-                                    warning: warning
+                                    warnings: warnings
                                 )), completion: completion, finish: finish)
                             }
                         }

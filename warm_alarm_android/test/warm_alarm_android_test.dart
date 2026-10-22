@@ -269,9 +269,11 @@ void main() {
               WarmAlarmReadinessReasonWire.exactAlarmPermissionDenied,
             ],
           ),
-          warning: WarmAlarmWarningWire(
-            message: 'Exact alarm permission missing.',
-          ),
+          warnings: [
+            WarmAlarmWarningWire(
+              message: 'Exact alarm permission missing.',
+            ),
+          ],
         ),
       );
 
@@ -288,6 +290,49 @@ void main() {
       expect(result.warning?.message, 'Exact alarm permission missing.');
       verify(() => api.scheduleAlarm(any())).called(1);
     });
+
+    for (final messages in <List<String>>[
+      [],
+      ['First native warning.'],
+      ['First native warning.', 'Second native warning.'],
+    ]) {
+      for (final wakeCheckRequested in [false]) {
+        test('scheduleAlarm maps ${messages.length} native warnings with wake-check=$wakeCheckRequested', () async {
+          final api = _MockWarmAlarmApi();
+          final platform = WarmAlarmAndroid(api: api);
+          final wireWarnings = messages.map((message) => WarmAlarmWarningWire(message: message)).toList();
+          when(() => api.scheduleAlarm(any())).thenAnswer(
+            (_) async => WarmAlarmScheduleResultWire(
+              alarmId: 71,
+              readiness: WarmAlarmReadinessWire(level: WarmAlarmReadinessLevelWire.ready, reasons: []),
+              warnings: wireWarnings,
+            ),
+          );
+          final result = await platform.scheduleAlarm(
+            WarmAlarmSchedule(
+              id: 71,
+              scheduledAt: DateTime(2026, 5, 1, 8),
+              notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+              audio: const WarmAlarmAudio(),
+              wakeCheck: wakeCheckRequested ? const WarmAlarmWakeCheck(checkDelay: Duration(minutes: 1)) : null,
+            ),
+          );
+          final expectedMessages = <String>[...[], ...messages];
+          expect(result.alarmId, 71);
+          expect(result.readiness.level, WarmAlarmReadinessLevel.ready);
+          expect(result.warnings.map((warning) => warning.message), expectedMessages);
+          expect(result.warning, expectedMessages.isEmpty ? isNull : same(result.warnings.first));
+          if (wakeCheckRequested) {
+            expect(result.warning?.code, WarmAlarmWarningCode.unsupportedWakeCheck);
+          }
+          expect(result.warnings.skip(wakeCheckRequested ? 1 : 0).map((warning) => warning.code), everyElement(isNull));
+          if (wireWarnings.isNotEmpty) wireWarnings.first.message = 'Changed native warning.';
+          wireWarnings.clear();
+          expect(result.warnings.map((warning) => warning.message), expectedMessages);
+          expect(() => result.warnings.add(const WarmAlarmWarning(message: 'Extra')), throwsUnsupportedError);
+        });
+      }
+    }
 
     test('getScheduledAlarms maps snapshots from wire', () async {
       final now = DateTime.now().millisecondsSinceEpoch;
@@ -641,6 +686,7 @@ void main() {
           invocation.positionalArguments[0] as WarmAlarmScheduleWire,
         );
         return WarmAlarmScheduleResultWire(
+          warnings: [],
           alarmId: 1,
           readiness: WarmAlarmReadinessWire(
             level: WarmAlarmReadinessLevelWire.ready,
@@ -675,6 +721,7 @@ void main() {
           invocation.positionalArguments[0] as WarmAlarmScheduleWire,
         );
         return WarmAlarmScheduleResultWire(
+          warnings: [],
           alarmId: 2,
           readiness: WarmAlarmReadinessWire(
             level: WarmAlarmReadinessLevelWire.ready,
@@ -702,6 +749,7 @@ void main() {
           invocation.positionalArguments[0] as WarmAlarmScheduleWire,
         );
         return WarmAlarmScheduleResultWire(
+          warnings: [],
           alarmId: 3,
           readiness: WarmAlarmReadinessWire(
             level: WarmAlarmReadinessLevelWire.ready,
@@ -867,6 +915,7 @@ void main() {
         when(() => api.scheduleAlarm(any())).thenAnswer((inv) async {
           captured.add(inv.positionalArguments[0] as WarmAlarmScheduleWire);
           return WarmAlarmScheduleResultWire(
+            warnings: [],
             alarmId: 1,
             readiness: WarmAlarmReadinessWire(
               level: WarmAlarmReadinessLevelWire.ready,
@@ -906,6 +955,7 @@ void main() {
         when(() => api.scheduleAlarm(any())).thenAnswer((inv) async {
           captured.add(inv.positionalArguments[0] as WarmAlarmScheduleWire);
           return WarmAlarmScheduleResultWire(
+            warnings: [],
             alarmId: 2,
             readiness: WarmAlarmReadinessWire(
               level: WarmAlarmReadinessLevelWire.ready,
@@ -967,6 +1017,7 @@ void main() {
       when(() => api.scheduleAlarm(any())).thenAnswer((inv) async {
         captured.add(inv.positionalArguments[0] as WarmAlarmScheduleWire);
         return WarmAlarmScheduleResultWire(
+          warnings: [],
           alarmId: 10,
           readiness: WarmAlarmReadinessWire(
             level: WarmAlarmReadinessLevelWire.ready,
@@ -1101,6 +1152,7 @@ void main() {
       when(() => api.scheduleAlarm(any())).thenAnswer((inv) async {
         captured.add(inv.positionalArguments[0] as WarmAlarmScheduleWire);
         return WarmAlarmScheduleResultWire(
+          warnings: [],
           alarmId: 1,
           readiness: WarmAlarmReadinessWire(
             level: WarmAlarmReadinessLevelWire.ready,
@@ -1128,6 +1180,7 @@ void main() {
         when(() => api.scheduleAlarm(any())).thenAnswer((inv) async {
           captured.add(inv.positionalArguments[0] as WarmAlarmScheduleWire);
           return WarmAlarmScheduleResultWire(
+            warnings: [],
             alarmId: 2,
             readiness: WarmAlarmReadinessWire(
               level: WarmAlarmReadinessLevelWire.ready,

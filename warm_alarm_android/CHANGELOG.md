@@ -1,3 +1,9 @@
+# 0.1.6
+
+- Return scheduling warnings as a read-only list while retaining `warning` as its first entry or null.
+- Carry native warnings through the generated wire protocol without discarding entries.
+- Require platform interface 0.1.8 for the warning-list constructor.
+
 # 0.1.5
 
 - Preserve completed alarm notifications after service exit across supported Android versions, removing stale controls and full-screen intent.
