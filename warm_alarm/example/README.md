@@ -29,13 +29,16 @@ The existing request includes wake-check.
 On Android, grant exact-alarm permission before recording so the result is not affected by an inexact-scheduling warning.
 On iOS, record the OS version and AlarmKit authorization state because the selected backend can differ.
 
-| Result                                     | Warning code           | Message                                                     |
-| ------------------------------------------ | ---------------------- | ----------------------------------------------------------- |
-| Android with exact-alarm permission        | `none`                 | `none`                                                      |
-| iOS with wake-check requested              | `unsupportedWakeCheck` | Wake-check is not supported on iOS, plus any native warning |
-| A native warning without a structured code | `unclassified`         | The original native warning                                 |
+| Result                                     | Warning code           | Message                            |
+| ------------------------------------------ | ---------------------- | ---------------------------------- |
+| Android with exact-alarm permission        | `none`                 | `none`                             |
+| iOS with wake-check requested              | `unsupportedWakeCheck` | Wake-check is not supported on iOS |
+| A native warning without a structured code | `unclassified`         | The original native warning        |
 
 The screen replaces the previous warning after each successful request, including a result with no warning.
+The screen intentionally reads the legacy `result.warning` getter and shows only the first warning.
+With iOS 0.1.13 or macOS 0.1.8 and later, simultaneous native diagnostics are separate entries in `result.warnings` and are not displayed by this legacy example.
+Consumers that need every diagnostic should iterate the full list, as shown in the package README.
 These demos show inspection and scheduling results; they do not establish that a future alarm will fire.
 Before recording, verify the expected values on the chosen devices and keep those device conditions with the video.
 
@@ -61,6 +64,7 @@ The iOS host includes `NSAlarmKitUsageDescription` and an AlarmKit countdown pre
 The one-minute alarm button schedules a five-minute Snooze so the native Schedule, Stop, and Snooze flow can be checked on an iOS 26 or later device.
 If AlarmKit asks for authorization, allow it, then check that the alarm appears with system alarm controls rather than a notification banner.
 The request also includes wake-check, so `unsupportedWakeCheck` is expected on iOS even when AlarmKit succeeds.
-Inspect the full warning message for additional fallback details; a wake-check warning alone does not identify the scheduling backend.
+Inspect every `result.warnings` entry for additional fallback details; the example screen shows only the first warning.
+A wake-check warning alone does not identify the scheduling backend or exclude a simultaneous native fallback warning.
 Verify the system alarm controls separately because User Notifications fallback does not verify AlarmKit behavior.
 The separate custom Live Activity fixture remains available through `lib/live_activity_fixture.dart`.

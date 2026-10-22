@@ -32,10 +32,11 @@ It is maintained as an independent Flutter plugin and does not require the WarmW
 ## Installation
 
 Add `warm_alarm` to your Flutter app.
+This checkout prepares facade 0.1.9; that release must be published before the constraint below resolves from pub.dev.
 
 ```yaml
 dependencies:
-  warm_alarm: ^0.1.8
+  warm_alarm: ^0.1.9
 ```
 
 Then run:
@@ -78,7 +79,7 @@ final result = await WarmAlarm.scheduleAlarm(
   ),
 );
 print('Scheduled alarm ${result.alarmId}, readiness: ${result.readiness.level}');
-if (result.warning case final warning?) {
+for (final warning in result.warnings) {
   print('Warning (${warning.code?.name ?? 'unclassified'}): ${warning.message}');
 }
 
@@ -217,8 +218,8 @@ See the platform-specific triggers and removal behavior for [Android](../warm_al
 
 On iOS and macOS, a schedule with `wakeCheck` returns `warning.code == WarmAlarmWarningCode.unsupportedWakeCheck` because wake-check cannot run there.
 The wake-check request is ignored.
-The iOS 0.1.13 and macOS 0.1.8 releases prepared here keep native scheduling warnings as separate entries in `result.warnings`, after the wake-check entry.
-Those releases require interface 0.1.8 and must be published before consumers can resolve them from pub.dev.
+The published iOS 0.1.13 and macOS 0.1.8 releases keep native scheduling warnings as separate entries in `result.warnings`, after the wake-check entry.
+Facade 0.1.9 requires interface 0.1.8 and those implementations, together with Android 0.1.6.
 The legacy `warning` getter returns the first entry; earlier Apple versions retain native messages inside that single warning instead.
 `unsupportedWakeCheck` is currently the only structured warning code; other native warnings can have a null code.
 Warnings do not cover every ignored option; see the [audio contract](#audio-contract) for reserved fields and platform-specific behavior.
@@ -239,7 +240,7 @@ user's answer.
 | `WarmAlarmNotificationSettings` | `authorizationStatus`, `alertsEnabled`, `soundsEnabled`, and nullable `timeSensitiveEnabled`                                                                                           |
 | `WarmAlarmPermissionState`      | `notificationsGranted`, `exactAlarmGranted`, `fullScreenIntentGranted`                                                                                                                 |
 | `WarmAlarmRemediationResult`    | `status`, `permissionState`, `readiness`                                                                                                                                               |
-| `WarmAlarmScheduleResult`       | `alarmId`, `readiness`, optional `warning`                                                                                                                                             |
+| `WarmAlarmScheduleResult`       | `alarmId`, `readiness`, read-only `warnings`, and `warning` (first entry or null)                                                                                                      |
 | `WarmAlarmWarning`              | `message`, optional `code`; a null code still represents a warning                                                                                                                     |
 | `WarmAlarmFailure`              | `code`, optional `message`                                                                                                                                                             |
 | `WarmAlarmAudio`                | `filePath?`, `assetPath?`, `systemSoundFilePath?`, `loop` (default `true`), `volume?`, `fadeInDuration?`, `fadeSteps?`, `volumeEnforced` (default `false`), `vibrate` (default `true`) |
@@ -320,7 +321,7 @@ with a richer capability model, macOS support, and a cleaner public/wire boundar
 | ---------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------- |
 | Platform coverage      | Android + iOS                              | Android + iOS + **macOS**                                                                    |
 | Pre-schedule diagnosis | None — silent failures                     | `getCapabilities()` + `getPermissionState()` + `getReadiness()` with actionable reason codes |
-| Schedule result        | `bool` success flag                        | `WarmAlarmScheduleResult` — includes readiness level and optional warning message            |
+| Schedule result        | `bool` success flag                        | `WarmAlarmScheduleResult` — includes readiness, a warning list, and the legacy first warning |
 | Wake verification      | None                                       | `WarmAlarmWakeCheck` — detects if the user actually woke up; retriggers the alarm if not     |
 | Snooze                 | App-layer only                             | Built-in `WarmAlarmSnooze`; notification action handled natively                             |
 | Event model            | `ringStream` / `updateStream` (deprecated) | `Stream<WarmAlarmEvent>` — 9 typed events in a sealed class hierarchy                        |
