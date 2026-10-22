@@ -6,7 +6,6 @@ updates:
     schedule:
       interval: weekly
       day: monday
-      timezone: Asia/Seoul
     groups:
       actions:
         patterns: ["*"]
@@ -23,7 +22,6 @@ updates:
     schedule:
       interval: weekly
       day: monday
-      timezone: Asia/Seoul
     open-pull-requests-limit: 3
     groups:
       pub-minor-patch:
@@ -43,7 +41,6 @@ updates:
     schedule:
       interval: weekly
       day: monday
-      timezone: Asia/Seoul
     open-pull-requests-limit: 3
     groups:
       gradle-minor-patch:
