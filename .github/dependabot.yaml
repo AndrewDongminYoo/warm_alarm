@@ -4,49 +4,52 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: daily
+      interval: weekly
+      day: monday
     groups:
       actions:
         patterns: ["*"]
+        update-types:
+          - minor
+          - patch
+      github-actions-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+    open-pull-requests-limit: 3
   - package-ecosystem: pub
-    directory: /warm_alarm
+    directory: /
     schedule:
-      interval: daily
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
     groups:
-      core:
-        patterns: ["*"]
-  - package-ecosystem: pub
-    directory: /warm_alarm/example
+      pub-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+      pub-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+  - package-ecosystem: gradle
+    directories:
+      - /warm_alarm/example/android
+      - /warm_alarm_android/android
     schedule:
-      interval: daily
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
     groups:
-      example:
-        patterns: ["*"]
-  - package-ecosystem: pub
-    directory: /warm_alarm_platform_interface
-    schedule:
-      interval: daily
-    groups:
-      interface:
-        patterns: ["*"]
-  - package-ecosystem: pub
-    directory: /warm_alarm_android
-    schedule:
-      interval: daily
-    groups:
-      android:
-        patterns: ["*"]
-  - package-ecosystem: pub
-    directory: /warm_alarm_ios
-    schedule:
-      interval: daily
-    groups:
-      ios:
-        patterns: ["*"]
-  - package-ecosystem: pub
-    directory: /warm_alarm_macos
-    schedule:
-      interval: daily
-    groups:
-      macos:
-        patterns: ["*"]
+      gradle-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+      gradle-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
