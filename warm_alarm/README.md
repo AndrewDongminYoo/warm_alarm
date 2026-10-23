@@ -114,7 +114,7 @@ Capabilities are runtime snapshots: iOS exact scheduling also depends on host co
 Call `getReadiness()` before scheduling; neither a supported capability nor a ready snapshot guarantees future alarm delivery.
 
 Surface the `reasons` list so users can address detected permissions or platform limits.
-Android reports `limited` when notification, exact-alarm, or full-screen permission is missing, and `ready` when all three are granted.
+Android reports `limited` when notification, exact-alarm, or full-screen permission is missing, or on API 23 and later when the app is not exempt from battery optimization, and `ready` otherwise.
 Apple's User Notifications backend reports `blocked` without notification permission and `limited` with it because background execution remains constrained.
 An authorized iOS AlarmKit backend can report `ready` without notification permission; active User Notifications fallback schedules still require notification permission.
 Not every reason has a supported settings action.

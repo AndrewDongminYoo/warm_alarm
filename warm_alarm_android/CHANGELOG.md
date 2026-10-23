@@ -1,3 +1,8 @@
+# Unreleased
+
+- Report `batteryOptimizationMayDelay` with limited readiness on API 23 and later when the app is not exempt from battery optimization.
+- Open the battery optimization settings list from `openReadinessSettings(batteryOptimizationMayDelay)` without declaring a new permission.
+
 # 0.1.6
 
 - Return scheduling warnings as a read-only list while retaining `warning` as its first entry or null.

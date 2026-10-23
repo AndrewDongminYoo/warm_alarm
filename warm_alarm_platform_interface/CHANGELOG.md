@@ -5,6 +5,7 @@
 - Add optional `title`, `body` and `confirmActionTitle` to `WarmAlarmWakeCheck` so a host can word and localize the wake-check prompt.
   Null keeps the current prompt text, so existing callers are unaffected; the platform packages read these fields in a later release.
 - Document that `fadeSteps` wins over `fadeInDuration` when both are set, and that `fadeInDuration` alone is a linear fade from silence to `volume`, or to 1.0 when `volume` is null.
+- Document that Android readiness checks the battery optimization exemption and reports `batteryOptimizationMayDelay` from API 23.
 
 # 0.1.8
 

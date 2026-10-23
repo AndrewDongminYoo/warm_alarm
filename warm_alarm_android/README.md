@@ -50,9 +50,19 @@ Already-aliased out-of-range registrations from older versions cannot be reconst
 
 `requestNotificationPermission()` requests `POST_NOTIFICATIONS` on Android 13+.
 On Android 12 and earlier there is no runtime notification permission to request, so the call reports `unsupported` and the caller should open notification settings instead.
-`openReadinessSettings(reason)` opens notification, exact-alarm, or full-screen settings when the reported reason supports it.
+`openReadinessSettings(reason)` opens notification, exact-alarm, full-screen, or battery optimization settings when the reported reason supports it.
 The settings action returns when Android accepts the deep link.
 Query readiness again after the app resumes.
+
+### Battery optimization
+
+On API 23 or later, `getReadiness()` includes `batteryOptimizationMayDelay` while `PowerManager.isIgnoringBatteryOptimizations()` reports that the app is not exempt.
+Doze and App Standby rate-limit `setExactAndAllowWhileIdle()` for such an app, so an alarm can fire late.
+This reason alone makes readiness `limited`, never `blocked`.
+Battery optimization is on by default on most devices, so treat this reason as advisory: show one-time guidance, not an error on every save.
+The readiness returned by `scheduleAlarm()` carries the same reason, so a host that surfaces schedule results should show it once rather than on every save.
+`openReadinessSettings(batteryOptimizationMayDelay)` opens the system battery optimization list (`ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS`); on API 19–22 it reports `unsupported`.
+The plugin does not detect vendor-specific power managers; guidance for those stays with the host app.
 
 ### Alarm delivery
 
@@ -142,6 +152,9 @@ VIBRATE                    — haptic feedback during alarm
 FOREGROUND_SERVICE         — run WarmAlarmForegroundService
 FOREGROUND_SERVICE_MEDIA_PLAYBACK — declare mediaPlayback foreground service type
 ```
+
+The battery optimization readiness check needs no permission: `isIgnoringBatteryOptimizations()` and the `ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS` list screen are available to every app.
+`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` is deliberately not declared, because Google Play restricts the direct exemption request it enables.
 
 ---
 
