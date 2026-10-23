@@ -1,0 +1,18 @@
+{
+  "status": "needs_framing_review",
+  "note": "Illustrative normalized focus centers, NOT measured screen positions. Calibrate against a synthetic or user-approved recording. Times are relative to scenario T=0 after trimming recording lead-in.",
+  "keyframes": [
+    { "at": 0, "zoom": 1, "x": 0.5, "y": 0.5 },
+    { "at": 4, "zoom": 1, "x": 0.5, "y": 0.5 },
+    { "at": 6, "zoom": 1.35, "x": 0.5, "y": 0.35 },
+    { "at": 10, "zoom": 1.35, "x": 0.5, "y": 0.35 },
+    { "at": 12, "zoom": 1, "x": 0.5, "y": 0.5 },
+    { "at": 14, "zoom": 1.3, "x": 0.5, "y": 0.5 },
+    { "at": 18, "zoom": 1.3, "x": 0.5, "y": 0.5 },
+    { "at": 20, "zoom": 1, "x": 0.5, "y": 0.5 },
+    { "at": 70, "zoom": 1, "x": 0.5, "y": 0.5 },
+    { "at": 73, "zoom": 1.4, "x": 0.5, "y": 0.7 },
+    { "at": 81, "zoom": 1.4, "x": 0.5, "y": 0.7 },
+    { "at": 84, "zoom": 1, "x": 0.5, "y": 0.5 }
+  ]
+}
