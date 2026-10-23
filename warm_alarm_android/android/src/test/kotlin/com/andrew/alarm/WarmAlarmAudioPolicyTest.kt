@@ -2,6 +2,7 @@ package com.andrew.alarm
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class WarmAlarmAudioPolicyTest {
     @Test
@@ -135,5 +136,65 @@ class WarmAlarmAudioPolicyTest {
         WarmAlarmAudioPolicy.enforceSystemVolume(enabled = true) { boostCount += 1 }
 
         assertEquals(1, boostCount)
+    }
+
+    @Test
+    fun explicitFadeStepsWinOverFadeInDuration() {
+        val steps = listOf(WarmAlarmVolumeFadeStepWire(timeMillis = 100, volume = 0.2))
+
+        assertEquals(steps, WarmAlarmAudioPolicy.resolveFadeSteps(steps, fadeInDurationMillis = 5_000, volume = 0.8))
+    }
+
+    @Test
+    fun emptyFadeStepsStillWinOverFadeInDuration() {
+        val steps = emptyList<WarmAlarmVolumeFadeStepWire>()
+
+        assertEquals(steps, WarmAlarmAudioPolicy.resolveFadeSteps(steps, fadeInDurationMillis = 5_000, volume = 0.8))
+    }
+
+    @Test
+    fun missingOrZeroFadeInDurationMeansNoFade() {
+        assertNull(WarmAlarmAudioPolicy.resolveFadeSteps(null, fadeInDurationMillis = null, volume = 0.8))
+        assertNull(WarmAlarmAudioPolicy.resolveFadeSteps(null, fadeInDurationMillis = 0, volume = 0.8))
+        assertNull(WarmAlarmAudioPolicy.resolveFadeSteps(null, fadeInDurationMillis = -1, volume = 0.8))
+    }
+
+    @Test
+    fun longFadeInUsesTenLinearSteps() {
+        val steps = requireNotNull(WarmAlarmAudioPolicy.resolveFadeSteps(null, fadeInDurationMillis = 5_000, volume = 0.8))
+
+        assertEquals((0L..10L).map { it * 500 }, steps.map { it.timeMillis })
+        assertEquals(0.0, steps.first().volume)
+        assertEquals(0.8, steps.last().volume)
+        steps.forEachIndexed { index, step -> assertEquals(0.8 * index / 10, step.volume, 1e-9) }
+    }
+
+    @Test
+    fun shortFadeInUsesOneStepPer100Millis() {
+        val steps = requireNotNull(WarmAlarmAudioPolicy.resolveFadeSteps(null, fadeInDurationMillis = 500, volume = 0.5))
+
+        assertEquals(listOf(0L, 100L, 200L, 300L, 400L, 500L), steps.map { it.timeMillis })
+        assertEquals(0.5, steps.last().volume)
+    }
+
+    @Test
+    fun fadeInShorterThan100MillisJumpsToTheTargetAtItsEnd() {
+        val steps = requireNotNull(WarmAlarmAudioPolicy.resolveFadeSteps(null, fadeInDurationMillis = 40, volume = 0.6))
+
+        assertEquals(
+            listOf(
+                WarmAlarmVolumeFadeStepWire(timeMillis = 0, volume = 0.0),
+                WarmAlarmVolumeFadeStepWire(timeMillis = 40, volume = 0.6),
+            ),
+            steps,
+        )
+    }
+
+    @Test
+    fun fadeInWithoutVolumeRampsToFullVolume() {
+        val steps = requireNotNull(WarmAlarmAudioPolicy.resolveFadeSteps(null, fadeInDurationMillis = 1_000, volume = null))
+
+        assertEquals(1.0, steps.last().volume)
+        assertEquals(1_000L, steps.last().timeMillis)
     }
 }

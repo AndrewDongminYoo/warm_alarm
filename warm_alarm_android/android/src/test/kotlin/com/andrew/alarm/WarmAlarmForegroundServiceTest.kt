@@ -264,6 +264,34 @@ class WarmAlarmForegroundServiceTest {
     }
 
     @Test
+    fun fadeInDurationStartsSilentAndRampsLinearlyToTheConfiguredVolume() {
+        PlaybackHarness().use { harness ->
+            harness.fire(73)
+            val player = harness.players.single()
+
+            Mockito.verify(player).setVolume(0f, 0f)
+            assertEquals(10, harness.fadeCallbacks.size)
+            harness.fadeCallbacks.first().run()
+            Mockito.verify(player).setVolume(0.05f, 0.05f)
+            harness.fadeCallbacks.last().run()
+            Mockito.verify(player).setVolume(0.5f, 0.5f)
+        }
+    }
+
+    @Test
+    fun fadeStepsWinWhenFadeInDurationIsAlsoSet() {
+        PlaybackHarness().use { harness ->
+            harness.fire(74)
+            val player = harness.players.single()
+
+            Mockito.verify(player).setVolume(0.8f, 0.8f)
+            assertEquals(1, harness.fadeCallbacks.size)
+            harness.fadeCallbacks.single().run()
+            Mockito.verify(player).setVolume(0.2f, 0.2f)
+        }
+    }
+
+    @Test
     fun replacementStillReleasesPlayerWhenStopThrows() {
         PlaybackHarness().use { harness ->
             harness.fire(71)
@@ -393,7 +421,9 @@ private class PlaybackHarness(
                     WarmAlarmStore.encode(schedule(71)),
                 ).put(
                     WarmAlarmStore.encode(schedule(72)),
-                ).put(WarmAlarmStore.encode(schedule(-1)))
+                ).put(WarmAlarmStore.encode(schedule(73)))
+                .put(WarmAlarmStore.encode(schedule(74)))
+                .put(WarmAlarmStore.encode(schedule(-1)))
                 .put(WarmAlarmStore.encode(schedule(4_294_967_296L)))
         val storedStrings = mutableMapOf("schedules" to schedules.toString())
         Mockito.doReturn(preferences).`when`(service).getSharedPreferences(Mockito.anyString(), Mockito.anyInt())
@@ -508,9 +538,10 @@ private class PlaybackHarness(
                     filePath = "/alarm.wav",
                     loop = true,
                     vibrate = id == 71L,
-                    volume = 0.8,
+                    volume = if (id == 73L) 0.5 else 0.8,
                     volumeEnforced = id == 71L,
-                    fadeSteps = if (id == 71L) listOf(WarmAlarmVolumeFadeStepWire(timeMillis = 100, volume = 0.2)) else null,
+                    fadeInDurationMillis = if (id == 73L || id == 74L) 1_000L else null,
+                    fadeSteps = if (id == 71L || id == 74L) listOf(WarmAlarmVolumeFadeStepWire(timeMillis = 100, volume = 0.2)) else null,
                 ),
             androidFullScreenIntent = false,
         )

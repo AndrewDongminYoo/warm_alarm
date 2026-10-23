@@ -286,7 +286,7 @@ The `backgroundAudioPlayback` capability is limited, so check `getCapabilities()
 | `systemSoundFilePath` | iOS AlarmKit override returned by `prepareSystemSound`. Keep `filePath` or `assetPath` for fallback. Android and macOS ignore it.                               |
 | `loop`                | Requests repeated custom playback. Android applies it to file and asset sources; its native fallback alarm loops.                                               |
 | `volume`, `fadeSteps` | Custom-player gain controls. Volume values are 0.0–1.0. Fade timestamps are nonnegative and strictly increasing at millisecond precision.                       |
-| `fadeInDuration`      | Reserved hint retained in native schedule data. Current Android, iOS, and macOS playback paths do not apply it; use `fadeSteps` for a fade curve.               |
+| `fadeInDuration`      | Android applies a linear fade from silence to `volume` (or 1.0); `fadeSteps` wins. iOS and macOS do not apply it yet; use `fadeSteps` there.                    |
 | `volumeEnforced`      | Android attempts to enforce the alarm stream volume. iOS and macOS can enforce only their plugin-owned player volume, so Apple system volume is not guaranteed. |
 | `vibrate`             | Android requests alarm vibration. Apple background haptics are unsupported for scheduled alarms.                                                                |
 
