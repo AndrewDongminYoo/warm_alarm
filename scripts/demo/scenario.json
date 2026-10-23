@@ -1,0 +1,76 @@
+{
+  "mode": "manual_cues",
+  "purpose": "Observation and proposal cues only: supplied A shows real WarmWake use, NOT permission denial/consent. Reframing A and editing await user approval. B is a separate existing Android/iOS comparison video.",
+  "required_inputs": [
+    "A: user decision on real-use-flow proposal and editing; final frame boundaries/focus and device/build metadata. Source supplied and reviewed by parent; no permission transition demonstrated.",
+    "B: original comparison video path and Android none / iOS unsupportedWakeCheck source in/out timecodes",
+    "A/B: measured crop/focus framing and edited durations after reviewing footage"
+  ],
+  "steps": [
+    {
+      "at": 0,
+      "action": "cue",
+      "note": "A PROPOSAL, APPROVAL PENDING: 00:34-00:47 voice recording (parent review ±1s). No editing now; spoken audio content unverified."
+    },
+    {
+      "at": 13,
+      "action": "cue",
+      "note": "A PROPOSAL: 01:43-01:51 actual alarm transition (±1s). 01:06-01:12 is background preview, not an actual alarm. If waiting is cut, label 대기 구간 생략."
+    },
+    {
+      "at": 21,
+      "action": "cue",
+      "note": "A PROPOSAL: 03:14-03:23 wake-check notification (±1s): 일어나셨나요? 확인하지 않으면 알람이 다시 울려요. Enlarge only after approval; focus unmeasured."
+    },
+    {
+      "at": 30,
+      "action": "cue",
+      "note": "A PROPOSAL: 04:10-04:18 re-alarm (±1s). Exclude personal notifications around 02:16. This A does not show permission denial/consent or prove B warning codes."
+    },
+    {
+      "at": 38,
+      "action": "cue",
+      "note": "A candidate clips total 38s; 38-40s transition is unassigned. Source unchanged. User decision and edit approval pending."
+    },
+    {
+      "at": 40,
+      "action": "cue",
+      "note": "B 0-12s: reuse existing Android comparison segment; point only to warning code none. Original path/timecode required; do not generate replacement."
+    },
+    {
+      "at": 52,
+      "action": "cue",
+      "note": "B 12-24s: reuse existing iOS comparison segment; point only to unsupportedWakeCheck. Original path/timecode required; avoid full diagnostic dump."
+    },
+    {
+      "at": 64,
+      "action": "cue",
+      "note": "B 24-30s: same wake-check request, different platform support. This warning is not notification denial and does not prove future alarm delivery."
+    },
+    {
+      "at": 70,
+      "action": "cue",
+      "note": "End main presentation. example inspection/86s delivery wait and macOS footage are optional technical evidence or Q&A only."
+    }
+  ],
+  "sources": {
+    "A": {
+      "library_id": "libfile_1e0c350b93dc8191a46d45e2d8934d7a",
+      "filename": "warmwake-demo-720p.mp4",
+      "status": "parent_reviewed_observations_edit_not_approved",
+      "local_path": null,
+      "note": "Parent supplied video review and ±1s timecode candidates. Not independently watched in this worker. No video modification or new recording.",
+      "duration_seconds": 261.61,
+      "width": 720,
+      "height": 1566,
+      "fps": 30,
+      "audio": "track_present_listening_not_verified",
+      "permission_transition_observed": false
+    },
+    "B": {
+      "status": "existing_video_path_and_timecodes_required"
+    }
+  },
+  "approval_status": "A_reframe_and_video_edit_pending_user_approval",
+  "review_document": "A-OBSERVATIONS.md"
+}

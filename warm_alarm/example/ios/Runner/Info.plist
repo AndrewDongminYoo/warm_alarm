@@ -26,6 +26,8 @@
 	<true/>
 	<key>NSAlarmKitUsageDescription</key>
 	<string>Allow alarms you schedule in Example to alert and snooze.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Record your voice to use as your alarm sound.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

@@ -1,0 +1,111 @@
+{
+  "status": "needs_review_inputs",
+  "note": "Observation-backed edit candidates only; ±1s source boundaries. No editing approved. Output placement is provisional, not a finished cut. Exclude personal notifications; label omitted waits. A candidate clips total 38s; prior B placement at 40s leaves an unassigned 2s gap, not an approved transition.",
+  "segments": [
+    {
+      "output": [0, 13],
+      "source": "libfile_1e0c350b93dc8191a46d45e2d8934d7a",
+      "source_in": 34,
+      "source_out": 47,
+      "timecode_tolerance_seconds": 1,
+      "focus": "A proposed: voice recording",
+      "source_status": "parent_observed_candidate_edit_approval_pending",
+      "edit_status": "not_executed",
+      "focus_coordinates": null
+    },
+    {
+      "output": [13, 21],
+      "source": "libfile_1e0c350b93dc8191a46d45e2d8934d7a",
+      "source_in": 103,
+      "source_out": 111,
+      "timecode_tolerance_seconds": 1,
+      "focus": "A proposed: actual alarm transition; not background preview",
+      "source_status": "parent_observed_candidate_edit_approval_pending",
+      "edit_status": "not_executed",
+      "focus_coordinates": null
+    },
+    {
+      "output": [21, 30],
+      "source": "libfile_1e0c350b93dc8191a46d45e2d8934d7a",
+      "source_in": 194,
+      "source_out": 203,
+      "timecode_tolerance_seconds": 1,
+      "focus": "A proposed: wake-check notification; enlarge text after approval",
+      "source_status": "parent_observed_candidate_edit_approval_pending",
+      "edit_status": "not_executed",
+      "focus_coordinates": null
+    },
+    {
+      "output": [30, 38],
+      "source": "libfile_1e0c350b93dc8191a46d45e2d8934d7a",
+      "source_in": 250,
+      "source_out": 258,
+      "timecode_tolerance_seconds": 1,
+      "focus": "A proposed: re-alarm",
+      "source_status": "parent_observed_candidate_edit_approval_pending",
+      "edit_status": "not_executed",
+      "focus_coordinates": null
+    },
+    {
+      "output": [40, 52],
+      "source": null,
+      "source_in": null,
+      "source_out": null,
+      "focus": "B: Android warning code none only",
+      "capture": "reuse existing comparison video"
+    },
+    {
+      "output": [52, 64],
+      "source": null,
+      "source_in": null,
+      "source_out": null,
+      "focus": "B: iOS warning code unsupportedWakeCheck only",
+      "capture": "reuse existing comparison video"
+    },
+    {
+      "output": [64, 70],
+      "source": null,
+      "source_in": null,
+      "source_out": null,
+      "focus": "B: hold the two relevant values; avoid full diagnostic dump",
+      "capture": "reuse existing comparison video"
+    }
+  ],
+  "keyframes": null,
+  "focus_coordinates": null,
+  "sources": {
+    "A": {
+      "library_id": "libfile_1e0c350b93dc8191a46d45e2d8934d7a",
+      "filename": "warmwake-demo-720p.mp4",
+      "status": "parent_reviewed_observations_edit_not_approved",
+      "local_path": null,
+      "note": "Parent supplied video review and ±1s timecode candidates. Not independently watched in this worker. No video modification or new recording.",
+      "duration_seconds": 261.61,
+      "width": 720,
+      "height": 1566,
+      "fps": 30,
+      "audio": "track_present_listening_not_verified",
+      "permission_transition_observed": false
+    },
+    "B": {
+      "source": null,
+      "status": "existing_video_path_and_timecodes_required"
+    }
+  },
+  "approval_status": "A_reframe_and_video_edit_pending_user_approval",
+  "review_document": "A-OBSERVATIONS.md",
+  "required_annotation_when_wait_removed": "대기 구간 생략",
+  "exclude_public_playback": [
+    {
+      "around_seconds": 136,
+      "reason": "personal notifications; exact exclusion bounds require final frame review"
+    }
+  ],
+  "not_actual_alarm": [
+    {
+      "source_in": 66,
+      "source_out": 72,
+      "reason": "background choice and preview"
+    }
+  ]
+}

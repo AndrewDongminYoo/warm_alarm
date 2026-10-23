@@ -11,6 +11,7 @@ dictionaries:
   - cpp
   - cpp-legacy
   - cpp-compound-words
+  - fonts
 dictionaryDefinitions:
   - name: custom-dictionary
     path: ./.cspell/custom-dictionary.txt
@@ -29,3 +30,5 @@ words:
   - Dongmin
   - fluttium
   - WarmWake
+ignoreRegExpList:
+  - /\/var\/folders\/[^\s`]+/g

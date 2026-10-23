@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		D22000000000000000000002 /* alarm_ring.caf in Resources */ = {isa = PBXBuildFile; fileRef = D22000000000000000000001 /* alarm_ring.caf */; };
 		091CBDDD526E406B8CBF65DC /* WarmAlarmSoundRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F45E0E343CE496AB364F01C /* WarmAlarmSoundRendererTests.swift */; };
 		0E2CAAC1A373D7C6B5EB4710 /* WarmAlarmLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DD67B29E07FAE9D131E9611 /* WarmAlarmLiveActivityWidget.swift */; };
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
@@ -16,7 +15,6 @@
 		48D698B134406520E72F9C5A /* LiveActivityWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C9163C90C1AA8CC518DD4566 /* LiveActivityWidget.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		550EEACF41D783F7B970EA15 /* WarmAlarmRequestRegistrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FC58045D2B9E8F22EF1930C /* WarmAlarmRequestRegistrationTests.swift */; };
 		5A0448E6CC51531A15EB7C26 /* WarmAlarmRecurrenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 109E51BED23F0B96E0307E3B /* WarmAlarmRecurrenceTests.swift */; };
-		6578EEA2C83B6388B886968C /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1D6986157739D9687AB6AFD6 /* Pods_Runner.framework */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
 		909ACAEC600DB48B13EE7D5E /* WarmAlarmPlatformReplyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB750F38CF6190D10EFBAC17 /* WarmAlarmPlatformReplyTests.swift */; };
@@ -33,6 +31,7 @@
 		D21000000000000000000002 /* WarmAlarmEventQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D21000000000000000000001 /* WarmAlarmEventQueueTests.swift */; };
 		D21000000000000000000004 /* WarmAlarmLiveActivityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D21000000000000000000003 /* WarmAlarmLiveActivityTests.swift */; };
 		D21000000000000000000006 /* WarmAlarmAudioSourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D21000000000000000000005 /* WarmAlarmAudioSourceTests.swift */; };
+		D22000000000000000000002 /* alarm_ring.caf in Resources */ = {isa = PBXBuildFile; fileRef = D22000000000000000000001 /* alarm_ring.caf */; };
 		E9B0700D66AE76F75CB98B1D /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C79963D8D2C3AB322DDFBEBD /* SwiftUI.framework */; };
 		F0F91448759B01BE660F206B /* WarmAlarmActivityKitAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5442F8A5329C66392CA1BCEE /* WarmAlarmActivityKitAdapter.swift */; };
 		FE8DFBF84224A45FA37EFCC4 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 34A57D4457F74C2FA2EB865D /* Foundation.framework */; };
@@ -80,12 +79,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		D22000000000000000000001 /* alarm_ring.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = alarm_ring.caf; sourceTree = "<group>"; };
 		0BADE68ED29E687F28B98BC2 /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
 		109E51BED23F0B96E0307E3B /* WarmAlarmRecurrenceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmRecurrenceTests.swift; sourceTree = "<group>"; };
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
-		1D6986157739D9687AB6AFD6 /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		2F45E0E343CE496AB364F01C /* WarmAlarmSoundRendererTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmSoundRendererTests.swift; sourceTree = "<group>"; };
 		34A57D4457F74C2FA2EB865D /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		399B59320BA37EF516F0B63A /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
@@ -101,7 +98,6 @@
 		74D654FC1A129F7EB17C8E08 /* WarmAlarmStoreTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmStoreTests.swift; sourceTree = "<group>"; };
 		78E0A7A72DC9AD7400C4905E /* FlutterGeneratedPluginSwiftPackage */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = FlutterGeneratedPluginSwiftPackage; path = Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage; sourceTree = "<group>"; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Flutter/Release.xcconfig; sourceTree = "<group>"; };
-		92B43DD0AD58E6356D15892C /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = Flutter/Debug.xcconfig; sourceTree = "<group>"; };
 		9740EEB31CF90195004384FC /* Generated.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Generated.xcconfig; path = Flutter/Generated.xcconfig; sourceTree = "<group>"; };
 		97C146EE1CF9000F007C117D /* Runner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Runner.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -111,16 +107,15 @@
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		97C147111CF9000F007C117D /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		BB750F38CF6190D10EFBAC17 /* WarmAlarmPlatformReplyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmPlatformReplyTests.swift; sourceTree = "<group>"; };
-		C32DC939DE75A0BDF7B647A4 /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
 		C79963D8D2C3AB322DDFBEBD /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		C9163C90C1AA8CC518DD4566 /* LiveActivityWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LiveActivityWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D21000000000000000000001 /* WarmAlarmEventQueueTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmEventQueueTests.swift; sourceTree = "<group>"; };
 		D21000000000000000000003 /* WarmAlarmLiveActivityTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmLiveActivityTests.swift; sourceTree = "<group>"; };
 		D21000000000000000000005 /* WarmAlarmAudioSourceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmAudioSourceTests.swift; sourceTree = "<group>"; };
 		D21000000000000000000007 /* Widget.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Widget.xcconfig; sourceTree = "<group>"; };
+		D22000000000000000000001 /* alarm_ring.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = alarm_ring.caf; sourceTree = "<group>"; };
 		D6CF975C427F92EF2C5CC756 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E713B65BD9501484EEB7A051 /* WarmAlarmRecoveryTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WarmAlarmRecoveryTests.swift; sourceTree = "<group>"; };
-		FC95DB849BF641CAD26B8123 /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -140,7 +135,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */,
-				6578EEA2C83B6388B886968C /* Pods_Runner.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -178,7 +172,6 @@
 		71A9A1607E036E391BA6A301 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				1D6986157739D9687AB6AFD6 /* Pods_Runner.framework */,
 				9D1B7CED2623F4176F37B394 /* iOS */,
 			);
 			name = Frameworks;
@@ -187,9 +180,6 @@
 		9567CFDD8F7714B0D403105A /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				92B43DD0AD58E6356D15892C /* Pods-Runner.debug.xcconfig */,
-				C32DC939DE75A0BDF7B647A4 /* Pods-Runner.release.xcconfig */,
-				FC95DB849BF641CAD26B8123 /* Pods-Runner.profile.xcconfig */,
 			);
 			path = Pods;
 			sourceTree = "<group>";
@@ -283,7 +273,6 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 97C147051CF9000F007C117D /* Build configuration list for PBXNativeTarget "Runner" */;
 			buildPhases = (
-				0266454444A641F4EB110FC5 /* [CP] Check Pods Manifest.lock */,
 				9740EEB61CF901F6004384FC /* Run Script */,
 				97C146EA1CF9000F007C117D /* Sources */,
 				97C146EB1CF9000F007C117D /* Frameworks */,
@@ -408,28 +397,6 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		0266454444A641F4EB110FC5 /* [CP] Check Pods Manifest.lock */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
-				"${PODS_ROOT}/Manifest.lock",
-			);
-			name = "[CP] Check Pods Manifest.lock";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Pods-Runner-checkManifestLockResult.txt",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
-			showEnvVarsInLog = 0;
-		};
 		3B06AD1E1E4923F5004D2608 /* Thin Binary */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -597,7 +564,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = iphoneos;
@@ -721,7 +688,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
@@ -770,7 +737,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = iphoneos;
