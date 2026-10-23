@@ -83,12 +83,16 @@ cd warm_alarm/example && fluttium test flows/test_readiness.yaml -d macos
 
 ## RELEASING
 
-- **The workspace hides constraint errors from every local check.** Root `pubspec.yaml` declares a `workspace:` and each package sets `resolution: workspace`, so `flutter pub get` always resolves the sibling `warm_alarm*` packages **by path**. Tests, `flutter analyze`, and the native host builds pass no matter what the version constraints say. Only pana reads pub.dev.
+- **The workspace hides constraint errors from every local check.** Root `pubspec.yaml` declares a `workspace:` and each package sets `resolution: workspace`, so `flutter pub get` always resolves the sibling `warm_alarm*` packages **by path**. Tests, `flutter analyze`, and the native host builds pass whatever the lower bounds say. Only pana reads pub.dev.
+  An upper bound is different: a sibling constraint that excludes a package's workspace version makes `flutter pub get` fail (`... depends on warm_alarm_platform_interface ^0.1.8 ... version solving failed` with the interface at 0.2.0).
 - **pana analyses against the lowest version a constraint allows** (it runs `dart pub downgrade`). A package using an API added to a sibling must require the release that carries it. When it does not, the run reports `[pub-downgrade-failed]` and the score collapses far below the workflow's minimum of 120.
 - **That forces a publish order — one merge and one publish per stage, never bundled:**
   1. `warm_alarm_platform_interface`
   2. `warm_alarm_android` / `warm_alarm_ios` / `warm_alarm_macos`, with their interface constraint raised
   3. `warm_alarm`, which depends on the interface **and** all three platform packages
+- **A breaking interface release is a minor bump, and it widens every sibling's upper bound in the same merge.** A new value in a published enum or a new sealed subtype breaks exhaustive switches, so the interface moves `0.x` to `0.(x+1).0`, which `^0.x.y` constraints do not select.
+  The same merge sets each sibling's interface constraint to `">=<current floor> <0.(x+2).0"` so the workspace still resolves; no lower bound moves and no sibling version changes, so nothing is published by that merge.
+  Each sibling narrows its constraint to `^0.(x+1).0` in its own release stage. The facade also takes a minor bump, because it re-exports the interface.
 - Publishing is triggered by pushing a tag matching `<package_name>-v{{version}}`; the tag version must equal that package's pubspec version.
 - **pub.dev's Automated publishing is configured per package**, not per repository. Each package needs Repository `AndrewDongminYoo/warm_alarm` and its own tag pattern set at `https://pub.dev/packages/<package>/admin`. Without it the upload fails with `publishing from github is not enabled` after the package validates cleanly. Re-run the workflow once the setting exists — the pushed tag stays valid and must not be re-created.
 
