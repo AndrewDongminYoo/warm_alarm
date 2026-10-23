@@ -67,6 +67,28 @@ void main() {
       expect(result.warnings.last.code, isNull);
     });
 
+    test('keeps an unsupportedFadeIn warning first and its code intact', () {
+      const fadeWarning = WarmAlarmWarning(
+        message: 'The system plays this sound, so the fade-in was not applied.',
+        code: WarmAlarmWarningCode.unsupportedFadeIn,
+      );
+      final result = WarmAlarmScheduleResult.withWarnings(
+        alarmId: 1,
+        readiness: _readiness,
+        warnings: <WarmAlarmWarning>[fadeWarning, _wakeCheckWarning],
+      );
+
+      expect(result.warning, same(fadeWarning));
+      expect(result.warning?.code, WarmAlarmWarningCode.unsupportedFadeIn);
+      expect(
+        result.warnings.map((warning) => warning.code),
+        orderedEquals(<WarmAlarmWarningCode>[
+          WarmAlarmWarningCode.unsupportedFadeIn,
+          WarmAlarmWarningCode.unsupportedWakeCheck,
+        ]),
+      );
+    });
+
     test('returns a list that callers cannot modify', () {
       final result = WarmAlarmScheduleResult.withWarnings(
         alarmId: 1,

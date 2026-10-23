@@ -28,7 +28,7 @@ dependencies:
   warm_alarm_android: ^0.1.6
   warm_alarm_ios: ^0.1.13
   warm_alarm_macos: ^0.1.8
-  warm_alarm_platform_interface: ^0.1.8
+  warm_alarm_platform_interface: ">=0.1.8 <0.3.0"
 
 dev_dependencies:
   flutter_test:

@@ -19,6 +19,9 @@ final class WarmAlarmWarning {
 enum WarmAlarmWarningCode {
   /// The requested wake-check option was ignored because the platform does not support it.
   unsupportedWakeCheck,
+
+  /// The requested fade-in was ignored because the backend did not own playback or does not support a fade.
+  unsupportedFadeIn,
 }
 
 final class WarmAlarmFailure {
