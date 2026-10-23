@@ -11,6 +11,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
@@ -244,6 +245,16 @@ class WarmAlarmPlugin :
                     }
                 }
 
+                WarmAlarmReadinessReasonWire.BATTERY_OPTIMIZATION_MAY_DELAY -> {
+                    // The list screen needs no permission; the per-app request dialog would need
+                    // REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, which Play restricts.
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                    } else {
+                        null
+                    }
+                }
+
                 else -> {
                     null
                 }
@@ -323,14 +334,20 @@ class WarmAlarmPlugin :
                 fireAtMillis = fireAtMillis,
                 sdkInt = Build.VERSION.SDK_INT,
             )
+        // The schedule result reports the same battery reason as getReadiness(); hosts decide how often to show it.
+        val batteryMayDelay = batteryOptimizationMayDelay(context, Build.VERSION.SDK_INT)
         val readiness =
             if (inexact) {
                 WarmAlarmReadinessWire(
                     level = WarmAlarmReadinessLevelWire.LIMITED,
-                    reasons = listOf(WarmAlarmReadinessReasonWire.EXACT_ALARM_PERMISSION_DENIED),
+                    reasons =
+                        buildList {
+                            add(WarmAlarmReadinessReasonWire.EXACT_ALARM_PERMISSION_DENIED)
+                            if (batteryMayDelay) add(WarmAlarmReadinessReasonWire.BATTERY_OPTIMIZATION_MAY_DELAY)
+                        },
                 )
             } else {
-                deriveReadiness(currentPermissionState())
+                deriveReadiness(currentPermissionState(), batteryMayDelay)
             }
         emitEventFromBackground(
             context,
@@ -498,21 +515,8 @@ class WarmAlarmPlugin :
         }
     }
 
-    private fun deriveReadiness(perm: WarmAlarmPermissionStateWire): WarmAlarmReadinessWire {
-        val reasons =
-            buildList {
-                if (!perm.notificationsGranted) add(WarmAlarmReadinessReasonWire.NOTIFICATION_PERMISSION_DENIED)
-                if (!perm.exactAlarmGranted) add(WarmAlarmReadinessReasonWire.EXACT_ALARM_PERMISSION_DENIED)
-                if (!perm.fullScreenIntentGranted) add(WarmAlarmReadinessReasonWire.FULL_SCREEN_PERMISSION_DENIED)
-            }
-        val level =
-            when {
-                reasons.isEmpty() -> WarmAlarmReadinessLevelWire.READY
-                !perm.exactAlarmGranted -> WarmAlarmReadinessLevelWire.LIMITED
-                else -> WarmAlarmReadinessLevelWire.LIMITED
-            }
-        return WarmAlarmReadinessWire(level = level, reasons = reasons)
-    }
+    private fun deriveReadiness(perm: WarmAlarmPermissionStateWire): WarmAlarmReadinessWire =
+        deriveReadiness(perm, batteryOptimizationMayDelay(context, Build.VERSION.SDK_INT))
 
     private fun alarmPendingIntent(
         alarmId: Long,
@@ -586,6 +590,41 @@ class WarmAlarmPlugin :
                 backend.scheduleExact(fireAtMillis)
             }
             return false
+        }
+
+        /**
+         * Returns whether the app is not exempt from battery optimization on API 23 or later.
+         * Doze and App Standby still rate-limit `setExactAndAllowWhileIdle()` for such an app, so its alarms can fire late.
+         * A missing power service is treated as no observed limit.
+         */
+        internal fun batteryOptimizationMayDelay(
+            context: Context,
+            sdkInt: Int,
+        ): Boolean {
+            if (sdkInt < Build.VERSION_CODES.M) return false
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
+            return !powerManager.isIgnoringBatteryOptimizations(context.packageName)
+        }
+
+        /** Battery optimization alone limits readiness; it never blocks delivery. */
+        internal fun deriveReadiness(
+            perm: WarmAlarmPermissionStateWire,
+            batteryOptimizationMayDelay: Boolean,
+        ): WarmAlarmReadinessWire {
+            val reasons =
+                buildList {
+                    if (!perm.notificationsGranted) add(WarmAlarmReadinessReasonWire.NOTIFICATION_PERMISSION_DENIED)
+                    if (!perm.exactAlarmGranted) add(WarmAlarmReadinessReasonWire.EXACT_ALARM_PERMISSION_DENIED)
+                    if (!perm.fullScreenIntentGranted) add(WarmAlarmReadinessReasonWire.FULL_SCREEN_PERMISSION_DENIED)
+                    if (batteryOptimizationMayDelay) add(WarmAlarmReadinessReasonWire.BATTERY_OPTIMIZATION_MAY_DELAY)
+                }
+            val level =
+                when {
+                    reasons.isEmpty() -> WarmAlarmReadinessLevelWire.READY
+                    !perm.exactAlarmGranted -> WarmAlarmReadinessLevelWire.LIMITED
+                    else -> WarmAlarmReadinessLevelWire.LIMITED
+                }
+            return WarmAlarmReadinessWire(level = level, reasons = reasons)
         }
     }
 }

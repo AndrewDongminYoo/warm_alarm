@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Build
 import android.os.Handler
+import android.os.PowerManager
 import androidx.core.app.NotificationManagerCompat
 import org.mockito.Mockito
 import java.lang.reflect.Field
@@ -52,6 +53,46 @@ class WarmAlarmSchedulingTest {
             }
         }
     }
+
+    @Test
+    fun scheduleResultReportsBatteryOptimizationOnApi23And31() {
+        for (sdkInt in listOf(23, 31)) {
+            for (exactGranted in listOf(true, false)) {
+                val readiness = scheduleReadiness(sdkInt, exactGranted, batteryExempt = false)
+                assertEquals(WarmAlarmReadinessLevelWire.LIMITED, readiness.level, "API $sdkInt, exact=$exactGranted")
+                assertTrue(
+                    WarmAlarmReadinessReasonWire.BATTERY_OPTIMIZATION_MAY_DELAY in readiness.reasons,
+                    "API $sdkInt, exact=$exactGranted",
+                )
+            }
+        }
+    }
+
+    @Test
+    fun scheduleResultOmitsBatteryOptimizationBelowApi23() {
+        val readiness = scheduleReadiness(22, exactGranted = true, batteryExempt = false)
+        assertEquals(WarmAlarmReadinessLevelWire.READY, readiness.level)
+        assertTrue(readiness.reasons.isEmpty())
+    }
+
+    private fun scheduleReadiness(
+        sdkInt: Int,
+        exactGranted: Boolean,
+        batteryExempt: Boolean,
+    ): WarmAlarmReadinessWire =
+        SchedulingHarness(sdkInt, exactGranted, batteryExempt).use { harness ->
+            val schedule =
+                WarmAlarmScheduleWire(
+                    id = 41,
+                    scheduledAtMillis = System.currentTimeMillis() + 60_000,
+                    notification = WarmAlarmNotificationWire(title = "Alarm", body = "Battery", keepNotificationAfterAlarmEnds = false),
+                    audio = WarmAlarmAudioWire(loop = true, vibrate = false, volumeEnforced = false),
+                    androidFullScreenIntent = false,
+                )
+            var result: WarmAlarmScheduleResultWire? = null
+            harness.plugin().scheduleAlarm(schedule) { result = it.getOrThrow() }
+            assertNotNull(result).readiness
+        }
 
     @Test
     fun lockedBootRecoveryKeepsTheInexactFallback() {
@@ -246,6 +287,7 @@ private data class ScheduledAlarmCall(
 private class SchedulingHarness(
     sdkInt: Int,
     exactGranted: Boolean,
+    batteryExempt: Boolean = true,
 ) : AutoCloseable {
     val context = Mockito.mock(Context::class.java)
     val pendingIntent = Mockito.mock(PendingIntent::class.java)
@@ -276,6 +318,9 @@ private class SchedulingHarness(
         Mockito.`when`(context.packageName).thenReturn("com.andrew.alarm")
         Mockito.`when`(context.getSystemService(Context.ALARM_SERVICE)).thenReturn(alarmManager)
         Mockito.`when`(context.getSystemService(Context.NOTIFICATION_SERVICE)).thenReturn(Mockito.mock(NotificationManager::class.java))
+        val powerManager = Mockito.mock(PowerManager::class.java)
+        Mockito.`when`(powerManager.isIgnoringBatteryOptimizations("com.andrew.alarm")).thenReturn(batteryExempt)
+        Mockito.`when`(context.getSystemService(Context.POWER_SERVICE)).thenReturn(powerManager)
         Mockito.`when`(context.createDeviceProtectedStorageContext()).thenReturn(context)
         val preferencesByName = mutableMapOf<String, SharedPreferences>()
         Mockito.`when`(context.getSharedPreferences(Mockito.anyString(), Mockito.anyInt())).thenAnswer {
