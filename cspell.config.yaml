@@ -30,5 +30,3 @@ words:
   - Dongmin
   - fluttium
   - WarmWake
-ignoreRegExpList:
-  - /\/var\/folders\/[^\s`]+/g
