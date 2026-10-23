@@ -71,7 +71,7 @@ are never exposed here.
 | `WarmAlarmNotification`         | Notification title, body, action button labels, and Android-specific icon/color                                                 |
 | `WarmAlarmSnooze`               | Snooze duration                                                                                                                 |
 | `WarmAlarmRecurrence`           | Weekly recurrence via a list of ISO weekday numbers (`weekdays`, 1 = Monday … 7 = Sunday)                                       |
-| `WarmAlarmWakeCheck`            | Wake-check configuration: check delay, optional retrigger delay, and max retrigger count                                        |
+| `WarmAlarmWakeCheck`            | Wake-check configuration: check delay, optional retrigger delay, max retrigger count, and optional prompt text                  |
 | `WarmAlarmSnapshot`             | Scheduled-alarm fields plus `systemManagedAudio` (default `false`)                                                              |
 | `WarmAlarmCapabilities`         | Per-feature `WarmAlarmSupportStatus`: notification & exact scheduling, background audio, full-screen, wake-check, Live Activity |
 | `WarmAlarmPermissionState`      | Runtime permission grant flags                                                                                                  |

@@ -109,6 +109,44 @@ void main() {
       expect(check.maxRetriggers, 1);
     });
 
+    test('leaves prompt text null by default so platforms keep their defaults', () {
+      const check = WarmAlarmWakeCheck(checkDelay: Duration(minutes: 5));
+      expect(check.title, isNull);
+      expect(check.body, isNull);
+      expect(check.confirmActionTitle, isNull);
+    });
+
+    test('accepts host-provided prompt text', () {
+      const check = WarmAlarmWakeCheck(
+        checkDelay: Duration(minutes: 5),
+        title: '기상 확인',
+        body: '일어나셨나요?',
+        confirmActionTitle: '일어났어요',
+      );
+      expect(check.title, '기상 확인');
+      expect(check.body, '일어나셨나요?');
+      expect(check.confirmActionTitle, '일어났어요');
+      expect(check.checkDelay, const Duration(minutes: 5));
+      expect(check.retriggerDelay, isNull);
+      expect(check.maxRetriggers, 1);
+    });
+
+    test('accepts each prompt text field on its own', () {
+      const titleOnly = WarmAlarmWakeCheck(checkDelay: Duration(minutes: 5), title: 'Wake check');
+      const bodyOnly = WarmAlarmWakeCheck(checkDelay: Duration(minutes: 5), body: 'Still in bed?');
+      const confirmOnly = WarmAlarmWakeCheck(checkDelay: Duration(minutes: 5), confirmActionTitle: "I'm up");
+
+      expect(titleOnly.title, 'Wake check');
+      expect(titleOnly.body, isNull);
+      expect(titleOnly.confirmActionTitle, isNull);
+      expect(bodyOnly.title, isNull);
+      expect(bodyOnly.body, 'Still in bed?');
+      expect(bodyOnly.confirmActionTitle, isNull);
+      expect(confirmOnly.title, isNull);
+      expect(confirmOnly.body, isNull);
+      expect(confirmOnly.confirmActionTitle, "I'm up");
+    });
+
     test('accepts optional retrigger config', () {
       const check = WarmAlarmWakeCheck(
         checkDelay: Duration(minutes: 5),
