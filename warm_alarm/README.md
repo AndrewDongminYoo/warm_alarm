@@ -32,7 +32,6 @@ It is maintained as an independent Flutter plugin and does not require the WarmW
 ## Installation
 
 Add `warm_alarm` to your Flutter app.
-This checkout prepares facade 0.1.9; that release must be published before the constraint below resolves from pub.dev.
 
 ```yaml
 dependencies:

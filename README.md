@@ -11,6 +11,8 @@
 
 ## Features
 
+For example usage, testing boundaries, and project decisions, see the [documentation guide](docs/README.md).
+
 - **Durable lifecycle events** — bounded native replay when the Dart engine reconnects.
 - **Opt-in iOS Live Activities** — host-provided widgets with explicit start, update, and end operations.
 - **Capability-first design** — feature support is reported at runtime, with platform-specific limits documented below
@@ -26,7 +28,6 @@
 ## Installation
 
 Add `warm_alarm` to your Flutter app.
-This checkout prepares facade 0.1.9; that release must be published before the constraint below resolves from pub.dev.
 
 ```yaml
 dependencies:

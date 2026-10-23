@@ -56,6 +56,20 @@ flutter run --no-pub -d macos
 Widget tests inject fake audio and platform implementations: they verify UI recovery and schedule arguments without requesting a microphone or scheduling native alarms.
 They do not verify native capture, audible playback, permissions, or eventual delivery.
 
+### CI and device checks
+
+The `example-tests` job in the [package workflow](../../.github/workflows/warm_alarm.yaml) runs these widget and audio-service tests on Linux for matching pull requests, main-branch pushes, `v*` tags, and manual workflow runs.
+The recording and playback boundaries are mocked, so the job requires no emulator, microphone, or OS permission prompt.
+
+The separate Android and iOS Fluttium jobs run `flows/test_readiness.yaml` only on manual workflow dispatch or `v*` tags.
+They inspect readiness and exact-scheduling support; they do not perform the voice-alarm recording flow.
+The legacy `integration_test/app_test.dart` harness is not invoked by those jobs.
+Its unconditional iOS Live Activity expectation must be reviewed against the configured host before using it as a regression gate.
+
+For a manual end-to-end pass, follow the voice demo above and verify microphone permission, preview sound, native alarm presentation, fired events, and cancellation on the selected device.
+Cancel an existing alarm before scheduling again: this example reuses ID 42, and AlarmKit can reject a duplicate native ID.
+An audio track, a playback callback, or a `WarmAlarmFired` event alone does not establish audible output.
+
 ## Inspection and presentation demos
 
 Press **Inspect Alarm API** to display readiness, reason codes, and all six capability values.
