@@ -1,3 +1,9 @@
+# 0.1.9
+
+- Add `WarmAlarmWarningCode.unsupportedFadeIn` for a backend that ignored `fadeInDuration` because it did not own playback or does not support a fade.
+  Code that switches exhaustively over `WarmAlarmWarningCode` needs a case for the new value.
+- Document that `fadeSteps` wins over `fadeInDuration` when both are set, and that `fadeInDuration` alone is a linear fade from silence to `volume`, or to 1.0 when `volume` is null.
+
 # 0.1.8
 
 - Add `WarmAlarmScheduleResult.warnings`, which lists every scheduling warning in detection order.

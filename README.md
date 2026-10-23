@@ -240,7 +240,7 @@ A recurring schedule may use a past `scheduledAt` anchor because its next local 
 
 **`WarmAlarmNotificationAuthorizationStatus`**: `notDetermined`, `denied`, `authorized`, `provisional`, `ephemeral`, `unknown`
 
-**`WarmAlarmWarningCode`**: `unsupportedWakeCheck`
+**`WarmAlarmWarningCode`**: `unsupportedWakeCheck`, `unsupportedFadeIn`
 
 **`WarmAlarmLiveActivityStatus`**: `scheduled`, `ringing`, `snoozed`
 
