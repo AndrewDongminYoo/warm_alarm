@@ -72,7 +72,9 @@ broadcast and starts `WarmAlarmForegroundService`. The service:
 - Plays audio via `MediaPlayer` (local file, asset, or system default ringtone), using the legacy alarm stream on API 19–20 and audio attributes on API 21 or later
 - Selects one audio source: a nonempty local file takes precedence, an asset is the direct-boot fallback when that file is unavailable before unlock, and the system alarm sound is used when neither path is configured
 - Applies `loop` to the selected local file or asset without mixing sources
-- Applies optional fade-in via a `Handler`-driven volume schedule
+- Applies optional fade-in via a `Handler`-driven volume schedule: `fadeSteps` when set, otherwise a linear ramp over `fadeInDuration` from silence to `volume`, or to 1.0 when `volume` is null
+  - The ramp uses 10 steps or one step per 100 ms, whichever is fewer; a zero `fadeInDuration` means no fade
+  - When both are set, `fadeSteps` wins and no warning is reported
 - Runs optional repeating vibration with the alarm and stops it on Stop, Snooze, playback failure, cancellation, or service destruction
 - Posts the alarm notification with configurable Stop/Snooze actions
 - Boosts and periodically enforces the maximum alarm stream volume only when `volumeEnforced` is enabled

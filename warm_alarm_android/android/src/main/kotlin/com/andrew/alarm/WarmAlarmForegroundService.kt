@@ -227,7 +227,7 @@ class WarmAlarmForegroundService : Service() {
         schedule: WarmAlarmScheduleWire?,
     ) {
         val audio = schedule?.audio
-        val fadeSteps = audio?.fadeSteps
+        val fadeSteps = WarmAlarmAudioPolicy.resolveFadeSteps(audio?.fadeSteps, audio?.fadeInDurationMillis, audio?.volume)
         val zeroStep = fadeSteps?.firstOrNull { it.timeMillis == 0L }
         val initialVolume =
             (
