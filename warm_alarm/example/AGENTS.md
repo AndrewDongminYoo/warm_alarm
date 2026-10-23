@@ -5,7 +5,8 @@ Runnable Flutter app demoing the plugin **and** the host for Fluttium E2E flows.
 ## STRUCTURE
 
 ```plaintext
-lib/main.dart                                # tiny demo UI: readiness inspection + schedule + event log
+lib/main.dart                                # voice alarm demo UI + readiness inspection + event log
+lib/voice_audio.dart                         # example-only recording, preview, and app-private files
 fluttium.yaml                                # registers custom actions for Fluttium
 flows/test_readiness.yaml                    # the only E2E flow (presses "Inspect Alarm API" then runs `checkReadiness`)
 integration_test/app_test.dart               # standard integration_test entry (used by flutter_driver)
@@ -25,14 +26,17 @@ android/, ios/, macos/                       # default Flutter native shells (re
 
 ## CONVENTIONS
 
-- `pubspec.yaml` path-depends on `warm_alarm` AND directly on `warm_alarm_android`. The direct Android pin is intentional (E2E reproducibility); do not mirror it in real consumer apps.
+- `pubspec.yaml` path-depends on `warm_alarm` and its public platform interface.
+  Endorsed platform implementations are resolved through `warm_alarm`.
 - This package is part of the root Dart workspace (declared in root `pubspec.yaml`) **and** is included in Melos's package list, so Melos scripts (`format`, `test`, `generate`-if-applicable) target it.
 - The nested `actions/check_readiness/` package is in the root Dart workspace and is discovered by Melos even though it is absent from the `melos.packages` list.
   Melos test commands include it; use `melos list` to inspect the resolved package set.
 - The readiness CI flow runs on an Android API 29 emulator and an iPhone simulator only for `workflow_dispatch` or a `v*` tag — see `.github/workflows/warm_alarm.yaml`.
   Ordinary PRs and package publication tags such as `warm_alarm-v0.1.8` do not run these E2E jobs.
   macOS readiness remains a manual Fluttium check; the separate native macOS workflow does not run this UI flow.
-- `lib/main.dart` is a State-driven `MaterialApp` with no routing/DI. Keep it minimal — this is a smoke target, not a showcase app.
+- `lib/main.dart` is a State-driven `MaterialApp` with no router or state-management framework.
+  Keep example-only audio I/O in `lib/voice_audio.dart`; inject it in widget tests so tests never request the microphone.
+  Preserve the readiness action labels used by Fluttium and the presentation scripts.
 
 ## ANTI-PATTERNS
 

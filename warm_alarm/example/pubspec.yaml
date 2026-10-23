@@ -9,8 +9,11 @@ environment:
   flutter: ^3.47.7
 
 dependencies:
+  audioplayers: ^6.8.1
   flutter:
     sdk: flutter
+  path_provider: ^2.1.6
+  record: ^7.1.2
   warm_alarm:
     # When depending on this package from a real application you should use:
     #   warm_alarm: ^x.y.z
