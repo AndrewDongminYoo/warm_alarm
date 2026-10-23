@@ -15,6 +15,7 @@ on:
       - pubspec.yaml
       - pubspec.lock
       - warm_alarm/**
+      - warm_alarm_platform_interface/**
   push:
     branches:
       - main
@@ -26,6 +27,7 @@ on:
       - pubspec.yaml
       - pubspec.lock
       - warm_alarm/**
+      - warm_alarm_platform_interface/**
 
 jobs:
   spell-check:
