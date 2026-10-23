@@ -47,6 +47,27 @@ jobs:
       format_directories: lib test example/lib example/test example/integration_test example/test_driver example/actions/check_readiness/lib example/actions/check_readiness/test ../tool
       working_directory: warm_alarm
 
+  example-tests:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: warm_alarm/example
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: 3.47.7
+
+      - name: Resolve workspace dependencies
+        run: flutter pub get
+
+      - name: Run example widget and audio service tests
+        run: flutter test --no-pub --concurrency 2 --test-randomize-ordering-seed random
+
   pana:
     uses: ./.github/workflows/pana.yaml
     with:
