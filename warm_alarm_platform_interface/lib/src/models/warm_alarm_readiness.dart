@@ -2,6 +2,7 @@ import 'package:warm_alarm_platform_interface/src/models/warm_alarm_notification
 
 /// The platform's current readiness assessment and the reasons behind it.
 /// A ready snapshot does not guarantee future delivery or inspect every operating-system restriction.
+/// Android checks the app's battery optimization exemption, but not vendor-specific power management.
 final class WarmAlarmReadiness {
   /// Creates a readiness snapshot with optional detailed notification settings.
   const WarmAlarmReadiness({
@@ -58,6 +59,7 @@ enum WarmAlarmReadinessReason {
   platformUnsupported,
 
   /// The implementation reports that battery policies may delay delivery.
+  /// Android reports it from API 23 while the app is not exempt from battery optimization.
   batteryOptimizationMayDelay,
 
   /// The implementation cannot classify the current readiness condition.
