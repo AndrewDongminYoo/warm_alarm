@@ -170,6 +170,7 @@ Legacy `filePath` or `assetPath` inputs alone do not opt into this complete-soun
 To prevent a second host player, prepare the full sound and pass it through `systemSoundFilePath`.
 AlarmKit alerts do not start a second `AVAudioPlayer`.
 The system controls repetition, volume, and Stop/Snooze; the normal `loop`, volume, and fade settings remain specific to the legacy player.
+When AlarmKit adopts a schedule whose `fadeInDuration` or `fadeSteps` requests a fade, the schedule result reports `unsupportedFadeIn`.
 
 Keep prepared files immutable while any alarm references them.
 Successful replacement, cancellation, one-shot Stop, and confirmed backend removal release unreferenced generated files.
@@ -220,6 +221,13 @@ default) sound. The `AVAudioSession` category is set to `.playback` (with `.mixW
 audio continues even when the device is in Silent mode. An optional fade-in is applied by scheduling
 discrete volume steps as `DispatchWorkItem`s (via `DispatchQueue.main.asyncAfter`), not a periodic
 timer.
+
+When `fadeSteps` is absent, a positive `fadeInDuration` becomes a linear ramp from silence to `volume`, or to 1.0 when `volume` is null, in 10 steps or one step per 100 ms, whichever is fewer.
+`fadeSteps` wins when both are set, and a zero duration means no fade.
+With `volumeEnforced`, the plugin sets the player volume to 1.0 once per second, starting after the last fade step.
+The volume therefore moves from the fade target to 1.0 about one second after the fade ends.
+A User Notifications schedule without a custom file or asset plays the notification sound instead of the plugin player, so its schedule result reports `unsupportedFadeIn` when `fadeInDuration` or `fadeSteps` requests a fade.
+A notification delivered while the app is in the background also plays only the notification sound; the schedule result cannot predict that case and does not warn about it.
 
 A missing custom file or asset emits `WarmAlarmFailed` with `audioFileNotFound`; decoding, audio-session activation, or player-start failure emits `audioPlaybackFailed`.
 Foreground delivery then requests the notification sound instead of suppressing it.
