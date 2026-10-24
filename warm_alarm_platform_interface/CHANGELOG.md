@@ -1,7 +1,7 @@
-# Unreleased
+# 0.2.2
 
 - Add `stopAlarm(id)`, which stops a ringing alarm through the same path as its notification's Stop action, so a host that dismisses from its own screen can still start the platform wake-check.
-  The default returns false and stops nothing, so existing implementations are unaffected; warm_alarm_android implements it in a later release.
+  The default returns false and stops nothing, so existing implementations are unaffected; warm_alarm_android 0.1.8 implements it, and iOS and macOS keep the default.
 
 # 0.2.1
 
