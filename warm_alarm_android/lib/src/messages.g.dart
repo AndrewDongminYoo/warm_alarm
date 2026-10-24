@@ -844,6 +844,9 @@ class WarmAlarmWakeCheckWire {
     required this.checkDelayMillis,
     this.retriggerDelayMillis,
     this.maxRetriggers,
+    this.title,
+    this.body,
+    this.confirmActionTitle,
   });
 
   int checkDelayMillis;
@@ -852,11 +855,20 @@ class WarmAlarmWakeCheckWire {
 
   int? maxRetriggers;
 
+  String? title;
+
+  String? body;
+
+  String? confirmActionTitle;
+
   List<Object?> _toList() {
     return <Object?>[
       checkDelayMillis,
       retriggerDelayMillis,
       maxRetriggers,
+      title,
+      body,
+      confirmActionTitle,
     ];
   }
 
@@ -869,6 +881,9 @@ class WarmAlarmWakeCheckWire {
       checkDelayMillis: result[0]! as int,
       retriggerDelayMillis: result[1] as int?,
       maxRetriggers: result[2] as int?,
+      title: result[3] as String?,
+      body: result[4] as String?,
+      confirmActionTitle: result[5] as String?,
     );
   }
 
@@ -881,7 +896,7 @@ class WarmAlarmWakeCheckWire {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(checkDelayMillis, other.checkDelayMillis) && _deepEquals(retriggerDelayMillis, other.retriggerDelayMillis) && _deepEquals(maxRetriggers, other.maxRetriggers);
+    return _deepEquals(checkDelayMillis, other.checkDelayMillis) && _deepEquals(retriggerDelayMillis, other.retriggerDelayMillis) && _deepEquals(maxRetriggers, other.maxRetriggers) && _deepEquals(title, other.title) && _deepEquals(body, other.body) && _deepEquals(confirmActionTitle, other.confirmActionTitle);
   }
 
   @override
@@ -890,7 +905,7 @@ class WarmAlarmWakeCheckWire {
 
   @override
   String toString() {
-    return 'WarmAlarmWakeCheckWire(checkDelayMillis: $checkDelayMillis, retriggerDelayMillis: $retriggerDelayMillis, maxRetriggers: $maxRetriggers)';
+    return 'WarmAlarmWakeCheckWire(checkDelayMillis: $checkDelayMillis, retriggerDelayMillis: $retriggerDelayMillis, maxRetriggers: $maxRetriggers, title: $title, body: $body, confirmActionTitle: $confirmActionTitle)';
   }
 }
 

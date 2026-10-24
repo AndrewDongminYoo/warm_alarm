@@ -308,6 +308,9 @@ internal object WarmAlarmStore {
                         put("checkDelayMillis", it.checkDelayMillis)
                         it.retriggerDelayMillis?.let { d -> put("retriggerDelayMillis", d) }
                         it.maxRetriggers?.let { m -> put("maxRetriggers", m) }
+                        it.title?.let { t -> put("title", t) }
+                        it.body?.let { b -> put("body", b) }
+                        it.confirmActionTitle?.let { c -> put("confirmActionTitle", c) }
                     },
                 )
             }
@@ -376,6 +379,9 @@ internal object WarmAlarmStore {
                         checkDelayMillis = w.getLong("checkDelayMillis"),
                         retriggerDelayMillis = if (w.has("retriggerDelayMillis")) w.getLong("retriggerDelayMillis") else null,
                         maxRetriggers = if (w.has("maxRetriggers")) w.getLong("maxRetriggers") else null,
+                        title = if (w.has("title")) w.getString("title") else null,
+                        body = if (w.has("body")) w.getString("body") else null,
+                        confirmActionTitle = if (w.has("confirmActionTitle")) w.getString("confirmActionTitle") else null,
                     )
                 } else {
                     null

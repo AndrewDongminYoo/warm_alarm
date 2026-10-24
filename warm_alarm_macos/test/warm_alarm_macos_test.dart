@@ -777,6 +777,42 @@ void main() {
       expect(result.warning?.code, WarmAlarmWarningCode.unsupportedWakeCheck);
     });
 
+    test('scheduleAlarm maps and warns as before when wake-check sets prompt text', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmMacOS(api: api);
+      final captured = <WarmAlarmScheduleWire>[];
+      when(() => api.scheduleAlarm(any())).thenAnswer((invocation) async {
+        captured.add(invocation.positionalArguments[0] as WarmAlarmScheduleWire);
+        return WarmAlarmScheduleResultWire(
+          warnings: [],
+          alarmId: 72,
+          readiness: WarmAlarmReadinessWire(level: WarmAlarmReadinessLevelWire.ready, reasons: []),
+        );
+      });
+
+      final result = await platform.scheduleAlarm(
+        WarmAlarmSchedule(
+          id: 72,
+          scheduledAt: DateTime(2026, 5, 1, 8),
+          notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+          audio: const WarmAlarmAudio(),
+          wakeCheck: const WarmAlarmWakeCheck(
+            checkDelay: Duration(minutes: 1),
+            title: 'Wake check',
+            body: 'Still asleep?',
+            confirmActionTitle: 'I am up',
+          ),
+        ),
+      );
+
+      expect(captured.single.id, 72);
+      expect(captured.single.notification.title, 'T');
+      expect(captured.single.notification.body, 'B');
+      expect(result.alarmId, 72);
+      expect(result.warnings.map((warning) => warning.message), ['Wake-check is not supported on macOS.']);
+      expect(result.warning?.code, WarmAlarmWarningCode.unsupportedWakeCheck);
+    });
+
     test('scheduleAlarm warns when wake-check is ignored and preserves the native warning', () async {
       final api = _MockWarmAlarmApi();
       final platform = WarmAlarmMacOS(api: api);

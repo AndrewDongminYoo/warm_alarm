@@ -27,7 +27,43 @@ class WarmAlarmReceiver : BroadcastReceiver() {
          */
         internal fun wakeCheckMayRemoveSchedule(schedule: WarmAlarmScheduleWire?): Boolean =
             schedule != null && schedule.recurrence?.weekdays.isNullOrEmpty()
+
+        /**
+         * The text of the wake-check prompt for [schedule].
+         *
+         * Each configured wake-check field wins. A null field keeps the text
+         * the prompt showed before these fields existed: the alarm title, an
+         * English body, and the alarm's stop label or an English default.
+         */
+        internal fun wakeCheckPrompt(schedule: WarmAlarmScheduleWire): WakeCheckPrompt =
+            WakeCheckPrompt(
+                title = schedule.wakeCheck?.title ?: schedule.notification.title,
+                body = schedule.wakeCheck?.body ?: "Are you awake?",
+                confirmActionTitle =
+                    schedule.wakeCheck?.confirmActionTitle
+                        ?: schedule.notification.stopActionTitle
+                        ?: "I'm awake",
+            )
+
+        /**
+         * The small icon of the wake-check prompt: the schedule's androidIcon
+         * drawable when it resolves in the host app, the system alert icon
+         * otherwise.
+         */
+        internal fun wakeCheckIcon(
+            context: Context,
+            notification: WarmAlarmNotificationWire,
+        ): Int =
+            notification.androidIcon
+                ?.let { name -> context.resources.getIdentifier(name, "drawable", context.packageName).takeIf { it != 0 } }
+                ?: android.R.drawable.ic_dialog_alert
     }
+
+    internal data class WakeCheckPrompt(
+        val title: String,
+        val body: String,
+        val confirmActionTitle: String,
+    )
 
     override fun onReceive(
         context: Context,
@@ -169,16 +205,17 @@ class WarmAlarmReceiver : BroadcastReceiver() {
                 dismissIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
-        val actionTitle = schedule.notification.stopActionTitle ?: "I'm awake"
-        val notification =
+        val prompt = wakeCheckPrompt(schedule)
+        val builder =
             NotificationCompat
                 .Builder(context, WarmAlarmForegroundService.CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_dialog_alert)
-                .setContentTitle(schedule.notification.title)
-                .setContentText("Are you awake?")
-                .addAction(0, actionTitle, dismissPending)
+                .setSmallIcon(wakeCheckIcon(context, schedule.notification))
+                .setContentTitle(prompt.title)
+                .setContentText(prompt.body)
+                .addAction(0, prompt.confirmActionTitle, dismissPending)
                 .setAutoCancel(true)
-                .build()
+        schedule.notification.androidIconColor?.let { builder.setColor(it.toInt()) }
+        val notification = builder.build()
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(WarmAlarmPendingIntents.wakeCheckNotificationId(alarmId), notification)
     }

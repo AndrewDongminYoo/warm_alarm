@@ -47,9 +47,43 @@ class WarmAlarmStoreTest {
         assertEquals(listOf(1L, 3L, 5L), decoded.recurrence?.weekdays)
     }
 
+    @Test
+    fun wakeCheckPromptTextSurvivesJsonRoundTrip() {
+        val wakeCheck =
+            WarmAlarmWakeCheckWire(
+                checkDelayMillis = 60_000,
+                retriggerDelayMillis = 120_000,
+                maxRetriggers = 2,
+                title = "기상 확인",
+                body = "일어나셨나요?",
+                confirmActionTitle = "일어났어요",
+            )
+
+        val decoded = WarmAlarmStore.decode(WarmAlarmStore.encode(schedule(id = 42, wakeCheck = wakeCheck)))
+
+        assertEquals(wakeCheck, decoded.wakeCheck)
+    }
+
+    @Test
+    fun wakeCheckStoredBeforePromptTextLoadsWithNullText() {
+        val stored = WarmAlarmStore.encode(schedule(id = 42))
+        stored.put(
+            "wakeCheck",
+            org.json
+                .JSONObject()
+                .put("checkDelayMillis", 60_000L)
+                .put("maxRetriggers", 1L),
+        )
+
+        val decoded = WarmAlarmStore.decode(stored)
+
+        assertEquals(WarmAlarmWakeCheckWire(checkDelayMillis = 60_000, maxRetriggers = 1), decoded.wakeCheck)
+    }
+
     private fun schedule(
         id: Long,
         recurrence: WarmAlarmRecurrenceWire? = null,
+        wakeCheck: WarmAlarmWakeCheckWire? = null,
     ) = WarmAlarmScheduleWire(
         id = id,
         scheduledAtMillis = 1_234,
@@ -66,6 +100,7 @@ class WarmAlarmStoreTest {
                 volumeEnforced = false,
             ),
         recurrence = recurrence,
+        wakeCheck = wakeCheck,
         androidFullScreenIntent = true,
     )
 }
