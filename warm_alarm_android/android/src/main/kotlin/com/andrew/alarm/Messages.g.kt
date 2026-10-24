@@ -1316,6 +1316,7 @@ interface WarmAlarmApi {
   fun cancelAllAlarms(callback: (Result<Unit>) -> Unit)
   fun getScheduledAlarms(callback: (Result<List<WarmAlarmSnapshotWire>>) -> Unit)
   fun isRinging(alarmId: Long?, callback: (Result<Boolean>) -> Unit)
+  fun stopAlarm(id: Long, callback: (Result<Boolean>) -> Unit)
   fun setKillWarning(title: String, body: String, callback: (Result<Unit>) -> Unit)
   fun clearKillWarning(callback: (Result<Unit>) -> Unit)
 
@@ -1518,6 +1519,26 @@ interface WarmAlarmApi {
             val args = message as List<Any?>
             val alarmIdArg = args[0] as Long?
             api.isRinging(alarmIdArg) { result: Result<Boolean> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(MessagesPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(MessagesPigeonUtils.wrapResult(data))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.warm_alarm.WarmAlarmApi.stopAlarm$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val idArg = args[0] as Long
+            api.stopAlarm(idArg) { result: Result<Boolean> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(MessagesPigeonUtils.wrapError(error))

@@ -1,6 +1,7 @@
 package com.andrew.alarm
 
 import android.content.Context
+import android.content.Intent
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import org.mockito.Mockito
 import kotlin.test.Test
@@ -32,7 +33,45 @@ class WarmAlarmPluginTest {
             var cancelError: Throwable? = null
             plugin.cancelAlarm(id) { cancelError = it.exceptionOrNull() }
             assertEquals("INVALID_ALARM_ID", assertIs<FlutterError>(cancelError).code)
+
+            var stopError: Throwable? = null
+            plugin.stopAlarm(id) { stopError = it.exceptionOrNull() }
+            assertEquals("INVALID_ALARM_ID", assertIs<FlutterError>(stopError).code)
             Mockito.verifyNoInteractions(context)
+        }
+    }
+
+    @Test
+    fun stopAlarmSendsTheStopActionOnlyForTheRingingAlarm() {
+        val context = Mockito.mock(Context::class.java)
+        val plugin = Mockito.mock(WarmAlarmPlugin::class.java, Mockito.CALLS_REAL_METHODS)
+        setPrivateField(plugin, "context", context)
+        try {
+            Mockito.mockConstruction(Intent::class.java).use { intents ->
+                for ((ringing, currentId) in listOf(false to null, false to 42L, true to 41L)) {
+                    WarmAlarmForegroundService.isRinging = ringing
+                    WarmAlarmForegroundService.currentAlarmId = currentId
+                    var stopped: Boolean? = null
+                    plugin.stopAlarm(42) { stopped = it.getOrThrow() }
+                    assertEquals(false, stopped, "ringing=$ringing currentId=$currentId")
+                }
+                Mockito.verifyNoInteractions(context)
+                assertEquals(0, intents.constructed().size)
+
+                WarmAlarmForegroundService.isRinging = true
+                WarmAlarmForegroundService.currentAlarmId = 42
+                var stopped: Boolean? = null
+                plugin.stopAlarm(42) { stopped = it.getOrThrow() }
+
+                assertEquals(true, stopped)
+                val intent = intents.constructed().single()
+                Mockito.verify(intent).setAction(WarmAlarmForegroundService.ACTION_STOP)
+                Mockito.verify(intent).putExtra(WarmAlarmForegroundService.EXTRA_ALARM_ID, 42L)
+                Mockito.verify(context).startService(intent)
+            }
+        } finally {
+            WarmAlarmForegroundService.isRinging = false
+            WarmAlarmForegroundService.currentAlarmId = null
         }
     }
 

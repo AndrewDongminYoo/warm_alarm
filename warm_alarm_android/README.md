@@ -93,6 +93,8 @@ With retention disabled, completion removes the foreground notification.
 ### Wake-check
 
 When `WarmAlarmWakeCheck` is configured, stopping the primary alarm schedules a secondary alarm for `checkDelay` later.
+Both the notification's Stop action and `stopAlarm(id)` stop it this way; `stopAlarm(id)` sends the same service action and returns false without sending anything when `id` is not the alarm ringing.
+`cancelAlarm(id)` and `scheduleAlarm` for the same id end a wake check in flight, so a host that dismisses from its own screen calls `stopAlarm(id)` and neither of the others for that id while the wake check should run.
 The check uses inexact `AlarmManager.set()` on API 19–22 and `setAndAllowWhileIdle()` on API 23 or later.
 When `ACTION_WAKE_CHECK_FIRE` arrives, the receiver shows the wake-check prompt and schedules a retrigger when `retriggerDelay` is configured, up to `maxRetriggers` times.
 `ACTION_WAKE_CHECK_DISMISS` cancels the follow-up chain.

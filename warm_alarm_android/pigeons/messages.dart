@@ -334,6 +334,9 @@ abstract class WarmAlarmApi {
   bool isRinging(int? alarmId);
 
   @asyncCallback
+  bool stopAlarm(int id);
+
+  @asyncCallback
   void setKillWarning(String title, String body);
 
   @asyncCallback

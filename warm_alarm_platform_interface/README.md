@@ -52,7 +52,7 @@ The two remediation methods carry an `unsupported` default, so a platform packag
 earlier version of this contract keeps working and simply reports that it cannot remediate.
 The endorsed Android, iOS, and macOS implementations override those remediation defaults.
 Live Activity methods also have inherited `unsupported` defaults, and `prepareSystemSound()` defaults to null.
-`stopAlarm()` defaults to false, which means the platform stopped nothing and the host keeps its own dismissal path; no endorsed implementation overrides it yet.
+`stopAlarm()` defaults to false, which means the platform stopped nothing and the host keeps its own dismissal path; the Android implementation overrides it, and iOS and macOS keep the default.
 The iOS implementation provides these optional integrations when its host and operating system support them.
 `openReadinessSettings()` hands the user off to a separate screen and returns as soon as the
 platform accepts the request, so its snapshot describes the state before the user acted on it — call

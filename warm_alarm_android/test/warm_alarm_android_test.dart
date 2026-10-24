@@ -831,6 +831,18 @@ void main() {
       verify(() => api.isRinging(null)).called(1);
     });
 
+    test('stopAlarm delegates to api and returns whether a ringing alarm was stopped', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      when(() => api.stopAlarm(5)).thenAnswer((_) async => true);
+      when(() => api.stopAlarm(6)).thenAnswer((_) async => false);
+
+      expect(await platform.stopAlarm(5), isTrue);
+      expect(await platform.stopAlarm(6), isFalse);
+      verify(() => api.stopAlarm(5)).called(1);
+      verify(() => api.stopAlarm(6)).called(1);
+    });
+
     test('emitEvent maps fired event with payload', () async {
       final api = _MockWarmAlarmApi();
       final platform = WarmAlarmAndroid(api: api);

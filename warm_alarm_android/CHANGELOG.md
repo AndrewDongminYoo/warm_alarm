@@ -1,3 +1,7 @@
+# Unreleased
+
+- Implement `stopAlarm(id)`: it sends the notification's Stop action for the ringing alarm, so the stop emits `WarmAlarmStopped`, keeps a recurring schedule armed and starts a configured wake check. It returns false and sends nothing when `id` is not the alarm ringing.
+
 # 0.1.7
 
 - Report `batteryOptimizationMayDelay` with limited readiness on API 23 and later when the app is not exempt from battery optimization.

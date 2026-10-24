@@ -1510,6 +1510,25 @@ class WarmAlarmApi {
     return pigeonVar_replyValue! as bool;
   }
 
+  Future<bool> stopAlarm(int id) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.stopAlarm$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[id]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as bool;
+  }
+
   Future<void> setKillWarning(String title, String body) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.warm_alarm.WarmAlarmApi.setKillWarning$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(

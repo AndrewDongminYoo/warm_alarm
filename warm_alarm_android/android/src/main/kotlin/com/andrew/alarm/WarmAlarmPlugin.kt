@@ -442,6 +442,17 @@ class WarmAlarmPlugin :
         )
     }
 
+    override fun stopAlarm(
+        id: Long,
+        callback: (Result<Boolean>) -> Unit,
+    ) {
+        if (!WarmAlarmIds.isSupported(id)) {
+            callback(Result.failure(WarmAlarmIds.error(id)))
+            return
+        }
+        callback(Result.success(WarmAlarmForegroundService.requestStop(context, id)))
+    }
+
     override fun setKillWarning(
         title: String,
         body: String,
