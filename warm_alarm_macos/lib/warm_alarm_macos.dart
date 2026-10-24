@@ -103,6 +103,7 @@ class WarmAlarmMacOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   ) async => _scheduleResultFromWire(
     await api.scheduleAlarm(_scheduleToWire(schedule)),
     wakeCheckRequested: schedule.wakeCheck != null,
+    fadeRequested: _fadeRequested(schedule.audio),
   );
 
   @override
@@ -361,6 +362,7 @@ WarmAlarmRecurrenceWire? _recurrenceToWire(WarmAlarmRecurrence? recurrence) {
 WarmAlarmScheduleResult _scheduleResultFromWire(
   WarmAlarmScheduleResultWire wire, {
   required bool wakeCheckRequested,
+  required bool fadeRequested,
 }) {
   return WarmAlarmScheduleResult.withWarnings(
     alarmId: wire.alarmId,
@@ -371,9 +373,21 @@ WarmAlarmScheduleResult _scheduleResultFromWire(
           code: WarmAlarmWarningCode.unsupportedWakeCheck,
           message: 'Wake-check is not supported on macOS.',
         ),
+      if (fadeRequested && (wire.customPlayerUnavailable ?? false))
+        const WarmAlarmWarning(
+          code: WarmAlarmWarningCode.unsupportedFadeIn,
+          message: "The system plays this alarm's sound on macOS, so fadeInDuration and fadeSteps are not applied.",
+        ),
       ...wire.warnings.map((warning) => WarmAlarmWarning(message: warning.message)),
     ],
   );
+}
+
+// Mirrors the native precedence: a non-null fadeSteps list wins over fadeInDuration, even when it is empty.
+bool _fadeRequested(WarmAlarmAudio audio) {
+  final fadeSteps = audio.fadeSteps;
+  if (fadeSteps != null) return fadeSteps.isNotEmpty;
+  return (audio.fadeInDuration ?? Duration.zero) > Duration.zero;
 }
 
 WarmAlarmScheduleWire _scheduleToWire(WarmAlarmSchedule schedule) {

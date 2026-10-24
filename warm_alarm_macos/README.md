@@ -135,7 +135,12 @@ The Dart wrapper buffers up to 64 events before the first stream listener.
 Custom playback selects a nonempty file path before an asset path.
 `volumeEnforced` affects only `AVAudioPlayer.volume`; it does not change or guarantee the system output volume.
 `vibrate` has no macOS background-haptic equivalent.
-Use `fadeSteps` for fades because `fadeInDuration` is currently a serialized hint with no playback effect.
+When `fadeSteps` is absent, a positive `fadeInDuration` becomes a linear ramp from silence to `volume`, or to 1.0 when `volume` is null, in 10 steps or one step per 100 ms, whichever is fewer.
+`fadeSteps` wins when both are set, and a zero duration means no fade.
+With `volumeEnforced`, the plugin sets the player volume to 1.0 once per second, starting after the last fade step.
+The volume therefore moves from the fade target to 1.0 about one second after the fade ends.
+A schedule without a custom file or asset plays the notification sound instead of the plugin player, so its schedule result reports `unsupportedFadeIn` when `fadeInDuration` or `fadeSteps` requests a fade.
+A notification delivered while the app is not in the foreground also plays only the notification sound; the schedule result cannot predict that case and does not warn about it.
 
 ---
 
