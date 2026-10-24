@@ -75,6 +75,10 @@ class WarmAlarmMock extends WarmAlarmPlatform {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('platforms without a native stop path stop nothing and report false', () async {
+    expect(await WarmAlarmMock().stopAlarm(7), isFalse);
+  });
+
   test('platforms without system sound preparation keep the legacy path', () async {
     expect(await WarmAlarmMock().prepareSystemSound(primaryFilePath: '/voice.aac'), isNull);
   });

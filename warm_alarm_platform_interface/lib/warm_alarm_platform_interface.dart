@@ -101,6 +101,18 @@ abstract class WarmAlarmPlatform extends PlatformInterface {
 
   Future<bool> isRinging({int? id});
 
+  /// Stops alarm [id] while it rings, through the same path as the alarm notification's Stop action.
+  ///
+  /// The stop keeps a recurring schedule armed and emits [WarmAlarmStopped] on [events], as the Stop
+  /// action does. Where the platform runs a wake-check, a schedule with [WarmAlarmSchedule.wakeCheck]
+  /// starts it here; [cancelAlarm] and [scheduleAlarm] for the same id end that wake-check, so call
+  /// neither for [id] afterwards while the wake-check should run.
+  ///
+  /// Returns true when [id] was ringing and the stop was started; the event can arrive after the
+  /// returned future completes. Returns false and changes nothing when [id] is not ringing or the
+  /// platform does not stop alarms through this path, so a host can fall back to its own dismissal.
+  Future<bool> stopAlarm(int id) async => false;
+
   Future<void> setKillWarning({required String title, required String body});
 
   Future<void> clearKillWarning();
