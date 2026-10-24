@@ -553,6 +553,16 @@ void main() {
       verify(() => warmAlarmPlatform.isRinging()).called(1);
     });
 
+    test('stopAlarm delegates to platform and keeps its result', () async {
+      when(() => warmAlarmPlatform.stopAlarm(3)).thenAnswer((_) async => true);
+      when(() => warmAlarmPlatform.stopAlarm(4)).thenAnswer((_) async => false);
+
+      expect(await WarmAlarm.stopAlarm(3), isTrue);
+      expect(await WarmAlarm.stopAlarm(4), isFalse);
+      verify(() => warmAlarmPlatform.stopAlarm(3)).called(1);
+      verify(() => warmAlarmPlatform.stopAlarm(4)).called(1);
+    });
+
     test('setKillWarning delegates to platform', () async {
       when(
         () => warmAlarmPlatform.setKillWarning(

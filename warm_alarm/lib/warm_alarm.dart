@@ -181,6 +181,12 @@ class WarmAlarm {
   /// Reports whether [id], or any alarm when omitted, is currently ringing.
   static Future<bool> isRinging({int? id}) => _platform.isRinging(id: id);
 
+  /// Stops alarm [id] while it rings, through the same path as its notification's Stop action.
+  /// On Android this starts a configured wake-check; do not call [cancelAlarm] or [scheduleAlarm] for [id]
+  /// afterwards while it should run. Returns false and changes nothing when [id] is not ringing or the
+  /// platform has no such path (iOS and macOS), so the caller can fall back to its own dismissal.
+  static Future<bool> stopAlarm(int id) => _platform.stopAlarm(id);
+
   /// Configures the platform's app-termination warning text.
   static Future<void> setKillWarning({
     required String title,
