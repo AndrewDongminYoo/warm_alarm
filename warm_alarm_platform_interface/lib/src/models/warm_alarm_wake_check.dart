@@ -1,6 +1,6 @@
 /// Configures a follow-up prompt after the user stops an alarm, and the retrigger when nobody answers.
 ///
-/// Android reads [title], [body] and [confirmActionTitle] from its next release, which also returns them from
+/// warm_alarm_android 0.1.7 and later read [title], [body] and [confirmActionTitle] and return them from
 /// `getScheduledAlarms`; earlier Android releases keep the default prompt text and return these fields null.
 /// iOS and macOS do not support wake-check and ignore these fields.
 final class WarmAlarmWakeCheck {

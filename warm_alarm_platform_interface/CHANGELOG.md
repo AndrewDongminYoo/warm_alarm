@@ -1,6 +1,7 @@
-# Unreleased
+# 0.2.1
 
-- Document that Android reads the `WarmAlarmWakeCheck` prompt fields `title`, `body` and `confirmActionTitle` from its next release, and that iOS and macOS ignore them.
+- Document that warm_alarm_android 0.1.7 reads the `WarmAlarmWakeCheck` prompt fields `title`, `body` and `confirmActionTitle`, and that iOS and macOS ignore them.
+- Document that warm_alarm_android 0.1.7, warm_alarm_ios 0.1.14 and warm_alarm_macos 0.1.9 apply `fadeInDuration` on the plugin player, and that the Apple packages report `unsupportedFadeIn` when the system plays the alarm.
 
 # 0.2.0
 
