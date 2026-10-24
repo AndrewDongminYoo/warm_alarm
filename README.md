@@ -31,7 +31,7 @@ Add `warm_alarm` to your Flutter app.
 
 ```yaml
 dependencies:
-  warm_alarm: ^0.1.9
+  warm_alarm: ^0.2.1
 ```
 
 Then run:
