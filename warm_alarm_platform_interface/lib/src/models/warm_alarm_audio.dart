@@ -25,9 +25,10 @@ final class WarmAlarmAudio {
 
   /// Time for a linear fade from silence to [volume], or to 1.0 when [volume] is null.
   /// When [fadeSteps] is also set, [fadeSteps] wins and this value is ignored.
-  /// A backend that does not apply the fade can report [WarmAlarmWarningCode.unsupportedFadeIn].
-  /// The current Android, iOS, and macOS backends neither apply this value nor report that code.
-  /// Use [fadeSteps] for a fade that plays today.
+  /// A backend that does not apply the fade reports [WarmAlarmWarningCode.unsupportedFadeIn].
+  /// warm_alarm_android 0.1.7, warm_alarm_ios 0.1.14 and warm_alarm_macos 0.1.9 apply it on the plugin player.
+  /// iOS and macOS report that code when the system plays the alarm instead (AlarmKit or the default sound).
+  /// Earlier platform releases neither apply this value nor report the code.
   final Duration? fadeInDuration;
 
   /// Explicit volume points for the fade.
