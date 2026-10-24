@@ -40,7 +40,7 @@ android {
     dependencies {
         testImplementation 'org.json:json:20260522'
         testImplementation 'org.jetbrains.kotlin:kotlin-test'
-        testImplementation 'org.mockito:mockito-core:5.0.0'
+        testImplementation 'org.mockito:mockito-core:5.24.0'
         // The instrumented test needs a real PendingIntent registry, nothing more:
         // plain JUnit4 under AndroidJUnitRunner, without androidx.test.ext.
         androidTestImplementation 'androidx.test:runner:1.6.2'
