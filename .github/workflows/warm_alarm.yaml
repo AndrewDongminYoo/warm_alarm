@@ -31,7 +31,7 @@ on:
 
 jobs:
   spell-check:
-    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/spell_check.yml@7af5da7884ffd1a1223fec2e0bab23026499e9f4 # v2.0.1
+    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/spell_check.yml@bf86fc749b907c6cc60e655f7f2ef619287b1b15 # v2.0.3
     with:
       config: cspell.config.yaml
       includes: |
@@ -41,7 +41,7 @@ jobs:
       modified_files_only: false
 
   build:
-    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/flutter_package.yml@7af5da7884ffd1a1223fec2e0bab23026499e9f4 # v2.0.1
+    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/flutter_package.yml@bf86fc749b907c6cc60e655f7f2ef619287b1b15 # v2.0.3
     with:
       flutter_version: 3.47.7
       coverage_excludes: "**/*.g.dart"
