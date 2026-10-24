@@ -577,6 +577,7 @@ class WarmAlarmScheduleResultWire {
     required this.alarmId,
     required this.readiness,
     required this.warnings,
+    this.customPlayerUnavailable,
   });
 
   int alarmId;
@@ -585,11 +586,15 @@ class WarmAlarmScheduleResultWire {
 
   List<WarmAlarmWarningWire> warnings;
 
+  /// True when delivery hands audio to the system and the plugin player does not play.
+  bool? customPlayerUnavailable;
+
   List<Object?> _toList() {
     return <Object?>[
       alarmId,
       readiness,
       warnings,
+      customPlayerUnavailable,
     ];
   }
 
@@ -602,6 +607,7 @@ class WarmAlarmScheduleResultWire {
       alarmId: result[0]! as int,
       readiness: result[1]! as WarmAlarmReadinessWire,
       warnings: (result[2]! as List<Object?>).cast<WarmAlarmWarningWire>(),
+      customPlayerUnavailable: result[3] as bool?,
     );
   }
 
@@ -614,7 +620,7 @@ class WarmAlarmScheduleResultWire {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(alarmId, other.alarmId) && _deepEquals(readiness, other.readiness) && _deepEquals(warnings, other.warnings);
+    return _deepEquals(alarmId, other.alarmId) && _deepEquals(readiness, other.readiness) && _deepEquals(warnings, other.warnings) && _deepEquals(customPlayerUnavailable, other.customPlayerUnavailable);
   }
 
   @override
@@ -623,7 +629,7 @@ class WarmAlarmScheduleResultWire {
 
   @override
   String toString() {
-    return 'WarmAlarmScheduleResultWire(alarmId: $alarmId, readiness: $readiness, warnings: $warnings)';
+    return 'WarmAlarmScheduleResultWire(alarmId: $alarmId, readiness: $readiness, warnings: $warnings, customPlayerUnavailable: $customPlayerUnavailable)';
   }
 }
 

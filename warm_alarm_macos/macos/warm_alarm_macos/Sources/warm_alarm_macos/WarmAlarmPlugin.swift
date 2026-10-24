@@ -604,8 +604,14 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                     self.getReadiness { result in
                         let readiness = (try? result.get())
                             ?? WarmAlarmReadinessWire(level: .limited, reasons: [.backgroundExecutionLimited])
+                        // The default notification sound never reaches the plugin player.
+                        let customPlayerUnavailable = WarmAlarmAudioSource.select(
+                            filePath: data.filePath, assetPath: data.assetPath
+                        ) == .none
                         WarmAlarmPlatformReply.complete(.success(WarmAlarmScheduleResultWire(
-                            alarmId: schedule.id, readiness: readiness, warnings: [])), completion: completion, finish: finish)
+                            alarmId: schedule.id, readiness: readiness, warnings: [],
+                            customPlayerUnavailable: customPlayerUnavailable
+                        )), completion: completion, finish: finish)
                     }
                 }
             }

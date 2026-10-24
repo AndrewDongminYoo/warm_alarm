@@ -511,6 +511,8 @@ struct WarmAlarmScheduleResultWire: Hashable, CustomStringConvertible {
   var alarmId: Int64
   var readiness: WarmAlarmReadinessWire
   var warnings: [WarmAlarmWarningWire]
+  /// True when delivery hands audio to the system and the plugin player does not play.
+  var customPlayerUnavailable: Bool? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -518,11 +520,13 @@ struct WarmAlarmScheduleResultWire: Hashable, CustomStringConvertible {
     let alarmId = pigeonVar_list[0] as! Int64
     let readiness = pigeonVar_list[1] as! WarmAlarmReadinessWire
     let warnings = pigeonVar_list[2] as! [WarmAlarmWarningWire]
+    let customPlayerUnavailable: Bool? = nilOrValue(pigeonVar_list[3])
 
     return WarmAlarmScheduleResultWire(
       alarmId: alarmId,
       readiness: readiness,
-      warnings: warnings
+      warnings: warnings,
+      customPlayerUnavailable: customPlayerUnavailable
     )
   }
   func toList() -> [Any?] {
@@ -530,13 +534,14 @@ struct WarmAlarmScheduleResultWire: Hashable, CustomStringConvertible {
       alarmId,
       readiness,
       warnings,
+      customPlayerUnavailable,
     ]
   }
   static func == (lhs: WarmAlarmScheduleResultWire, rhs: WarmAlarmScheduleResultWire) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return MessagesPigeonInternal.deepEquals(lhs.alarmId, rhs.alarmId) && MessagesPigeonInternal.deepEquals(lhs.readiness, rhs.readiness) && MessagesPigeonInternal.deepEquals(lhs.warnings, rhs.warnings)
+    return MessagesPigeonInternal.deepEquals(lhs.alarmId, rhs.alarmId) && MessagesPigeonInternal.deepEquals(lhs.readiness, rhs.readiness) && MessagesPigeonInternal.deepEquals(lhs.warnings, rhs.warnings) && MessagesPigeonInternal.deepEquals(lhs.customPlayerUnavailable, rhs.customPlayerUnavailable)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -544,10 +549,11 @@ struct WarmAlarmScheduleResultWire: Hashable, CustomStringConvertible {
     MessagesPigeonInternal.deepHash(value: alarmId, hasher: &hasher)
     MessagesPigeonInternal.deepHash(value: readiness, hasher: &hasher)
     MessagesPigeonInternal.deepHash(value: warnings, hasher: &hasher)
+    MessagesPigeonInternal.deepHash(value: customPlayerUnavailable, hasher: &hasher)
   }
 
   public var description: String {
-    return "WarmAlarmScheduleResultWire(alarmId: \(String(describing: alarmId)), readiness: \(String(describing: readiness)), warnings: \(String(describing: warnings)))"
+    return "WarmAlarmScheduleResultWire(alarmId: \(String(describing: alarmId)), readiness: \(String(describing: readiness)), warnings: \(String(describing: warnings)), customPlayerUnavailable: \(String(describing: customPlayerUnavailable)))"
   }
 }
 

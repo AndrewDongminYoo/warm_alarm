@@ -707,7 +707,11 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         do {
             let player = try AVAudioPlayer(contentsOf: url)
             try configureAudioSession()
-            let steps = schedule?.fadeSteps
+            let steps = WarmAlarmFadeRamp.resolve(
+                fadeSteps: schedule?.fadeSteps,
+                fadeInDurationMillis: schedule?.fadeInDurationMillis,
+                volume: schedule?.volume
+            )
             if let first = steps?.first, first.timeMillis == 0 {
                 player.volume = max(0.0, min(1.0, Float(first.volume)))
             } else if let volume = schedule?.volume {
@@ -726,7 +730,9 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             currentlyPlayingAlarmId = alarmId
             currentlyPlayingOccurrenceToken = occurrenceToken
             if let steps { applyFadeSteps(steps, to: player) }
-            if schedule?.volumeEnforced == true { startVolumeEnforcer(for: player) }
+            if schedule?.volumeEnforced == true {
+                startVolumeEnforcer(for: player, afterMillis: WarmAlarmFadeRamp.volumeEnforcerStartMillis(for: steps))
+            }
             return true
         } catch {
             emitPlaybackFailure(alarmId: alarmId, code: .audioPlaybackFailed, message: error.localizedDescription)
@@ -751,7 +757,22 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         }
     }
 
-    private func startVolumeEnforcer(for player: AVAudioPlayer) {
+    private func startVolumeEnforcer(for player: AVAudioPlayer, afterMillis delayMillis: Int64) {
+        guard delayMillis > 0 else {
+            scheduleVolumeEnforcerTimer(for: player)
+            return
+        }
+        // Cancelled with the fade work items, so stopping audio before the fade ends never starts the enforcer.
+        // cancel() cannot stop an item that is already running, so it re-checks that this player still plays.
+        let item = DispatchWorkItem { [weak self, weak player] in
+            guard let self, let player, self.audioPlayer === player else { return }
+            self.scheduleVolumeEnforcerTimer(for: player)
+        }
+        fadeWorkItems.append(item)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Double(delayMillis) / 1000.0, execute: item)
+    }
+
+    private func scheduleVolumeEnforcerTimer(for player: AVAudioPlayer) {
         volumeEnforcerTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak player] _ in
             player?.volume = 1.0
         }

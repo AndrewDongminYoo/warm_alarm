@@ -3052,11 +3052,17 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                             if let capacityWarning = notificationOutcome?.warning {
                                 warnings.append(capacityWarning)
                             }
+                            // AlarmKit alerts and the default notification sound never reach the plugin player.
+                            let customPlayerUnavailable = outcome.backend == .alarmKit
+                                || WarmAlarmAudioSource.select(
+                                    filePath: storedSchedule.filePath, assetPath: storedSchedule.assetPath
+                                ) == .none
                             self.captureNotificationSnapshot(effectiveBackend: outcome.backend) { _, readiness in
                                 WarmAlarmPlatformReply.complete(.success(WarmAlarmScheduleResultWire(
                                     alarmId: schedule.id,
                                     readiness: readiness,
-                                    warnings: warnings
+                                    warnings: warnings,
+                                    customPlayerUnavailable: customPlayerUnavailable
                                 )), completion: completion, finish: finish)
                             }
                         }

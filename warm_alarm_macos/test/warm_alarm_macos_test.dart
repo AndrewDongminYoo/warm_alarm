@@ -853,6 +853,95 @@ void main() {
       }
     }
 
+    for (final (description, audio, customPlayerUnavailable, warns) in <(String, WarmAlarmAudio, bool?, bool)>[
+      ('fadeInDuration with system audio', const WarmAlarmAudio(fadeInDuration: Duration(seconds: 3)), true, true),
+      (
+        'fadeSteps with system audio',
+        const WarmAlarmAudio(fadeSteps: [WarmAlarmVolumeFadeStep(time: Duration.zero, volume: 0.2)]),
+        true,
+        true,
+      ),
+      (
+        'fadeInDuration with the plugin player',
+        const WarmAlarmAudio(fadeInDuration: Duration(seconds: 3)),
+        false,
+        false,
+      ),
+      (
+        'fadeInDuration without the native flag',
+        const WarmAlarmAudio(fadeInDuration: Duration(seconds: 3)),
+        null,
+        false,
+      ),
+      ('zero fadeInDuration with system audio', const WarmAlarmAudio(fadeInDuration: Duration.zero), true, false),
+      ('empty fadeSteps with system audio', const WarmAlarmAudio(fadeSteps: []), true, false),
+      (
+        'empty fadeSteps over fadeInDuration with system audio',
+        const WarmAlarmAudio(fadeSteps: [], fadeInDuration: Duration(seconds: 3)),
+        true,
+        false,
+      ),
+      ('no fade with system audio', const WarmAlarmAudio(), true, false),
+    ]) {
+      test('scheduleAlarm maps $description to ${warns ? 'an' : 'no'} unsupportedFadeIn warning', () async {
+        final api = _MockWarmAlarmApi();
+        final platform = WarmAlarmMacOS(api: api);
+        when(() => api.scheduleAlarm(any())).thenAnswer(
+          (_) async => WarmAlarmScheduleResultWire(
+            alarmId: 72,
+            readiness: WarmAlarmReadinessWire(level: WarmAlarmReadinessLevelWire.ready, reasons: []),
+            warnings: [],
+            customPlayerUnavailable: customPlayerUnavailable,
+          ),
+        );
+
+        final result = await platform.scheduleAlarm(
+          WarmAlarmSchedule(
+            id: 72,
+            scheduledAt: DateTime(2026, 5, 1, 8),
+            notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+            audio: audio,
+          ),
+        );
+
+        expect(result.warnings.map((warning) => warning.code), [if (warns) WarmAlarmWarningCode.unsupportedFadeIn]);
+      });
+    }
+
+    test('scheduleAlarm orders the fade warning after wake-check and before native warnings', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmMacOS(api: api);
+      when(() => api.scheduleAlarm(any())).thenAnswer(
+        (_) async => WarmAlarmScheduleResultWire(
+          alarmId: 73,
+          readiness: WarmAlarmReadinessWire(level: WarmAlarmReadinessLevelWire.ready, reasons: []),
+          warnings: [WarmAlarmWarningWire(message: 'Native warning.')],
+          customPlayerUnavailable: true,
+        ),
+      );
+
+      final result = await platform.scheduleAlarm(
+        WarmAlarmSchedule(
+          id: 73,
+          scheduledAt: DateTime(2026, 5, 1, 8),
+          notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+          audio: const WarmAlarmAudio(fadeInDuration: Duration(seconds: 3)),
+          wakeCheck: const WarmAlarmWakeCheck(checkDelay: Duration(minutes: 1)),
+        ),
+      );
+
+      expect(result.warnings.map((warning) => warning.code), [
+        WarmAlarmWarningCode.unsupportedWakeCheck,
+        WarmAlarmWarningCode.unsupportedFadeIn,
+        null,
+      ]);
+      expect(
+        result.warnings[1].message,
+        "The system plays this alarm's sound on macOS, so fadeInDuration and fadeSteps are not applied.",
+      );
+      expect(result.warnings.last.message, 'Native warning.');
+    });
+
     test('scheduleAlarm preserves the native warning without wake-check', () async {
       final api = _MockWarmAlarmApi();
       final platform = WarmAlarmMacOS(api: api);

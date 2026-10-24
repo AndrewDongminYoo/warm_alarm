@@ -160,11 +160,15 @@ class WarmAlarmScheduleResultWire {
     required this.alarmId,
     required this.readiness,
     required this.warnings,
+    this.customPlayerUnavailable,
   });
 
   final int alarmId;
   final WarmAlarmReadinessWire readiness;
   final List<WarmAlarmWarningWire> warnings;
+
+  /// True when delivery hands audio to the system and the plugin player does not play.
+  final bool? customPlayerUnavailable;
 }
 
 class WarmAlarmNotificationWire {

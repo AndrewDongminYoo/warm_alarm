@@ -1,3 +1,10 @@
+# Unreleased
+
+- Apply `fadeInDuration` on the plugin `AVAudioPlayer` as a linear fade from silence to `volume`, or to 1.0 when `volume` is null, in 10 steps or one step per 100 ms, whichever is fewer. `fadeSteps` still wins when both are set, and a zero duration plays without a fade.
+- Report `unsupportedFadeIn` after any wake-check warning and before native warnings when `fadeInDuration` or `fadeSteps` requests a fade but AlarmKit or the default notification sound plays the alarm instead of the plugin player.
+- Start the `volumeEnforced` 1-second volume enforcer after the last fade step, so it no longer interrupts a `fadeInDuration` ramp or `fadeSteps` fade.
+- Require platform interface 0.2.0.
+
 # 0.1.13
 
 - Return wake-check and native scheduling warnings as separate read-only list entries, keeping `warning` as the first entry or null.
