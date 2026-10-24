@@ -1,3 +1,9 @@
+# 0.2.0
+
+- **Breaking:** Re-export platform interface 0.2.1, whose `WarmAlarmWarningCode` gains `unsupportedFadeIn`; code that switches exhaustively over `WarmAlarmWarningCode` needs a case for the new value.
+- Require Android 0.1.7, iOS 0.1.14, and macOS 0.1.9: every platform now applies `fadeInDuration` on its plugin player, and iOS and macOS report `unsupportedFadeIn` when the system plays the alarm.
+- Android reads the `WarmAlarmWakeCheck` prompt text (`title`, `body`, `confirmActionTitle`), reports `batteryOptimizationMayDelay` readiness on API 23 and later, and opens the battery optimization settings list.
+
 # 0.1.9
 
 - Require platform interface 0.1.8, Android 0.1.6, iOS 0.1.13, and macOS 0.1.8 so consumers receive separate scheduling warnings.
