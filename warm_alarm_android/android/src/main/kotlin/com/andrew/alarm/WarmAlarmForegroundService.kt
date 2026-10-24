@@ -49,6 +49,25 @@ class WarmAlarmForegroundService : Service() {
                 },
             )
         }
+
+        /**
+         * Sends the notification's Stop action for [alarmId], so handleStop
+         * emits STOPPED and arms the wake-check exactly as a tap on Stop does.
+         * Returns false and sends nothing when [alarmId] is not the alarm ringing.
+         */
+        fun requestStop(
+            context: Context,
+            alarmId: Long,
+        ): Boolean {
+            if (!isRinging || currentAlarmId != alarmId) return false
+            context.startService(
+                Intent(context, WarmAlarmForegroundService::class.java).apply {
+                    action = ACTION_STOP
+                    putExtra(EXTRA_ALARM_ID, alarmId)
+                },
+            )
+            return true
+        }
     }
 
     private var mediaPlayer: MediaPlayer? = null

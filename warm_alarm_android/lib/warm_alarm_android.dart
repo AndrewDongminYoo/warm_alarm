@@ -98,6 +98,9 @@ class WarmAlarmAndroid extends WarmAlarmPlatform implements WarmAlarmEventsApi {
   Future<bool> isRinging({int? id}) => api.isRinging(id);
 
   @override
+  Future<bool> stopAlarm(int id) => api.stopAlarm(id);
+
+  @override
   Future<void> setKillWarning({required String title, required String body}) => api.setKillWarning(title, body);
 
   @override
