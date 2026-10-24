@@ -7,11 +7,9 @@ updates:
       interval: weekly
       day: monday
     groups:
+      # Every version update, majors included, in one PR; CI runs the actions it bumps.
       actions:
         patterns: ["*"]
-        update-types:
-          - minor
-          - patch
       github-actions-security:
         applies-to: security-updates
         patterns:
@@ -42,6 +40,22 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 3
+    ignore:
+      # Runtime majors without a security fix stay off (operator, 2026-10-24); com.android.library 9.4.1 came as #139 and org.json:json 20260814 as #138.
+      # update-types limits this to version updates; security updates still open.
+      - dependency-name: com.android.library
+        update-types:
+          - version-update:semver-major
+      - dependency-name: org.json:json
+        update-types:
+          - version-update:semver-major
+      # Gradle wrapper upgrades follow the Flutter/AGP (or React Native) toolchain, not Dependabot.
+      # update-types limits this to version updates; security updates still open.
+      - dependency-name: gradle-wrapper
+        update-types:
+          - version-update:semver-patch
+          - version-update:semver-minor
+          - version-update:semver-major
     groups:
       gradle-minor-patch:
         patterns:
