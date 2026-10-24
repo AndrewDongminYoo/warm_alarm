@@ -219,11 +219,17 @@ class WarmAlarmWakeCheckWire {
     required this.checkDelayMillis,
     this.retriggerDelayMillis,
     this.maxRetriggers,
+    this.title,
+    this.body,
+    this.confirmActionTitle,
   });
 
   final int checkDelayMillis;
   final int? retriggerDelayMillis;
   final int? maxRetriggers;
+  final String? title;
+  final String? body;
+  final String? confirmActionTitle;
 }
 
 class WarmAlarmScheduleWire {

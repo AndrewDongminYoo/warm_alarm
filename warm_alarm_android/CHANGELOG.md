@@ -3,6 +3,10 @@
 - Report `batteryOptimizationMayDelay` with limited readiness on API 23 and later when the app is not exempt from battery optimization.
 - Open the battery optimization settings list from `openReadinessSettings(batteryOptimizationMayDelay)` without declaring a new permission.
 - Apply `fadeInDuration` as a linear fade from silence to `volume`, or to 1.0 when `volume` is null, in 10 steps or one step per 100 ms, whichever is fewer. `fadeSteps` still wins when both are set, and a zero duration plays without a fade.
+- Show the wake-check prompt with `WarmAlarmWakeCheck.title`, `body` and `confirmActionTitle` when they are set, and keep the alarm title, "Are you awake?" and the stop label, or "I'm awake", when they are null.
+- Persist the wake-check prompt text across reboot and return it from `getScheduledAlarms`. Schedules stored by an earlier release load with the text null.
+- Use the schedule's `androidIcon` and `androidIconColor` for the wake-check prompt when they are set, and keep the system alert icon otherwise.
+- Require platform interface 0.2.0 for the wake-check prompt fields.
 
 # 0.1.6
 

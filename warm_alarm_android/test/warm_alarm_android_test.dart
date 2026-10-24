@@ -710,6 +710,44 @@ void main() {
       expect(wire.checkDelayMillis, 5 * 60 * 1000);
       expect(wire.retriggerDelayMillis, 2 * 60 * 1000);
       expect(wire.maxRetriggers, 1);
+      expect(wire.title, isNull);
+      expect(wire.body, isNull);
+      expect(wire.confirmActionTitle, isNull);
+    });
+
+    test('scheduleAlarm passes wakeCheck prompt text to api', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      final captured = <WarmAlarmScheduleWire>[];
+      when(() => api.scheduleAlarm(any())).thenAnswer((invocation) async {
+        captured.add(invocation.positionalArguments[0] as WarmAlarmScheduleWire);
+        return WarmAlarmScheduleResultWire(
+          warnings: [],
+          alarmId: 3,
+          readiness: WarmAlarmReadinessWire(
+            level: WarmAlarmReadinessLevelWire.ready,
+            reasons: <WarmAlarmReadinessReasonWire>[],
+          ),
+        );
+      });
+      await platform.scheduleAlarm(
+        WarmAlarmSchedule(
+          id: 3,
+          scheduledAt: DateTime(2026, 5, 1, 7),
+          notification: const WarmAlarmNotification(title: 'T', body: 'B', stopActionTitle: 'Dismiss alarm'),
+          audio: const WarmAlarmAudio(),
+          wakeCheck: const WarmAlarmWakeCheck(
+            checkDelay: Duration(minutes: 5),
+            title: '기상 확인',
+            body: '일어나셨나요?',
+            confirmActionTitle: '일어났어요',
+          ),
+        ),
+      );
+      final wire = captured.single.wakeCheck!;
+      expect(wire.title, '기상 확인');
+      expect(wire.body, '일어나셨나요?');
+      expect(wire.confirmActionTitle, '일어났어요');
     });
 
     test('scheduleAlarm passes null wakeCheck when not configured', () async {
@@ -901,6 +939,9 @@ void main() {
       expect(snapshots.single.audio.volume, 0.8);
       expect(snapshots.single.snooze!.duration.inMinutes, 5);
       expect(snapshots.single.wakeCheck!.checkDelay.inSeconds, 60);
+      expect(snapshots.single.wakeCheck!.title, isNull);
+      expect(snapshots.single.wakeCheck!.body, isNull);
+      expect(snapshots.single.wakeCheck!.confirmActionTitle, isNull);
       expect(snapshots.single.payload, '{"key":"val"}');
     });
   });
@@ -1134,6 +1175,34 @@ void main() {
         expect(snapshots.single.wakeCheck!.maxRetriggers, 3);
       },
     );
+
+    test('getScheduledAlarms maps snapshot with wakeCheck prompt text', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      when(api.getScheduledAlarms).thenAnswer(
+        (_) async => <WarmAlarmSnapshotWire>[
+          WarmAlarmSnapshotWire(
+            id: 31,
+            scheduledAtMillis: DateTime(2026, 5, 1, 7).millisecondsSinceEpoch,
+            notification: WarmAlarmNotificationWire(title: 'T', body: 'B', keepNotificationAfterAlarmEnds: false),
+            audio: WarmAlarmAudioWire(loop: false, vibrate: false, volumeEnforced: false),
+            wakeCheck: WarmAlarmWakeCheckWire(
+              checkDelayMillis: 60000,
+              title: '기상 확인',
+              body: '일어나셨나요?',
+              confirmActionTitle: '일어났어요',
+            ),
+            androidFullScreenIntent: true,
+          ),
+        ],
+      );
+
+      final wakeCheck = (await platform.getScheduledAlarms()).single.wakeCheck!;
+
+      expect(wakeCheck.title, '기상 확인');
+      expect(wakeCheck.body, '일어나셨나요?');
+      expect(wakeCheck.confirmActionTitle, '일어났어요');
+    });
   });
 
   group('WarmAlarmAndroid Phase 4 features', () {

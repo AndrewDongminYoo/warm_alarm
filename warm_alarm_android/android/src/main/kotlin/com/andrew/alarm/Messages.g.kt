@@ -844,7 +844,10 @@ data class WarmAlarmSnoozeWire (
 data class WarmAlarmWakeCheckWire (
   val checkDelayMillis: Long,
   val retriggerDelayMillis: Long? = null,
-  val maxRetriggers: Long? = null
+  val maxRetriggers: Long? = null,
+  val title: String? = null,
+  val body: String? = null,
+  val confirmActionTitle: String? = null
 )
  {
   companion object {
@@ -852,7 +855,10 @@ data class WarmAlarmWakeCheckWire (
       val checkDelayMillis = pigeonVar_list[0] as Long
       val retriggerDelayMillis = pigeonVar_list[1] as Long?
       val maxRetriggers = pigeonVar_list[2] as Long?
-      return WarmAlarmWakeCheckWire(checkDelayMillis, retriggerDelayMillis, maxRetriggers)
+      val title = pigeonVar_list[3] as String?
+      val body = pigeonVar_list[4] as String?
+      val confirmActionTitle = pigeonVar_list[5] as String?
+      return WarmAlarmWakeCheckWire(checkDelayMillis, retriggerDelayMillis, maxRetriggers, title, body, confirmActionTitle)
     }
   }
   fun toList(): List<Any?> {
@@ -860,6 +866,9 @@ data class WarmAlarmWakeCheckWire (
       checkDelayMillis,
       retriggerDelayMillis,
       maxRetriggers,
+      title,
+      body,
+      confirmActionTitle,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -870,7 +879,7 @@ data class WarmAlarmWakeCheckWire (
       return true
     }
     val other = other as WarmAlarmWakeCheckWire
-    return MessagesPigeonUtils.deepEquals(this.checkDelayMillis, other.checkDelayMillis) && MessagesPigeonUtils.deepEquals(this.retriggerDelayMillis, other.retriggerDelayMillis) && MessagesPigeonUtils.deepEquals(this.maxRetriggers, other.maxRetriggers)
+    return MessagesPigeonUtils.deepEquals(this.checkDelayMillis, other.checkDelayMillis) && MessagesPigeonUtils.deepEquals(this.retriggerDelayMillis, other.retriggerDelayMillis) && MessagesPigeonUtils.deepEquals(this.maxRetriggers, other.maxRetriggers) && MessagesPigeonUtils.deepEquals(this.title, other.title) && MessagesPigeonUtils.deepEquals(this.body, other.body) && MessagesPigeonUtils.deepEquals(this.confirmActionTitle, other.confirmActionTitle)
   }
 
   override fun hashCode(): Int {
@@ -878,10 +887,13 @@ data class WarmAlarmWakeCheckWire (
     result = 31 * result + MessagesPigeonUtils.deepHash(this.checkDelayMillis)
     result = 31 * result + MessagesPigeonUtils.deepHash(this.retriggerDelayMillis)
     result = 31 * result + MessagesPigeonUtils.deepHash(this.maxRetriggers)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.title)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.body)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.confirmActionTitle)
     return result
   }
   override fun toString(): String {
-    return "WarmAlarmWakeCheckWire(checkDelayMillis=$checkDelayMillis, retriggerDelayMillis=$retriggerDelayMillis, maxRetriggers=$maxRetriggers)"
+    return "WarmAlarmWakeCheckWire(checkDelayMillis=$checkDelayMillis, retriggerDelayMillis=$retriggerDelayMillis, maxRetriggers=$maxRetriggers, title=$title, body=$body, confirmActionTitle=$confirmActionTitle)"
   }
 }
 

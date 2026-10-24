@@ -387,6 +387,9 @@ WarmAlarmSnapshot _snapshotFromWire(WarmAlarmSnapshotWire wire) {
                 ? null
                 : Duration(milliseconds: wire.wakeCheck!.retriggerDelayMillis!),
             maxRetriggers: wire.wakeCheck!.maxRetriggers,
+            title: wire.wakeCheck!.title,
+            body: wire.wakeCheck!.body,
+            confirmActionTitle: wire.wakeCheck!.confirmActionTitle,
           ),
     payload: wire.payload,
     androidFullScreenIntent: wire.androidFullScreenIntent,
@@ -417,6 +420,9 @@ WarmAlarmWakeCheckWire? _wakeCheckToWire(WarmAlarmWakeCheck? check) {
     checkDelayMillis: check.checkDelay.inMilliseconds,
     retriggerDelayMillis: check.retriggerDelay?.inMilliseconds,
     maxRetriggers: check.maxRetriggers,
+    title: check.title,
+    body: check.body,
+    confirmActionTitle: check.confirmActionTitle,
   );
 }
 
