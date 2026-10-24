@@ -1,6 +1,6 @@
 name: warm_alarm
 description: An independent Flutter alarm plugin extracted from WarmWake's core alarm functionality.
-version: 0.2.0
+version: 0.2.1
 
 homepage: https://github.com/AndrewDongminYoo/warm_alarm
 repository: https://github.com/AndrewDongminYoo/warm_alarm
@@ -25,10 +25,10 @@ flutter:
 dependencies:
   flutter:
     sdk: flutter
-  warm_alarm_android: ^0.1.7
+  warm_alarm_android: ^0.1.8
   warm_alarm_ios: ^0.1.14
   warm_alarm_macos: ^0.1.9
-  warm_alarm_platform_interface: ^0.2.1
+  warm_alarm_platform_interface: ^0.2.2
 
 dev_dependencies:
   flutter_test:
