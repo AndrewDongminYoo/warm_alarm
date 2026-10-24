@@ -1,4 +1,4 @@
-# Unreleased
+# 0.1.7
 
 - Report `batteryOptimizationMayDelay` with limited readiness on API 23 and later when the app is not exempt from battery optimization.
 - Open the battery optimization settings list from `openReadinessSettings(batteryOptimizationMayDelay)` without declaring a new permission.
