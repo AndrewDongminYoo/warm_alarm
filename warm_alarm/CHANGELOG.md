@@ -1,3 +1,9 @@
+# 0.2.1
+
+- Add `WarmAlarm.stopAlarm(id)`, which stops a ringing alarm through the same path as its notification's Stop action, so an app that dismisses from its own screen still starts the Android wake-check.
+  It returns false and changes nothing when the alarm is not ringing, and always on iOS and macOS, which keep the app's own dismissal path.
+- Require platform interface 0.2.2 and Android 0.1.8, the first releases that declare and implement `stopAlarm`.
+
 # 0.2.0
 
 - **Breaking:** Re-export platform interface 0.2.1, whose `WarmAlarmWarningCode` gains `unsupportedFadeIn`; code that switches exhaustively over `WarmAlarmWarningCode` needs a case for the new value.

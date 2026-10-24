@@ -35,7 +35,7 @@ Add `warm_alarm` to your Flutter app.
 
 ```yaml
 dependencies:
-  warm_alarm: ^0.1.9
+  warm_alarm: ^0.2.1
 ```
 
 Then run:
@@ -207,6 +207,7 @@ Custom activities use a separate opt-in from AlarmKit countdown presentation.
 | `hasAlarm()`                      | `Future<bool>`                        | Whether any future alarm is currently scheduled             |
 | `getAlarm(id)`                    | `Future<WarmAlarmSnapshot?>`          | Fetch a single future scheduled alarm by ID                 |
 | `isRinging({id})`                 | `Future<bool>`                        | Whether an alarm (or any alarm) is currently ringing        |
+| `stopAlarm(id)`                   | `Future<bool>`                        | Stop a ringing alarm as its Stop action does; false if not  |
 | `setKillWarning(...)`             | `Future<void>`                        | Configure app-termination warning text                      |
 | `clearKillWarning()`              | `Future<void>`                        | Clear the configured warning text                           |
 | `events`                          | `Stream<WarmAlarmEvent>`              | Real-time alarm lifecycle event stream                      |
