@@ -518,6 +518,42 @@ void main() {
       expect(result.warnings.last.code, isNull);
     });
 
+    test('scheduleAlarm maps and warns as before when wake-check sets prompt text', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmIOS(api: api);
+      final captured = <WarmAlarmScheduleWire>[];
+      when(() => api.scheduleAlarm(any())).thenAnswer((invocation) async {
+        captured.add(invocation.positionalArguments[0] as WarmAlarmScheduleWire);
+        return WarmAlarmScheduleResultWire(
+          alarmId: 22,
+          readiness: WarmAlarmReadinessWire(level: WarmAlarmReadinessLevelWire.ready, reasons: []),
+          warnings: [],
+        );
+      });
+
+      final result = await platform.scheduleAlarm(
+        WarmAlarmSchedule(
+          id: 22,
+          scheduledAt: DateTime(2026, 5, 1, 8),
+          notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+          audio: const WarmAlarmAudio(),
+          wakeCheck: const WarmAlarmWakeCheck(
+            checkDelay: Duration(minutes: 1),
+            title: 'Wake check',
+            body: 'Still asleep?',
+            confirmActionTitle: 'I am up',
+          ),
+        ),
+      );
+
+      expect(captured.single.id, 22);
+      expect(captured.single.notification.title, 'T');
+      expect(captured.single.notification.body, 'B');
+      expect(result.alarmId, 22);
+      expect(result.warnings.map((warning) => warning.message), ['Wake-check is not supported on iOS.']);
+      expect(result.warning?.code, WarmAlarmWarningCode.unsupportedWakeCheck);
+    });
+
     for (final messages in <List<String>>[
       [],
       ['First native warning.'],
