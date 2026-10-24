@@ -1,8 +1,8 @@
 /// Configures a follow-up prompt after the user stops an alarm, and the retrigger when nobody answers.
 ///
-/// No platform package reads [title], [body] or [confirmActionTitle] yet, including Android, which supports wake-check.
-/// Until a later platform release adds support, the prompt keeps its default text, and an alarm returned by
-/// `getScheduledAlarms` has these fields null.
+/// Android reads [title], [body] and [confirmActionTitle] from its next release, which also returns them from
+/// `getScheduledAlarms`; earlier Android releases keep the default prompt text and return these fields null.
+/// iOS and macOS do not support wake-check and ignore these fields.
 final class WarmAlarmWakeCheck {
   const WarmAlarmWakeCheck({
     required this.checkDelay,

@@ -1,3 +1,7 @@
+# Unreleased
+
+- Document that Android reads the `WarmAlarmWakeCheck` prompt fields `title`, `body` and `confirmActionTitle` from its next release, and that iOS and macOS ignore them.
+
 # 0.2.0
 
 - **Breaking:** Add `WarmAlarmWarningCode.unsupportedFadeIn` for a backend that ignored `fadeInDuration` because it did not own playback or does not support a fade.
