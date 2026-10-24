@@ -43,6 +43,7 @@ Apps must wait for the snapshot before starting a second player.
 | `cancelAllAlarms()`               | `Future<void>`                        | Cancel all scheduled alarms                                 |
 | `getScheduledAlarms()`            | `Future<List<WarmAlarmSnapshot>>`     | List all currently scheduled alarms                         |
 | `isRinging({id})`                 | `Future<bool>`                        | Whether an alarm (or any alarm) is currently ringing        |
+| `stopAlarm(id)`                   | `Future<bool>`                        | Stop a ringing alarm as its Stop action does; false if not  |
 | `setKillWarning(...)`             | `Future<void>`                        | Configure app-termination warning text                      |
 | `clearKillWarning()`              | `Future<void>`                        | Clear the configured warning text                           |
 | `events`                          | `Stream<WarmAlarmEvent>`              | Real-time alarm lifecycle event stream                      |
@@ -51,6 +52,7 @@ The two remediation methods carry an `unsupported` default, so a platform packag
 earlier version of this contract keeps working and simply reports that it cannot remediate.
 The endorsed Android, iOS, and macOS implementations override those remediation defaults.
 Live Activity methods also have inherited `unsupported` defaults, and `prepareSystemSound()` defaults to null.
+`stopAlarm()` defaults to false, which means the platform stopped nothing and the host keeps its own dismissal path; no endorsed implementation overrides it yet.
 The iOS implementation provides these optional integrations when its host and operating system support them.
 `openReadinessSettings()` hands the user off to a separate screen and returns as soon as the
 platform accepts the request, so its snapshot describes the state before the user acted on it — call

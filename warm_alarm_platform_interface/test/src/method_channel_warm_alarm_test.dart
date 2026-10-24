@@ -51,6 +51,11 @@ void main() {
       expect(log, isEmpty);
     });
 
+    test('stopAlarm reports false without channel traffic', () async {
+      expect(await methodChannelWarmAlarm.stopAlarm(1), isFalse);
+      expect(log, isEmpty);
+    });
+
     test('cancelAllAlarms completes without channel traffic', () async {
       await expectLater(methodChannelWarmAlarm.cancelAllAlarms(), completes);
       expect(log, isEmpty);
