@@ -1,4 +1,4 @@
-# Unreleased
+# 0.1.8
 
 - Implement `stopAlarm(id)`: it sends the notification's Stop action for the ringing alarm, so the stop emits `WarmAlarmStopped`, keeps a recurring schedule armed and starts a configured wake check. It returns false and sends nothing when `id` is not the alarm ringing.
 
