@@ -217,10 +217,10 @@ See the platform-specific triggers and removal behavior for [Android](../warm_al
 
 On iOS and macOS, a schedule with `wakeCheck` returns `warning.code == WarmAlarmWarningCode.unsupportedWakeCheck` because wake-check cannot run there.
 The wake-check request is ignored.
-The published iOS 0.1.13 and macOS 0.1.8 releases keep native scheduling warnings as separate entries in `result.warnings`, after the wake-check entry.
-Facade 0.1.9 requires interface 0.1.8 and those implementations, together with Android 0.1.6.
-The legacy `warning` getter returns the first entry; earlier Apple versions retain native messages inside that single warning instead.
-`unsupportedWakeCheck` is currently the only structured warning code; other native warnings can have a null code.
+iOS and macOS keep native scheduling warnings as separate entries in `result.warnings`, after the wake-check entry.
+The legacy `warning` getter returns the first entry; Apple versions before iOS 0.1.13 and macOS 0.1.8 retain native messages inside that single warning instead.
+The structured warning codes are `unsupportedWakeCheck` and `unsupportedFadeIn`; iOS and macOS place `unsupportedFadeIn` after any wake-check entry and before native warnings when a requested fade cannot play because the system plays the alarm.
+Other native warnings can have a null code.
 Warnings do not cover every ignored option; see the [audio contract](#audio-contract) for reserved fields and platform-specific behavior.
 
 `openReadinessSettings(reason)` hands the user off to a system screen and returns as soon as the

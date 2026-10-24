@@ -172,6 +172,39 @@ void main() {
       });
     }
 
+    test('scheduleAlarm preserves an unsupportedFadeIn warning between wake-check and native entries', () async {
+      final schedule = _schedule();
+      const warnings = [
+        WarmAlarmWarning(
+          code: WarmAlarmWarningCode.unsupportedWakeCheck,
+          message: 'Wake-check is not supported on iOS.',
+        ),
+        WarmAlarmWarning(
+          code: WarmAlarmWarningCode.unsupportedFadeIn,
+          message: 'The system plays this alarm, so the fade-in was not applied.',
+        ),
+        WarmAlarmWarning(message: 'Native scheduling fallback.'),
+      ];
+      final platformResult = WarmAlarmScheduleResult.withWarnings(
+        alarmId: schedule.id,
+        readiness: const WarmAlarmReadiness(level: WarmAlarmReadinessLevel.ready, reasons: []),
+        warnings: warnings,
+      );
+      when(() => warmAlarmPlatform.scheduleAlarm(schedule)).thenAnswer((_) async => platformResult);
+
+      final result = await WarmAlarm.scheduleAlarm(schedule);
+
+      expect(
+        result.warnings.map((warning) => warning.code),
+        orderedEquals(<WarmAlarmWarningCode?>[
+          WarmAlarmWarningCode.unsupportedWakeCheck,
+          WarmAlarmWarningCode.unsupportedFadeIn,
+          null,
+        ]),
+      );
+      expect(result.warnings[1], same(warnings[1]));
+    });
+
     final invalidSchedules =
         <
           ({

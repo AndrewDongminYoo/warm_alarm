@@ -161,9 +161,10 @@ See the [`warm_alarm_ios` host requirements][warm_alarm_ios_requirements] for th
 | `events`                          | `Stream<WarmAlarmEvent>`              | Real-time alarm lifecycle event stream                      |
 
 Warning lists require platform interface 0.1.8 or later.
-Facade 0.1.9 requires platform interface 0.1.8 and the published Android 0.1.6, iOS 0.1.13, and macOS 0.1.8 implementations that populate the list.
+Facade 0.2.0 requires platform interface 0.2.1 and Android 0.1.7, iOS 0.1.14, and macOS 0.1.9, which populate the list and apply `fadeInDuration`.
 On those Apple versions, scheduling with `wakeCheck` places `WarmAlarmWarningCode.unsupportedWakeCheck` first and keeps native warnings as separate entries.
 The legacy `warning` getter returns that first entry or null; earlier Apple versions combine wake-check and native messages into one warning.
+iOS and macOS add `WarmAlarmWarningCode.unsupportedFadeIn` after any wake-check entry when a requested fade cannot play because the system plays the alarm.
 Other native warnings can have a null code.
 Warnings do not cover every ignored option; see the [audio contract](warm_alarm/README.md#audio-contract) for reserved fields and platform-specific behavior.
 
