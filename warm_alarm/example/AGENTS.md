@@ -50,7 +50,7 @@ android/, ios/, macos/                       # default Flutter native shells (re
 
 ## NOTES
 
-- The Android host uses AGP 9.0.1, Kotlin 2.3.20, and Gradle 9.2.1.
+- The Android host uses AGP 9.1.0, Kotlin 2.4.0, and Gradle 9.3.1, the versions of the Flutter 3.47.8 app template, and no Jetifier.
   Keep `android.newDsl=false` and `android.builtInKotlin=false` in its `gradle.properties` while Flutter uses the legacy Android DSL and this plugin applies the external Kotlin plugin.
   Direct native Gradle jobs do not run Flutter build migrations.
   Keep the wrapper distribution's published SHA-256 checksum pinned for both local builds and CI downloads.
