@@ -6,6 +6,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
+      timezone: Asia/Seoul
     groups:
       # Every version update, majors included, in one PR; CI runs the actions it bumps.
       actions:
@@ -20,7 +21,8 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 3
+      timezone: Asia/Seoul
+    open-pull-requests-limit: 2
     groups:
       pub-minor-patch:
         patterns:
@@ -39,19 +41,51 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 3
+      timezone: Asia/Seoul
+    open-pull-requests-limit: 2
     ignore:
-      # Runtime majors without a security fix stay off (operator, 2026-10-24); com.android.library 9.4.1 came as #139 and org.json:json 20260814 as #138.
+      # The Android Gradle Plugin follows the Flutter or React Native toolchain, not Dependabot.
       # update-types limits this to version updates; security updates still open.
+      - dependency-name: com.android.application
+        update-types:
+          - version-update:semver-patch
+          - version-update:semver-minor
+          - version-update:semver-major
       - dependency-name: com.android.library
         update-types:
+          - version-update:semver-patch
+          - version-update:semver-minor
           - version-update:semver-major
+      # Runtime majors without a security fix stay off (operator, 2026-10-24); org.json:json 20260814 came as #138.
+      # update-types limits this to version updates; security updates still open.
       - dependency-name: org.json:json
         update-types:
+          - version-update:semver-major
+      # The Kotlin Gradle plugin and its stdlib must match the framework's bundled Kotlin.
+      - dependency-name: org.jetbrains.kotlin.android
+        update-types:
+          - version-update:semver-patch
+          - version-update:semver-minor
+          - version-update:semver-major
+      - dependency-name: org.jetbrains.kotlin:kotlin-stdlib
+        update-types:
+          - version-update:semver-patch
+          - version-update:semver-minor
           - version-update:semver-major
       # Gradle wrapper upgrades follow the Flutter/AGP (or React Native) toolchain, not Dependabot.
       # update-types limits this to version updates; security updates still open.
       - dependency-name: gradle-wrapper
+        update-types:
+          - version-update:semver-patch
+          - version-update:semver-minor
+          - version-update:semver-major
+      # The same two plugins, declared as classpath coordinates.
+      - dependency-name: com.android.tools.build:gradle
+        update-types:
+          - version-update:semver-patch
+          - version-update:semver-minor
+          - version-update:semver-major
+      - dependency-name: org.jetbrains.kotlin:kotlin-gradle-plugin
         update-types:
           - version-update:semver-patch
           - version-update:semver-minor
