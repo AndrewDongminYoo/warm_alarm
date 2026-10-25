@@ -24,3 +24,9 @@ Start #113 when one of these conditions becomes true:
 - The default Flutter app template moves to built-in Kotlin and the new DSL.
 
 When #113 starts, it must pass the native unit suite, both example APK builds, and the API 19/22/29 instrumented matrix without AGP 10 deprecation notices for these settings.
+
+## Update 2026-10-25: template sync, trigger not met
+
+A fresh `flutter create` on Flutter 3.47.8 still writes `android.newDsl=false` and `android.builtInKotlin=false`, so neither trigger above has fired and those two settings stay deferred.
+The template no longer sets Jetifier and uses AGP 9.1.0, Kotlin 2.4.0 and Gradle 9.3.1, so the example host follows it: Jetifier is removed and the three versions moved (operator decision on #113).
+#113 stays open for the two flags under the same trigger.
