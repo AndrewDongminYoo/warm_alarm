@@ -10,6 +10,7 @@ llfbandit
 mirae
 podhelper
 swiftc
+taplo
 Unarchiver
 widgetkit
 xcresulttool
