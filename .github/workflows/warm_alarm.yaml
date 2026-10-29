@@ -43,7 +43,7 @@ jobs:
   build:
     uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/flutter_package.yml@bf86fc749b907c6cc60e655f7f2ef619287b1b15 # v2.0.3
     with:
-      flutter_version: 3.47.7
+      flutter_version: 3.47.8
       coverage_excludes: "**/*.g.dart"
       format_line_length: 120
       format_directories: lib test example/lib example/test example/integration_test example/test_driver example/actions/check_readiness/lib example/actions/check_readiness/test ../tool
