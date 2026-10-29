@@ -5,7 +5,6 @@ import json
 import plistlib
 from pathlib import Path
 
-
 EXPECTED_APIS = {
     "NSPrivacyAccessedAPICategoryUserDefaults": ["CA92.1"],
     "NSPrivacyAccessedAPICategoryFileTimestamp": ["C617.1"],
@@ -14,7 +13,10 @@ BUNDLE_NAMES = {
     "swiftpm": "warm_alarm_ios_warm_alarm_ios.bundle",
     "cocoapods": "warm_alarm_ios_privacy.bundle",
 }
-SOURCE = Path(__file__).resolve().parents[1] / "ios/warm_alarm_ios/Sources/warm_alarm_ios/PrivacyInfo.xcprivacy"
+SOURCE = (
+    Path(__file__).resolve().parents[1]
+    / "ios/warm_alarm_ios/Sources/warm_alarm_ios/PrivacyInfo.xcprivacy"
+)
 
 
 def read_manifest(path):
@@ -23,7 +25,10 @@ def read_manifest(path):
     with path.open("rb") as source:
         manifest = plistlib.load(source)
     entries = manifest.get("NSPrivacyAccessedAPITypes", [])
-    apis = {entry["NSPrivacyAccessedAPIType"]: entry["NSPrivacyAccessedAPITypeReasons"] for entry in entries}
+    apis = {
+        entry["NSPrivacyAccessedAPIType"]: entry["NSPrivacyAccessedAPITypeReasons"]
+        for entry in entries
+    }
     if len(entries) != len(EXPECTED_APIS) or apis != EXPECTED_APIS:
         raise ValueError(f"Unexpected required-reason declarations: {path}: {apis}")
     if manifest.get("NSPrivacyTracking") is not False:
@@ -48,17 +53,35 @@ def main():
     if args.app_bundle:
         if not args.app_bundle.is_dir() or args.app_bundle.suffix != ".app":
             raise ValueError(f"Missing app bundle: {args.app_bundle}")
-        candidates = list(args.app_bundle.rglob(f"{BUNDLE_NAMES[args.packaging]}/PrivacyInfo.xcprivacy"))
+        candidates = list(
+            args.app_bundle.rglob(
+                f"{BUNDLE_NAMES[args.packaging]}/PrivacyInfo.xcprivacy"
+            )
+        )
         if len(candidates) != 1:
-            raise ValueError(f"Expected one {args.packaging} plugin manifest in {args.app_bundle}; found {len(candidates)}")
+            raise ValueError(
+                f"Expected one {args.packaging} plugin manifest in {args.app_bundle}; found {len(candidates)}"
+            )
         if read_manifest(candidates[0]) != expected:
-            raise ValueError(f"Bundled manifest differs from the source: {candidates[0]}")
+            raise ValueError(
+                f"Bundled manifest differs from the source: {candidates[0]}"
+            )
         checked.append(str(candidates[0]))
-    print(json.dumps({"verified": checked, "required_reason_apis": EXPECTED_APIS}, indent=2))
+    print(
+        json.dumps(
+            {"verified": checked, "required_reason_apis": EXPECTED_APIS}, indent=2
+        )
+    )
 
 
 if __name__ == "__main__":
     try:
         main()
-    except (ValueError, KeyError, TypeError, OSError, plistlib.InvalidFileException) as error:
+    except (
+        ValueError,
+        KeyError,
+        TypeError,
+        OSError,
+        plistlib.InvalidFileException,
+    ) as error:
         raise SystemExit(str(error)) from error
