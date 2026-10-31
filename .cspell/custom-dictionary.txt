@@ -9,6 +9,7 @@ ktlint
 llfbandit
 mirae
 podhelper
+screenrecord
 swiftc
 taplo
 Unarchiver
