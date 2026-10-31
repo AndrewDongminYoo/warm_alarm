@@ -16,8 +16,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
+import 'package:warm_alarm/warm_alarm.dart';
 import 'package:warm_alarm_example/main.dart' as app;
 
+/// The id the example passes to every `scheduleAlarm` call.
+const _alarmId = 42;
 const _scroll = Duration(milliseconds: 900);
 const _beat = Duration(milliseconds: 1200);
 const _read = Duration(milliseconds: 3500);
@@ -98,16 +101,23 @@ void main() {
       await hold(_beat);
     }
     await tap(find.text('Schedule 1 minute alarm'));
-    await waitFor(find.textContaining('Schedule warning code: '));
-    await reveal(find.text('Alarm request accepted'), alignment: 0.2);
-    await hold(const Duration(seconds: 6));
+    // The example schedules a fixed alarm id. Cancel it if a later step fails, so it cannot ring after the run.
+    var canceled = false;
+    try {
+      await waitFor(find.textContaining('Schedule warning code: '));
+      await reveal(find.text('Alarm request accepted'), alignment: 0.2);
+      await hold(const Duration(seconds: 6));
 
-    // 04 / Alarm
-    await reveal(find.text('Events'), alignment: 0.25);
-    await waitFor(find.textContaining('WarmAlarmFired'), timeout: const Duration(seconds: 90));
-    await hold(_ringFor);
-    await reveal(find.text('Cancel alarm'), alignment: 0.4);
-    await tap(find.text('Cancel alarm'));
-    await hold(const Duration(seconds: 3));
+      // 04 / Alarm
+      await reveal(find.text('Events'), alignment: 0.25);
+      await waitFor(find.textContaining('WarmAlarmFired'), timeout: const Duration(seconds: 90));
+      await hold(_ringFor);
+      await reveal(find.text('Cancel alarm'), alignment: 0.4);
+      await tap(find.text('Cancel alarm'));
+      canceled = true;
+      await hold(const Duration(seconds: 3));
+    } finally {
+      if (!canceled) await WarmAlarm.cancelAlarm(_alarmId);
+    }
   }, timeout: const Timeout(Duration(minutes: 4)));
 }
