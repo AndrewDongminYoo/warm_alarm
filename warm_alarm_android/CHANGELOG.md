@@ -1,3 +1,11 @@
+# 0.1.9
+
+- Honor `WarmAlarmSnooze.maxCount`: the alarm notification drops its Snooze action once one occurrence has been snoozed `maxCount` times, and never shows it when `maxCount` is 0. A null `maxCount` keeps the action on every ring.
+- Count snoozes per occurrence. The count starts again when a new occurrence rings, when the alarm is scheduled again with the same id, when it is cancelled, and on `cancelAllAlarms`; a snoozed ring and a wake-check retrigger ring keep it.
+- Ignore and log a Snooze action that arrives after the limit is reached, and keep the ring playing.
+- Persist `maxCount` with the stored schedule and return it from `getScheduledAlarms`. Schedules stored by an earlier release load with no limit.
+- Require platform interface 0.3.0 for `WarmAlarmSnooze.maxCount`.
+
 # 0.1.8
 
 - Implement `stopAlarm(id)`: it sends the notification's Stop action for the ringing alarm, so the stop emits `WarmAlarmStopped`, keeps a recurring schedule armed and starts a configured wake check. It returns false and sends nothing when `id` is not the alarm ringing.
