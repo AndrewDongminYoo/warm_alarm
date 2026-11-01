@@ -24,7 +24,7 @@ It is maintained as an independent Flutter plugin and does not require the WarmW
 - **Reactive event stream** — sealed `WarmAlarmEvent` types covering every alarm lifecycle transition
 - **Custom audio** — local file, asset, or platform default with fade steps, looping, and platform-specific vibration
 - **Wake-check flow** (Android only) — verifies the user is awake after dismissal and retriggers if not
-- **Snooze and recurrence** — built-in snooze duration and weekly recurrence by weekday
+- **Snooze and recurrence** — built-in snooze duration, an optional per-occurrence snooze limit, and weekly recurrence by weekday
 - **Federated plugin** — independent implementations for Android, iOS, and macOS
 
 ---
@@ -149,6 +149,7 @@ Apple requires a Widget Extension with an `ActivityConfiguration` for `AlarmAttr
 Declare `extension Never: @retroactive AlarmMetadata {}` in the extension so it uses the same module-independent empty metadata type as the plugin.
 Set both `NSSupportsLiveActivities` and `WarmAlarmAlarmKitLiveActivityEnabled` to `true` in the app target's `Info.plist` only after the extension is ready.
 Until then, schedules with Snooze use the User Notifications fallback and return a warning.
+AlarmKit performs the snooze itself, so it cannot honor `WarmAlarmSnooze.maxCount`; an AlarmKit schedule with a snooze limit returns `unsupportedSnoozeLimit`, while the User Notifications backends on iOS and macOS and Android drop the Snooze action once the limit is reached.
 Call `prepareSystemSound` with a recording and optional tone, then pass its returned path as `WarmAlarmAudio.systemSoundFilePath`.
 Keep the legacy audio inputs for fallback, and start app audio only when the saved snapshot does not report `systemManagedAudio`.
 Unsupported hosts return null; preparation failures throw without replacing an existing alarm.
@@ -245,7 +246,7 @@ user's answer.
 | `WarmAlarmFailure`              | `code`, optional `message`                                                                                                                                                             |
 | `WarmAlarmAudio`                | `filePath?`, `assetPath?`, `systemSoundFilePath?`, `loop` (default `true`), `volume?`, `fadeInDuration?`, `fadeSteps?`, `volumeEnforced` (default `false`), `vibrate` (default `true`) |
 | `WarmAlarmNotification`         | `title`, `body`, `stopActionTitle?`, `snoozeActionTitle?`, `androidIcon?`, `androidIconColor?`, `keepNotificationAfterAlarmEnds` (default `false`)                                     |
-| `WarmAlarmSnooze`               | `duration`                                                                                                                                                                             |
+| `WarmAlarmSnooze`               | `duration`, `maxCount?`                                                                                                                                                                |
 | `WarmAlarmRecurrence`           | `weekdays`: ISO weekday numbers from 1 (Monday) through 7 (Sunday)                                                                                                                     |
 | `WarmAlarmWakeCheck`            | `checkDelay`, `retriggerDelay?`, `maxRetriggers?` (default `1`, Android only)                                                                                                          |
 | `WarmAlarmVolumeFadeStep`       | `time` (offset from alarm start), `volume` (0.0–1.0)                                                                                                                                   |
@@ -262,6 +263,7 @@ user's answer.
 | `schedule.scheduledAt`              | A one-time time that is not strictly future at millisecond precision                                    |
 | `schedule.recurrence.weekdays`      | An empty list or a weekday outside ISO 1–7                                                              |
 | `schedule.snooze.duration`          | A negative duration                                                                                     |
+| `schedule.snooze.maxCount`          | A negative count                                                                                        |
 | `schedule.wakeCheck.checkDelay`     | A negative duration                                                                                     |
 | `schedule.wakeCheck.retriggerDelay` | A negative duration                                                                                     |
 | `schedule.wakeCheck.maxRetriggers`  | A negative count                                                                                        |

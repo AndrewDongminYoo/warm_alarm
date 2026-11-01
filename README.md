@@ -20,7 +20,7 @@ For example usage, testing boundaries, and project decisions, see the [documenta
 - **Reactive event stream** — sealed `WarmAlarmEvent` types for every alarm lifecycle transition
 - **Custom audio** — local file, asset, or platform default with fade steps, looping, and platform-specific vibration control
 - **Wake-check flow** (Android) — verifies the user is actually awake after dismissal and retriggers when they are not
-- **Snooze and recurrence** — built-in snooze duration and weekly recurrence by weekday
+- **Snooze and recurrence** — built-in snooze duration, an optional per-occurrence snooze limit, and weekly recurrence by weekday
 - **Federated plugin** — independent implementations for Android, iOS, and macOS
 
 ---
@@ -129,6 +129,7 @@ Apple requires a Widget Extension with an `ActivityConfiguration` for `AlarmAttr
 Declare `extension Never: @retroactive AlarmMetadata {}` in the extension so it uses the same module-independent empty metadata type as the plugin.
 Set both `NSSupportsLiveActivities` and `WarmAlarmAlarmKitLiveActivityEnabled` to `true` in the app target's `Info.plist` only after the extension is ready.
 Until then, schedules with Snooze use the User Notifications fallback and return a warning.
+AlarmKit performs the snooze itself, so it cannot honor `WarmAlarmSnooze.maxCount`; an AlarmKit schedule with a snooze limit returns `unsupportedSnoozeLimit`, while the User Notifications backends on iOS and macOS and Android drop the Snooze action once the limit is reached.
 See the [`warm_alarm_ios` host requirements][warm_alarm_ios_requirements] for the complete value mapping and event limitations.
 
 ---
@@ -184,7 +185,7 @@ The facade validates input before it calls a platform.
 - A recurrence must contain at least one ISO weekday from `1` through `7`.
 - `wakeCheck.maxRetriggers` must not be negative.
 - Fade-step timestamps must be strictly increasing at millisecond precision.
-- Configured snooze, fade-in, fade-step, and wake-check durations must not be negative.
+- Configured snooze, fade-in, fade-step, and wake-check durations must not be negative, and neither may a snooze limit.
 - Audio and fade-step volumes must be finite values from `0.0` through `1.0`.
 
 Zero-duration fields remain valid.
@@ -205,7 +206,7 @@ A recurring schedule may use a past `scheduledAt` anchor because its next local 
 | `WarmAlarmFailure`              | `code`, optional `message`                                                                                                                                                             |
 | `WarmAlarmAudio`                | `filePath?`, `assetPath?`, `systemSoundFilePath?`, `loop` (default `true`), `volume?`, `fadeInDuration?`, `fadeSteps?`, `volumeEnforced` (default `false`), `vibrate` (default `true`) |
 | `WarmAlarmNotification`         | `title`, `body`, `stopActionTitle?`, `snoozeActionTitle?`, `androidIcon?`, `androidIconColor?`, `keepNotificationAfterAlarmEnds` (default `false`)                                     |
-| `WarmAlarmSnooze`               | `duration`                                                                                                                                                                             |
+| `WarmAlarmSnooze`               | `duration`, `maxCount?`                                                                                                                                                                |
 | `WarmAlarmRecurrence`           | `weekdays`: ISO weekday numbers from 1 (Monday) through 7 (Sunday)                                                                                                                     |
 | `WarmAlarmWakeCheck`            | `checkDelay`, `retriggerDelay?`, `maxRetriggers?` (default `1`, Android only)                                                                                                          |
 | `WarmAlarmVolumeFadeStep`       | `time` (offset from alarm start), `volume` (0.0–1.0)                                                                                                                                   |
