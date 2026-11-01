@@ -13,7 +13,7 @@ A host can stop offering Snooze on its own ring screen, but the notification kee
 
 Add `WarmAlarmSnooze.maxCount` (`int?`) to the public platform interface:
 
-- Null offers Snooze on every ring, which is the current behavior.
+- Null sets no limit: a notification that has a Snooze action offers it on every ring, which is the current behavior. On Android a notification has a Snooze action only when `snoozeActionTitle` is non-null; on iOS and macOS it always has one.
 - 0 offers no Snooze action.
 - A positive value allows that many snoozes from the notification for one occurrence; the ring after the last allowed snooze has no Snooze action.
 

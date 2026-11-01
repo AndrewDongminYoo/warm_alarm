@@ -26,7 +26,9 @@ final class WarmAlarmSnooze {
 
   /// How many times the person can snooze one occurrence of this alarm from its notification.
   ///
-  /// When null, the Snooze action is offered on every ring. When 0, the notification has no Snooze action.
+  /// When null there is no limit, and a notification that has a Snooze action offers it on every ring.
+  /// On Android a notification has one only when `WarmAlarmNotification.snoozeActionTitle` is non-null.
+  /// When 0, the notification has no Snooze action.
   /// The count starts again when a new occurrence rings, and when the alarm is scheduled again or cancelled.
   /// A host that schedules its own snooze ring should pass the number of snoozes left, so the limit still holds.
   /// A backend whose snooze is performed by the system reports [WarmAlarmWarningCode.unsupportedSnoozeLimit]
