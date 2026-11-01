@@ -2,11 +2,14 @@ package com.andrew.alarm
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.UserManager
 import org.json.JSONArray
 import org.mockito.ArgumentCaptor
 import org.mockito.Mockito
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class WarmAlarmStoreTest {
     @Test
@@ -48,6 +51,43 @@ class WarmAlarmStoreTest {
     }
 
     @Test
+    fun snoozeMaxCountSurvivesJsonRoundTrip() {
+        for (maxCount in listOf(0L, 3L)) {
+            val snooze = WarmAlarmSnoozeWire(durationMillis = 300_000, maxCount = maxCount)
+
+            val decoded = WarmAlarmStore.decode(WarmAlarmStore.encode(schedule(id = 42, snooze = snooze)))
+
+            assertEquals(snooze, decoded.snooze)
+        }
+    }
+
+    @Test
+    fun snoozeWithoutMaxCountIsStoredWithoutTheKeyAndLoadsAsNoLimit() {
+        val stored = WarmAlarmStore.encode(schedule(id = 42, snooze = WarmAlarmSnoozeWire(durationMillis = 300_000)))
+
+        assertFalse(stored.getJSONObject("snooze").has("maxCount"))
+        assertEquals(WarmAlarmSnoozeWire(durationMillis = 300_000), WarmAlarmStore.decode(stored).snooze)
+    }
+
+    @Test
+    fun aSnoozeCountClearedWhileLockedStaysClearedAfterUnlock() {
+        AndroidSdkOverride(24).use {
+            val storage = DirectBootStorageHarness()
+            storage.unlocked = true
+            WarmAlarmStore.incrementSnoozeCount(storage.context, 42)
+            assertEquals(1L, WarmAlarmStore.snoozeCount(storage.context, 42))
+
+            // The next occurrence rings after a reboot, before the first unlock.
+            storage.unlocked = false
+            WarmAlarmStore.clearSnoozeCount(storage.context, 42)
+            assertTrue(storage.credentialPrefs.contains("snooze_count_42"), "The locked clear cannot reach credential-protected storage")
+
+            storage.unlocked = true
+            assertEquals(0L, WarmAlarmStore.snoozeCount(storage.context, 42), "A count cleared while locked must not return after unlock")
+        }
+    }
+
+    @Test
     fun wakeCheckPromptTextSurvivesJsonRoundTrip() {
         val wakeCheck =
             WarmAlarmWakeCheckWire(
@@ -83,6 +123,7 @@ class WarmAlarmStoreTest {
     private fun schedule(
         id: Long,
         recurrence: WarmAlarmRecurrenceWire? = null,
+        snooze: WarmAlarmSnoozeWire? = null,
         wakeCheck: WarmAlarmWakeCheckWire? = null,
     ) = WarmAlarmScheduleWire(
         id = id,
@@ -100,6 +141,7 @@ class WarmAlarmStoreTest {
                 volumeEnforced = false,
             ),
         recurrence = recurrence,
+        snooze = snooze,
         wakeCheck = wakeCheck,
         androidFullScreenIntent = true,
     )
@@ -123,5 +165,45 @@ private class StorePreferencesHarness(
         val captor = ArgumentCaptor.forClass(String::class.java)
         Mockito.verify(editor, Mockito.atLeastOnce()).putString(Mockito.eq("schedules"), captor.capture())
         return captor.allValues.last()
+    }
+}
+
+/** Separate credential-protected and device-protected preference stores behind a lock switch. */
+private class DirectBootStorageHarness {
+    var unlocked = true
+    val context: Context = Mockito.mock(Context::class.java)
+    private val deviceContext: Context = Mockito.mock(Context::class.java)
+    val credentialPrefs = inMemoryStorePreferences()
+    private val devicePrefs = inMemoryStorePreferences()
+
+    init {
+        val userManager = Mockito.mock(UserManager::class.java)
+        Mockito.`when`(userManager.isUserUnlocked).thenAnswer { unlocked }
+        for (candidate in listOf(context, deviceContext)) {
+            Mockito.`when`(candidate.getSystemService(Context.USER_SERVICE)).thenReturn(userManager)
+            Mockito.`when`(candidate.createDeviceProtectedStorageContext()).thenReturn(deviceContext)
+        }
+        Mockito.`when`(context.getSharedPreferences(Mockito.anyString(), Mockito.anyInt())).thenReturn(credentialPrefs)
+        Mockito.`when`(deviceContext.getSharedPreferences(Mockito.anyString(), Mockito.anyInt())).thenReturn(devicePrefs)
+    }
+
+    private fun inMemoryStorePreferences(): SharedPreferences {
+        val values = mutableMapOf<String, Long>()
+        val preferences = Mockito.mock(SharedPreferences::class.java)
+        val editor = Mockito.mock(SharedPreferences.Editor::class.java, Mockito.RETURNS_SELF)
+        Mockito.`when`(preferences.contains(Mockito.anyString())).thenAnswer { it.getArgument<String>(0) in values }
+        Mockito.`when`(preferences.getLong(Mockito.anyString(), Mockito.anyLong())).thenAnswer {
+            values[it.getArgument<String>(0)] ?: it.getArgument<Long>(1)
+        }
+        Mockito.`when`(preferences.edit()).thenReturn(editor)
+        Mockito.`when`(editor.putLong(Mockito.anyString(), Mockito.anyLong())).thenAnswer {
+            values[it.getArgument<String>(0)] = it.getArgument<Long>(1)
+            editor
+        }
+        Mockito.`when`(editor.remove(Mockito.anyString())).thenAnswer {
+            values.remove(it.getArgument<String>(0))
+            editor
+        }
+        return preferences
     }
 }

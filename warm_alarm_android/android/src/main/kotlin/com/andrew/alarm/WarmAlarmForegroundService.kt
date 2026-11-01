@@ -16,6 +16,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import java.io.File
 
@@ -67,6 +68,18 @@ class WarmAlarmForegroundService : Service() {
                 },
             )
             return true
+        }
+
+        /**
+         * Whether the occurrence of [schedule] may still be snoozed from the
+         * notification after [snoozeCount] snoozes. A null maxCount sets no limit.
+         */
+        internal fun snoozeLimitAllows(
+            schedule: WarmAlarmScheduleWire?,
+            snoozeCount: Long,
+        ): Boolean {
+            val maxCount = schedule?.snooze?.maxCount ?: return true
+            return snoozeCount < maxCount
         }
     }
 
@@ -179,7 +192,17 @@ class WarmAlarmForegroundService : Service() {
     }
 
     private fun handleSnooze(alarmId: Long) {
-        val schedule = currentSchedule ?: WarmAlarmStore.load(this, alarmId)
+        val schedule = currentSchedule?.takeIf { it.id == alarmId } ?: WarmAlarmStore.load(this, alarmId)
+        // A Snooze action from an earlier ring can still arrive after the limit is reached.
+        // Refuse it before touching playback, so the ring that is sounding keeps sounding.
+        if (!snoozeLimitAllows(schedule, WarmAlarmStore.snoozeCount(this, alarmId))) {
+            Log.w("WarmAlarm", "Ignored a snooze for alarm $alarmId: its snooze limit is reached")
+            if (!isRinging) stopSelf()
+            return
+        }
+        if (schedule != null) {
+            WarmAlarmStore.incrementSnoozeCount(this, alarmId)
+        }
         isRinging = false
         currentAlarmId = null
         stopAudio()
@@ -400,7 +423,7 @@ class WarmAlarmForegroundService : Service() {
                 .setOngoing(true)
                 .addAction(0, stopTitle, stopPendingIntent)
 
-        if (snoozeTitle != null) {
+        if (snoozeTitle != null && snoozeLimitAllows(schedule, WarmAlarmStore.snoozeCount(this, alarmId))) {
             val snoozePendingIntent =
                 WarmAlarmPendingIntents.serviceAction(
                     this,
