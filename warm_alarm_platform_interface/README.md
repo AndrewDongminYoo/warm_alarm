@@ -71,7 +71,7 @@ are never exposed here.
 | `WarmAlarmSchedule`             | Full alarm configuration passed to `scheduleAlarm()`                                                                            |
 | `WarmAlarmAudio`                | Audio source, looping, volume, fade-in curve, and vibration settings                                                            |
 | `WarmAlarmNotification`         | Notification title, body, action button labels, and Android-specific icon/color                                                 |
-| `WarmAlarmSnooze`               | Snooze duration                                                                                                                 |
+| `WarmAlarmSnooze`               | Snooze duration, and an optional per-occurrence limit on notification snoozes (`maxCount`, not read by any platform yet)        |
 | `WarmAlarmRecurrence`           | Weekly recurrence via a list of ISO weekday numbers (`weekdays`, 1 = Monday … 7 = Sunday)                                       |
 | `WarmAlarmWakeCheck`            | Wake-check configuration: check delay, optional retrigger delay, max retrigger count, and optional prompt text                  |
 | `WarmAlarmSnapshot`             | Scheduled-alarm fields plus `systemManagedAudio` (default `false`)                                                              |
