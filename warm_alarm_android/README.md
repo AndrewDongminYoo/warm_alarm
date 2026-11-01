@@ -95,6 +95,7 @@ With retention disabled, completion removes the foreground notification.
 `WarmAlarmSnooze.maxCount` limits how many times one occurrence can be snoozed from the notification.
 Null sets no limit, 0 removes the Snooze action, and a positive value removes it from the ring that follows the last allowed snooze.
 The count is stored next to the active snooze in credential-protected and device-protected storage, so it survives a reboot during a snooze.
+On API 24 and later it is read only from device-protected storage, so a reset made before the first unlock still holds after it.
 It starts again when a ring arrives with no active snooze, which is a new occurrence, when the same id is scheduled again, when it is cancelled, and on `cancelAllAlarms()`.
 A snoozed ring and a wake-check retrigger ring keep it.
 A Snooze action that arrives after the limit is reached, for example from an earlier notification, is ignored and logged, and the ring keeps playing.

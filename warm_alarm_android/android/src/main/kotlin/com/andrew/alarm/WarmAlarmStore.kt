@@ -100,16 +100,18 @@ internal object WarmAlarmStore {
         }
     }
 
-    /** How many times the plugin has snoozed the current occurrence of [id]. */
+    /**
+     * How many times the plugin has snoozed the current occurrence of [id].
+     *
+     * Read only from device-protected storage on API 24+. A clear made before the first unlock
+     * cannot reach credential-protected storage, so falling back to it would bring back a count
+     * that was already reset. Every write reaches device-protected storage, and the key has no
+     * data from before it, so nothing is lost.
+     */
     fun snoozeCount(
         context: Context,
         id: Long,
-    ): Long {
-        val key = snoozeCountKey(id)
-        return (listOf(schedulePrefs(context)) + allPrefs(context)).distinct().firstNotNullOfOrNull { preferences ->
-            if (preferences.contains(key)) preferences.getLong(key, 0L) else null
-        } ?: 0L
-    }
+    ): Long = schedulePrefs(context).getLong(snoozeCountKey(id), 0L)
 
     fun incrementSnoozeCount(
         context: Context,
