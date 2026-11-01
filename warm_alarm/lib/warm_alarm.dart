@@ -69,6 +69,7 @@ class WarmAlarm {
   /// Inspect the returned readiness and every entry in [WarmAlarmScheduleResult.warnings] even when scheduling succeeds.
   /// [WarmAlarmScheduleResult.warning] exposes only the first entry for existing callers.
   /// Apple platforms return [WarmAlarmWarningCode.unsupportedWakeCheck] when wake-check was requested.
+  /// iOS returns [WarmAlarmWarningCode.unsupportedSnoozeLimit] when AlarmKit scheduled an alarm with a snooze limit.
   /// Other native warnings can have no code, and warnings do not cover every ignored option.
   static Future<WarmAlarmScheduleResult> scheduleAlarm(
     WarmAlarmSchedule schedule,
@@ -97,6 +98,13 @@ class WarmAlarm {
       throw ArgumentError.value(
         snooze.duration,
         'schedule.snooze.duration',
+        'must not be negative',
+      );
+    }
+    if (schedule.snooze?.maxCount case final maxCount? when maxCount < 0) {
+      throw ArgumentError.value(
+        maxCount,
+        'schedule.snooze.maxCount',
         'must not be negative',
       );
     }

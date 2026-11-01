@@ -108,7 +108,7 @@ void main() {
           recurrence: const WarmAlarmRecurrence(
             weekdays: <int>[DateTime.monday],
           ),
-          snooze: const WarmAlarmSnooze(duration: Duration.zero),
+          snooze: const WarmAlarmSnooze(duration: Duration.zero, maxCount: 0),
           wakeCheck: const WarmAlarmWakeCheck(
             checkDelay: Duration.zero,
             retriggerDelay: Duration.zero,
@@ -239,6 +239,13 @@ void main() {
             description: 'a negative snooze duration',
             schedule: _schedule(
               snooze: const WarmAlarmSnooze(duration: Duration(seconds: -1)),
+            ),
+          ),
+          (
+            argumentName: 'schedule.snooze.maxCount',
+            description: 'a negative snooze limit',
+            schedule: _schedule(
+              snooze: const WarmAlarmSnooze(duration: Duration(minutes: 5), maxCount: -1),
             ),
           ),
           (
