@@ -291,6 +291,7 @@ class WarmAlarmSchedulingTest {
                 WarmAlarmStore.save(harness.context, schedule)
                 if (recoveringSnooze) {
                     WarmAlarmStore.setActiveSnooze(harness.context, schedule.id, fireAt)
+                    WarmAlarmStore.incrementSnoozeCount(harness.context, schedule.id)
                     assertEquals(fireAt, WarmAlarmStore.activeSnoozeUntilMillis(harness.context, schedule.id))
                 }
             }
@@ -347,7 +348,10 @@ class WarmAlarmSchedulingTest {
             )
             assertEquals(listOf(41), harness.scheduledRequestCodes)
             assertEquals(scheduledAt, WarmAlarmStore.load(harness.context, 41)?.scheduledAtMillis)
-            if (recoveringSnooze) assertEquals(fireAt, WarmAlarmStore.activeSnoozeUntilMillis(harness.context, 41))
+            if (recoveringSnooze) {
+                assertEquals(fireAt, WarmAlarmStore.activeSnoozeUntilMillis(harness.context, 41))
+                assertEquals(1L, WarmAlarmStore.snoozeCount(harness.context, 41), "A live snooze keeps its count across recovery")
+            }
         }
     }
 }
