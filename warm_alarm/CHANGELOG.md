@@ -1,3 +1,11 @@
+# 0.3.0
+
+- **Breaking:** Re-export platform interface 0.3.0, whose `WarmAlarmWarningCode` gains `unsupportedSnoozeLimit`; code that switches exhaustively over `WarmAlarmWarningCode` needs a case for the new value.
+- Add `WarmAlarmSnooze.maxCount`, the number of snoozes one alarm occurrence allows from its notification. Null keeps today's behavior, 0 offers no Snooze action, and the ring after the last allowed snooze has no Snooze action.
+  A host that schedules its own snooze ring passes the number of snoozes left as that schedule's `maxCount`.
+- `scheduleAlarm` rejects a negative `maxCount` with an `ArgumentError` named `schedule.snooze.maxCount`.
+- Require Android 0.1.9, iOS 0.1.15, and macOS 0.1.10, which honor the limit; iOS returns `unsupportedSnoozeLimit` when AlarmKit, which performs the snooze itself, scheduled the alarm.
+
 # 0.2.1
 
 - Add `WarmAlarm.stopAlarm(id)`, which stops a ringing alarm through the same path as its notification's Stop action, so an app that dismisses from its own screen still starts the Android wake-check.
