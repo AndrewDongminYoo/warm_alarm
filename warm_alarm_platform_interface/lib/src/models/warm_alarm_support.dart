@@ -22,6 +22,9 @@ enum WarmAlarmWarningCode {
 
   /// The requested fade-in was ignored because the backend did not own playback or does not support a fade.
   unsupportedFadeIn,
+
+  /// The requested `WarmAlarmSnooze.maxCount` was ignored because the system performs the snooze for this backend.
+  unsupportedSnoozeLimit,
 }
 
 final class WarmAlarmFailure {
