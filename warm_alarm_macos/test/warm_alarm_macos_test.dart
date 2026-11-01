@@ -378,7 +378,7 @@ void main() {
               volume: 0.5,
               volumeEnforced: false,
             ),
-            snooze: WarmAlarmSnoozeWire(durationMillis: 600000),
+            snooze: WarmAlarmSnoozeWire(durationMillis: 600000, maxCount: 2),
             payload: 'mac-payload',
           ),
         ],
@@ -390,6 +390,7 @@ void main() {
       expect(snapshots.single.notification.title, 'macOS Alarm');
       expect(snapshots.single.audio.volume, 0.5);
       expect(snapshots.single.snooze!.duration.inMinutes, 10);
+      expect(snapshots.single.snooze!.maxCount, 2);
       expect(snapshots.single.payload, 'mac-payload');
       expect(snapshots.single.wakeCheck, isNull);
     });
@@ -1050,10 +1051,44 @@ void main() {
           scheduledAt: DateTime(2026, 5, 1, 7),
           notification: const WarmAlarmNotification(title: 'T', body: 'B'),
           audio: const WarmAlarmAudio(),
-          snooze: const WarmAlarmSnooze(duration: Duration(minutes: 10)),
+          snooze: const WarmAlarmSnooze(duration: Duration(minutes: 10), maxCount: 3),
         ),
       );
       expect(captured.single.snooze!.durationMillis, 10 * 60 * 1000);
+      expect(captured.single.snooze!.maxCount, 3);
+    });
+
+    test('scheduleAlarm passes zero and null snooze maxCount to wire without a snooze limit warning', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmMacOS(api: api);
+      final captured = <WarmAlarmScheduleWire>[];
+      when(() => api.scheduleAlarm(any())).thenAnswer((inv) async {
+        captured.add(inv.positionalArguments[0] as WarmAlarmScheduleWire);
+        return WarmAlarmScheduleResultWire(
+          warnings: [],
+          alarmId: 73,
+          readiness: WarmAlarmReadinessWire(
+            level: WarmAlarmReadinessLevelWire.ready,
+            reasons: <WarmAlarmReadinessReasonWire>[],
+          ),
+        );
+      });
+      final results = <WarmAlarmScheduleResult>[];
+      for (final maxCount in <int?>[0, null]) {
+        results.add(
+          await platform.scheduleAlarm(
+            WarmAlarmSchedule(
+              id: 73,
+              scheduledAt: DateTime(2026, 5, 1, 7),
+              notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+              audio: const WarmAlarmAudio(),
+              snooze: WarmAlarmSnooze(duration: const Duration(minutes: 10), maxCount: maxCount),
+            ),
+          ),
+        );
+      }
+      expect(captured.map((wire) => wire.snooze!.maxCount), [0, null]);
+      expect(results.expand((result) => result.warnings), isEmpty);
     });
 
     test('scheduleAlarm with fadeInDuration passes to wire', () async {

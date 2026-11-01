@@ -413,6 +413,7 @@ WarmAlarmSnapshot _snapshotFromWire(WarmAlarmSnapshotWire wire) {
         ? null
         : WarmAlarmSnooze(
             duration: Duration(milliseconds: wire.snooze!.durationMillis),
+            maxCount: wire.snooze!.maxCount,
           ),
     payload: wire.payload,
   );
@@ -423,7 +424,7 @@ WarmAlarmSnoozeWire? _snoozeToWire(WarmAlarmSnooze? snooze) {
     return null;
   }
 
-  return WarmAlarmSnoozeWire(durationMillis: snooze.duration.inMilliseconds);
+  return WarmAlarmSnoozeWire(durationMillis: snooze.duration.inMilliseconds, maxCount: snooze.maxCount);
 }
 
 WarmAlarmSupportStatus _supportStatusFromWire(WarmAlarmSupportStatusWire wire) {

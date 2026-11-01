@@ -346,7 +346,6 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                     completion(nil)
                     return
                 }
-                let content = self.delegate.makeContent(from: schedule)
                 let missingIdentifiers = WarmAlarmRecurrence.missingIdentifiers(
                     alarmId: schedule.id,
                     weekdays: schedule.recurrenceWeekdays,
@@ -354,9 +353,12 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                     nowMillis: nowMillis,
                     pendingIdentifiers: pendingIdentifiers
                 )
-                let requests = missingIdentifiers.map {
-                    Self.makeRecoveryRequest(identifier: $0, schedule: schedule, content: content, nowMillis: nowMillis)
-                }
+                let requests = Self.makeRecoveryRequests(
+                    for: schedule,
+                    identifiers: missingIdentifiers,
+                    nowMillis: nowMillis,
+                    makeContent: self.delegate.makeContent(from:)
+                )
                 guard !requests.isEmpty else {
                     completion(nil)
                     return
@@ -369,6 +371,25 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
             },
             completion: completion
         )
+    }
+
+    static func makeRecoveryRequests(
+        for schedule: WarmAlarmScheduleData,
+        identifiers: [String],
+        nowMillis: Int64,
+        makeContent: (WarmAlarmScheduleData) -> UNNotificationContent
+    ) -> [UNNotificationRequest] {
+        let content = makeContent(schedule)
+        // A weekly request starts a new occurrence, so it keeps Snooze even when the stored count is at the limit.
+        let newOccurrenceContent = makeContent(schedule.withSnoozeCount(0))
+        return identifiers.map {
+            makeRecoveryRequest(
+                identifier: $0,
+                schedule: schedule,
+                content: $0.contains("#") ? newOccurrenceContent : content,
+                nowMillis: nowMillis
+            )
+        }
     }
 
     private static func makeRecoveryRequest(
@@ -684,7 +705,9 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, WarmAlarmApi {
                     }
                 ),
                 recurrence: data.recurrenceWeekdays.map { WarmAlarmRecurrenceWire(weekdays: $0) },
-                snooze: data.snoozeDurationMillis.map { WarmAlarmSnoozeWire(durationMillis: $0) },
+                snooze: data.snoozeDurationMillis.map {
+                    WarmAlarmSnoozeWire(durationMillis: $0, maxCount: data.snoozeMaxCount)
+                },
                 payload: data.payload
             )
         }

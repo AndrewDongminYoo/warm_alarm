@@ -29,6 +29,8 @@ struct WarmAlarmScheduleData: Codable {
     let activeSnoozeUntilMillis: Int64?
     let consumedOccurrenceMillis: Int64?
     let occurrenceSeriesToken: String?
+    var snoozeMaxCount: Int64? = nil
+    var snoozeCount: Int64 = 0
 
     // Explicit CodingKeys lets the synthesized encode(to:) work while we
     // override init(from:) in the extension below to add migration defaults.
@@ -39,6 +41,7 @@ struct WarmAlarmScheduleData: Codable {
         case recurrenceWeekdays, recurrenceHour, recurrenceMinute, snoozeDurationMillis, payload
         case volumeEnforced, fadeSteps, keepNotificationAfterAlarmEnds, activeSnoozeUntilMillis
         case occurrenceSeriesToken, consumedOccurrenceMillis
+        case snoozeMaxCount, snoozeCount
     }
 }
 
@@ -97,6 +100,8 @@ extension WarmAlarmScheduleData {
         activeSnoozeUntilMillis = try c.decodeIfPresent(Int64.self, forKey: .activeSnoozeUntilMillis)
         consumedOccurrenceMillis = try c.decodeIfPresent(Int64.self, forKey: .consumedOccurrenceMillis)
         occurrenceSeriesToken = try c.decodeIfPresent(String.self, forKey: .occurrenceSeriesToken)
+        snoozeMaxCount = try c.decodeIfPresent(Int64.self, forKey: .snoozeMaxCount)
+        snoozeCount = try c.decodeIfPresent(Int64.self, forKey: .snoozeCount) ?? 0
     }
 
     static func from(
@@ -134,7 +139,8 @@ extension WarmAlarmScheduleData {
             keepNotificationAfterAlarmEnds: wire.notification.keepNotificationAfterAlarmEnds,
             activeSnoozeUntilMillis: nil,
             consumedOccurrenceMillis: nil,
-            occurrenceSeriesToken: UUID().uuidString
+            occurrenceSeriesToken: UUID().uuidString,
+            snoozeMaxCount: wire.snooze?.maxCount
         )
     }
 
@@ -144,6 +150,21 @@ extension WarmAlarmScheduleData {
             recurrenceMinute: recurrenceMinute,
             activeSnoozeUntilMillis: untilMillis,
             consumedOccurrenceMillis: consumingOccurrenceMillis ?? consumedOccurrenceMillis
+        )
+    }
+
+    /// Whether the next ring of this occurrence offers the notification Snooze action.
+    var offersSnooze: Bool {
+        snoozeMaxCount.map { snoozeCount < $0 } ?? true
+    }
+
+    func withSnoozeCount(_ count: Int64) -> WarmAlarmScheduleData {
+        copying(
+            recurrenceHour: recurrenceHour,
+            recurrenceMinute: recurrenceMinute,
+            activeSnoozeUntilMillis: activeSnoozeUntilMillis,
+            consumedOccurrenceMillis: consumedOccurrenceMillis,
+            snoozeCount: count
         )
     }
 
@@ -169,7 +190,8 @@ extension WarmAlarmScheduleData {
         recurrenceHour: Int?,
         recurrenceMinute: Int?,
         activeSnoozeUntilMillis: Int64?,
-        consumedOccurrenceMillis: Int64?
+        consumedOccurrenceMillis: Int64?,
+        snoozeCount: Int64? = nil
     ) -> WarmAlarmScheduleData {
         WarmAlarmScheduleData(
             id: id, scheduledAtMillis: scheduledAtMillis,
@@ -188,7 +210,9 @@ extension WarmAlarmScheduleData {
             keepNotificationAfterAlarmEnds: keepNotificationAfterAlarmEnds,
             activeSnoozeUntilMillis: activeSnoozeUntilMillis,
             consumedOccurrenceMillis: consumedOccurrenceMillis,
-            occurrenceSeriesToken: occurrenceSeriesToken
+            occurrenceSeriesToken: occurrenceSeriesToken,
+            snoozeMaxCount: snoozeMaxCount,
+            snoozeCount: snoozeCount ?? self.snoozeCount
         )
     }
 }
