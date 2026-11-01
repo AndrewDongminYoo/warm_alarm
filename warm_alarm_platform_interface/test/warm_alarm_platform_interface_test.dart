@@ -347,6 +347,22 @@ void main() {
     test('WarmAlarmSnooze constructs with duration', () {
       const snooze = WarmAlarmSnooze(duration: Duration(minutes: 10));
       expect(snooze.duration.inMinutes, 10);
+      expect(snooze.maxCount, isNull);
+    });
+
+    test('WarmAlarmSnooze carries an optional maxCount, including 0', () {
+      const limited = WarmAlarmSnooze(duration: Duration(minutes: 5), maxCount: 3);
+      const none = WarmAlarmSnooze(duration: Duration(minutes: 5), maxCount: 0);
+      expect(limited.maxCount, 3);
+      expect(none.maxCount, 0);
+    });
+
+    test('WarmAlarmWarningCode lists unsupportedSnoozeLimit after the existing codes', () {
+      expect(WarmAlarmWarningCode.values, [
+        WarmAlarmWarningCode.unsupportedWakeCheck,
+        WarmAlarmWarningCode.unsupportedFadeIn,
+        WarmAlarmWarningCode.unsupportedSnoozeLimit,
+      ]);
     });
 
     test('WarmAlarmSnapshot constructs with required fields', () {
