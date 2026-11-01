@@ -1,3 +1,10 @@
+# 0.3.0
+
+- **Breaking:** Add `WarmAlarmWarningCode.unsupportedSnoozeLimit` for a backend that ignored `WarmAlarmSnooze.maxCount` because the system performs the snooze.
+  Code that switches exhaustively over `WarmAlarmWarningCode` needs a case for the new value, so this release is a minor bump that `^0.2.x` constraints do not select.
+- Add optional `WarmAlarmSnooze.maxCount`, the number of snoozes one occurrence allows from its notification; 0 offers no Snooze action.
+  Null keeps a Snooze action on every ring, so existing callers are unaffected; the platform packages read this field in a later release.
+
 # 0.2.2
 
 - Add `stopAlarm(id)`, which stops a ringing alarm through the same path as its notification's Stop action, so a host that dismisses from its own screen can still start the platform wake-check.
