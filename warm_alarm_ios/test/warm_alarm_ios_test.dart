@@ -655,6 +655,99 @@ void main() {
       });
     }
 
+    for (final (description, snooze, systemPerformsSnooze, warns) in <(String, WarmAlarmSnooze?, bool?, bool)>[
+      (
+        'a snooze limit the system performs',
+        const WarmAlarmSnooze(duration: Duration(minutes: 5), maxCount: 2),
+        true,
+        true,
+      ),
+      (
+        'a zero snooze limit the system performs',
+        const WarmAlarmSnooze(duration: Duration(minutes: 5), maxCount: 0),
+        true,
+        true,
+      ),
+      ('no snooze limit the system performs', const WarmAlarmSnooze(duration: Duration(minutes: 5)), true, false),
+      ('no snooze the system performs', null, true, false),
+      (
+        'a snooze limit the plugin performs',
+        const WarmAlarmSnooze(duration: Duration(minutes: 5), maxCount: 2),
+        false,
+        false,
+      ),
+      (
+        'a snooze limit without the native flag',
+        const WarmAlarmSnooze(duration: Duration(minutes: 5), maxCount: 2),
+        null,
+        false,
+      ),
+    ]) {
+      test('scheduleAlarm maps $description to ${warns ? 'an' : 'no'} unsupportedSnoozeLimit warning', () async {
+        final api = _MockWarmAlarmApi();
+        final platform = WarmAlarmIOS(api: api);
+        when(() => api.scheduleAlarm(any())).thenAnswer(
+          (_) async => WarmAlarmScheduleResultWire(
+            alarmId: 74,
+            readiness: WarmAlarmReadinessWire(level: WarmAlarmReadinessLevelWire.ready, reasons: []),
+            warnings: [],
+            systemPerformsSnooze: systemPerformsSnooze,
+          ),
+        );
+
+        final result = await platform.scheduleAlarm(
+          WarmAlarmSchedule(
+            id: 74,
+            scheduledAt: DateTime(2026, 5, 1, 8),
+            notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+            audio: const WarmAlarmAudio(),
+            snooze: snooze,
+          ),
+        );
+
+        expect(result.warnings.map((warning) => warning.code), [
+          if (warns) WarmAlarmWarningCode.unsupportedSnoozeLimit,
+        ]);
+      });
+    }
+
+    test('scheduleAlarm orders the snooze limit warning after the fade warning and before native warnings', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmIOS(api: api);
+      when(() => api.scheduleAlarm(any())).thenAnswer(
+        (_) async => WarmAlarmScheduleResultWire(
+          alarmId: 75,
+          readiness: WarmAlarmReadinessWire(level: WarmAlarmReadinessLevelWire.ready, reasons: []),
+          warnings: [WarmAlarmWarningWire(message: 'Native warning.')],
+          customPlayerUnavailable: true,
+          systemPerformsSnooze: true,
+        ),
+      );
+
+      final result = await platform.scheduleAlarm(
+        WarmAlarmSchedule(
+          id: 75,
+          scheduledAt: DateTime(2026, 5, 1, 8),
+          notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+          audio: const WarmAlarmAudio(fadeInDuration: Duration(seconds: 3)),
+          snooze: const WarmAlarmSnooze(duration: Duration(minutes: 5), maxCount: 1),
+          wakeCheck: const WarmAlarmWakeCheck(checkDelay: Duration(minutes: 1)),
+        ),
+      );
+
+      expect(result.warnings.map((warning) => warning.code), [
+        WarmAlarmWarningCode.unsupportedWakeCheck,
+        WarmAlarmWarningCode.unsupportedFadeIn,
+        WarmAlarmWarningCode.unsupportedSnoozeLimit,
+        null,
+      ]);
+      expect(
+        result.warnings[2].message,
+        'The system performs the snooze on iOS with AlarmKit, so snooze maxCount is not applied.',
+      );
+      expect(result.warnings.last.message, 'Native warning.');
+    });
+
     test('scheduleAlarm orders the fade warning after wake-check and before native warnings', () async {
       final api = _MockWarmAlarmApi();
       final platform = WarmAlarmIOS(api: api);
@@ -1204,10 +1297,43 @@ void main() {
           scheduledAt: DateTime(2026, 5, 1, 7),
           notification: const WarmAlarmNotification(title: 'T', body: 'B'),
           audio: const WarmAlarmAudio(),
-          snooze: const WarmAlarmSnooze(duration: Duration(minutes: 10)),
+          snooze: const WarmAlarmSnooze(duration: Duration(minutes: 10), maxCount: 3),
         ),
       );
       expect(captured.single.snooze!.durationMillis, 10 * 60 * 1000);
+      expect(captured.single.snooze!.maxCount, 3);
+    });
+
+    test('scheduleAlarm with snooze passes zero and null maxCount to wire', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmIOS(api: api);
+      final captured = <WarmAlarmScheduleWire>[];
+      when(() => api.scheduleAlarm(any())).thenAnswer((inv) async {
+        captured.add(inv.positionalArguments[0] as WarmAlarmScheduleWire);
+        return WarmAlarmScheduleResultWire(
+          warnings: [],
+          alarmId: 51,
+          readiness: WarmAlarmReadinessWire(
+            level: WarmAlarmReadinessLevelWire.ready,
+            reasons: <WarmAlarmReadinessReasonWire>[],
+          ),
+        );
+      });
+      for (final snooze in const [
+        WarmAlarmSnooze(duration: Duration(minutes: 5), maxCount: 0),
+        WarmAlarmSnooze(duration: Duration(minutes: 5)),
+      ]) {
+        await platform.scheduleAlarm(
+          WarmAlarmSchedule(
+            id: 51,
+            scheduledAt: DateTime(2026, 5, 1, 7),
+            notification: const WarmAlarmNotification(title: 'T', body: 'B'),
+            audio: const WarmAlarmAudio(),
+            snooze: snooze,
+          ),
+        );
+      }
+      expect(captured.map((wire) => wire.snooze!.maxCount), [0, null]);
     });
 
     test('scheduleAlarm with fadeInDuration passes to wire', () async {
@@ -1286,10 +1412,27 @@ void main() {
             ),
             snooze: WarmAlarmSnoozeWire(durationMillis: 300000),
           ),
+          WarmAlarmSnapshotWire(
+            id: 62,
+            scheduledAtMillis: now,
+            notification: WarmAlarmNotificationWire(
+              title: 'T',
+              body: 'B',
+              keepNotificationAfterAlarmEnds: false,
+            ),
+            audio: WarmAlarmAudioWire(
+              loop: false,
+              vibrate: false,
+              volumeEnforced: false,
+            ),
+            snooze: WarmAlarmSnoozeWire(durationMillis: 300000, maxCount: 4),
+          ),
         ],
       );
       final snapshots = await platform.getScheduledAlarms();
-      expect(snapshots.single.snooze!.duration.inMinutes, 5);
+      expect(snapshots.first.snooze!.duration.inMinutes, 5);
+      expect(snapshots.first.snooze!.maxCount, isNull);
+      expect(snapshots.last.snooze!.maxCount, 4);
     });
 
     test('getScheduledAlarms maps snapshot audio with fadeSteps', () async {

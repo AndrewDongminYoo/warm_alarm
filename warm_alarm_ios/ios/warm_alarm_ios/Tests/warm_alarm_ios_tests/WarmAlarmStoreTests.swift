@@ -311,6 +311,99 @@ final class WarmAlarmStoreTests: XCTestCase {
         XCTAssertEqual(snapshotAtMillis, millis(2030, 3, 11, 7, 0, calendar: snapshotCalendar))
     }
 
+    func testSnoozeLimitAndCountSurviveRoundtrip() {
+        var limited = makeData(id: 60)
+        limited.snoozeMaxCount = 2
+        limited.snoozeCount = 1
+        WarmAlarmStore.shared.save(limited)
+        WarmAlarmStore.shared.save(makeData(id: 61))
+
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: 60)?.snoozeMaxCount, 2)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: 60)?.snoozeCount, 1)
+        XCTAssertNil(WarmAlarmStore.shared.load(id: 61)?.snoozeMaxCount)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: 61)?.snoozeCount, 0)
+    }
+
+    func testScheduleDataStoredWithoutSnoozeLimitFieldsDecodesWithNoLimit() throws {
+        var limited = makeData(id: 62)
+        limited.snoozeMaxCount = 2
+        limited.snoozeCount = 1
+        var json = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(limited)) as? [String: Any]
+        )
+        json.removeValue(forKey: "snoozeMaxCount")
+        json.removeValue(forKey: "snoozeCount")
+
+        let legacy = try JSONDecoder().decode(
+            WarmAlarmScheduleData.self,
+            from: JSONSerialization.data(withJSONObject: json)
+        )
+
+        XCTAssertNil(legacy.snoozeMaxCount)
+        XCTAssertEqual(legacy.snoozeCount, 0)
+        XCTAssertTrue(legacy.offersSnooze)
+    }
+
+    func testFromWireCarriesSnoozeMaxCountAndStartsCountAtZero() {
+        var wire = WarmAlarmScheduleWire(
+            id: 63,
+            scheduledAtMillis: 1_000,
+            notification: WarmAlarmNotificationWire(title: "T", body: "B", keepNotificationAfterAlarmEnds: false),
+            audio: WarmAlarmAudioWire(loop: true, vibrate: false, volumeEnforced: false),
+            snooze: WarmAlarmSnoozeWire(durationMillis: 60_000, maxCount: 3)
+        )
+
+        let limited = WarmAlarmScheduleData.from(wire: wire)
+        wire.snooze = WarmAlarmSnoozeWire(durationMillis: 60_000)
+        let unlimited = WarmAlarmScheduleData.from(wire: wire)
+
+        XCTAssertEqual(limited.snoozeMaxCount, 3)
+        XCTAssertEqual(limited.snoozeCount, 0)
+        XCTAssertNil(unlimited.snoozeMaxCount)
+        XCTAssertEqual(unlimited.snoozeCount, 0)
+    }
+
+    func testOffersSnoozeComparesCountWithMaxCount() {
+        let cases: [(maxCount: Int64?, count: Int64, offersSnooze: Bool)] = [
+            (nil, 0, true), (nil, 9, true), (0, 0, false), (2, 1, true), (2, 2, false), (2, 3, false),
+        ]
+        for testCase in cases {
+            var data = makeData(id: 64)
+            data.snoozeMaxCount = testCase.maxCount
+            data.snoozeCount = testCase.count
+            XCTAssertEqual(
+                data.offersSnooze,
+                testCase.offersSnooze,
+                "maxCount \(String(describing: testCase.maxCount)), count \(testCase.count)"
+            )
+        }
+    }
+
+    func testScheduleStateCopiesKeepSnoozeLimitAndCount() {
+        var data = makeData(id: 65, recurrenceWeekdays: [1], recurrenceHour: 7, recurrenceMinute: 0)
+        data.snoozeMaxCount = 2
+        data.snoozeCount = 1
+        let copies = [
+            data.withActiveSnooze(untilMillis: 1_000, fallbackAnchorMillis: 1_000),
+            data.clearingActiveSnooze(),
+            data.clearingFallbackAnchor(),
+            data.withRecurrenceTime(hour: 8, minute: 30),
+            data.withOneShotAnchor(2_000),
+            data.withAlarmKitManaged(true),
+            data.withAlarmKitManaged(false),
+            data.withAlarmKitSnoozeObserved(),
+            data.withAlarmKitSound(named: nil),
+        ]
+
+        for copy in copies {
+            XCTAssertEqual(copy.snoozeMaxCount, 2)
+            XCTAssertEqual(copy.snoozeCount, 1)
+        }
+        XCTAssertEqual(data.withSnoozeCount(2).snoozeCount, 2)
+        XCTAssertEqual(data.withSnoozeCount(2).snoozeMaxCount, 2)
+        XCTAssertEqual(data.withSnoozeCount(0).snoozeCount, 0)
+    }
+
     private func utcCalendar() -> Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!

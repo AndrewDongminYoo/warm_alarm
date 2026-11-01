@@ -161,6 +161,7 @@ class WarmAlarmScheduleResultWire {
     required this.readiness,
     required this.warnings,
     this.customPlayerUnavailable,
+    this.systemPerformsSnooze,
   });
 
   final int alarmId;
@@ -169,6 +170,9 @@ class WarmAlarmScheduleResultWire {
 
   /// True when delivery hands audio to the system and the plugin player does not play.
   final bool? customPlayerUnavailable;
+
+  /// True when the system performs the snooze, so the plugin cannot limit the Snooze action.
+  final bool? systemPerformsSnooze;
 }
 
 class WarmAlarmNotificationWire {
@@ -236,9 +240,11 @@ class WarmAlarmRecurrenceWire {
 class WarmAlarmSnoozeWire {
   const WarmAlarmSnoozeWire({
     required this.durationMillis,
+    this.maxCount,
   });
 
   final int durationMillis;
+  final int? maxCount;
 }
 
 class WarmAlarmScheduleWire {

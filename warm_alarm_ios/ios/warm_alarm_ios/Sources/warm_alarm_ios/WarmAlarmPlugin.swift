@@ -1311,16 +1311,33 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         if !staleIdentifiers.isEmpty {
             center.removePendingNotificationRequests(withIdentifiers: Array(staleIdentifiers))
         }
+        // Both recovery passes build requests here, so weekly requests always get the new-occurrence content.
+        func recoveryRequests(
+            for schedule: WarmAlarmScheduleData,
+            content: UNNotificationContent,
+            newOccurrenceContent: UNNotificationContent,
+            nowMillis: Int64
+        ) -> [UNNotificationRequest] {
+            Self.makeRecoveryRequests(
+                for: schedule,
+                nowMillis: nowMillis,
+                pendingIdentifiers: pendingIdentifiers,
+                content: content,
+                newOccurrenceContent: newOccurrenceContent
+            )
+        }
         let requestGroups = alarms.map { schedule in
             let content = delegate.makeContent(from: schedule)
+            let newOccurrenceContent = delegate.makeContent(from: schedule.withSnoozeCount(0))
             return (
                 schedule: schedule,
                 content: content,
-                requests: Self.makeRecoveryRequests(
+                newOccurrenceContent: newOccurrenceContent,
+                requests: recoveryRequests(
                     for: schedule,
-                    nowMillis: nowMillis,
-                    pendingIdentifiers: pendingIdentifiers,
-                    content: content
+                    content: content,
+                    newOccurrenceContent: newOccurrenceContent,
+                    nowMillis: nowMillis
                 )
             )
         }
@@ -1353,11 +1370,11 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
             prepare: { group in
                 let registrationNowMillis = Int64(Date().timeIntervalSince1970 * 1_000)
                 let remainingRequestGroups = requestGroups.dropFirst(nextGroupIndex).map { candidate in
-                    Self.makeRecoveryRequests(
+                    recoveryRequests(
                         for: candidate.schedule,
-                        nowMillis: registrationNowMillis,
-                        pendingIdentifiers: pendingIdentifiers,
-                        content: candidate.content
+                        content: candidate.content,
+                        newOccurrenceContent: candidate.newOccurrenceContent,
+                        nowMillis: registrationNowMillis
                     )
                 }
                 nextGroupIndex += 1
@@ -1365,7 +1382,12 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                     remainingRequestGroups,
                     remainingRequestCount: remainingRequestCount
                 )
-                return (schedule: group.schedule, content: group.content, requests: requests)
+                return (
+                    schedule: group.schedule,
+                    content: group.content,
+                    newOccurrenceContent: group.newOccurrenceContent,
+                    requests: requests
+                )
             },
             recover: { group, completion in
                 guard !group.requests.isEmpty else {
@@ -1501,6 +1523,7 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         nowMillis: Int64,
         pendingIdentifiers: Set<String>,
         content: UNNotificationContent,
+        newOccurrenceContent: UNNotificationContent? = nil,
         calendar: Calendar = .current
     ) -> [UNNotificationRequest] {
         let usesRelativeFallbackTrigger = hasActiveSnoozeFallbacks(
@@ -1554,8 +1577,13 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                         occurrenceToken: occurrenceToken,
                         chainMetadata: chainMetadata
                     )
+                    // Weekly requests and their own fallback chain start a new occurrence, so they keep Snooze.
+                    let startsNewOccurrence = recurringWeekday(for: identifier, alarmId: schedule.id) != nil
+                        || (schedule.recurrenceWeekdays?.isEmpty == false
+                            && fallbackIndex(for: identifier, alarmId: schedule.id) != nil
+                            && !usesRelativeFallbackTrigger)
                     let requestContent = contentWithOccurrenceMetadata(
-                        content,
+                        startsNewOccurrence ? newOccurrenceContent ?? content : content,
                         metadata: occurrenceMetadata,
                         ordinal: fallbackIndex(for: identifier, alarmId: schedule.id) ?? 0
                     )
@@ -2483,6 +2511,17 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
         return [fallbackAnchorMillis, recurrenceOccurrenceMillis].compactMap { $0 }.max()
     }
 
+    static func snoozeCountBeforeAction(
+        for schedule: WarmAlarmScheduleData,
+        content: UNNotificationContent?
+    ) -> Int64 {
+        // A recurring alarm has no fire hook when the app is killed, so a weekly delivery starts a new occurrence.
+        guard let content, isFloatingRecurringOccurrence(for: schedule, content: content) else {
+            return schedule.snoozeCount
+        }
+        return 0
+    }
+
     static func isFloatingRecurringOccurrence(
         for schedule: WarmAlarmScheduleData,
         content: UNNotificationContent
@@ -3062,7 +3101,8 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                                     alarmId: schedule.id,
                                     readiness: readiness,
                                     warnings: warnings,
-                                    customPlayerUnavailable: customPlayerUnavailable
+                                    customPlayerUnavailable: customPlayerUnavailable,
+                                    systemPerformsSnooze: outcome.backend == .alarmKit
                                 )), completion: completion, finish: finish)
                             }
                         }
@@ -3246,7 +3286,9 @@ public class WarmAlarmPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDele
                     systemSoundFilePath: data.systemSoundFilePath
                 ),
                 recurrence: data.recurrenceWeekdays.map { WarmAlarmRecurrenceWire(weekdays: $0) },
-                snooze: data.snoozeDurationMillis.map { WarmAlarmSnoozeWire(durationMillis: $0) },
+                snooze: data.snoozeDurationMillis.map {
+                    WarmAlarmSnoozeWire(durationMillis: $0, maxCount: data.snoozeMaxCount)
+                },
                 payload: data.payload,
                 systemManagedAudio: data.systemManagedAudio
             )
