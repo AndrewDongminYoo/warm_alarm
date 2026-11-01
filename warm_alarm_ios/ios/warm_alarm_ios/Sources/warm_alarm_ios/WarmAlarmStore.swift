@@ -34,6 +34,8 @@ struct WarmAlarmScheduleData: Codable {
     let alarmKitSnoozeObserved: Bool
     var systemSoundFilePath: String? = nil
     var alarmKitSoundName: String? = nil
+    var snoozeMaxCount: Int64? = nil
+    var snoozeCount: Int64 = 0
 
     var systemManagedAudio: Bool {
         alarmKitManaged && systemSoundFilePath != nil && alarmKitSoundName != nil
@@ -50,6 +52,7 @@ struct WarmAlarmScheduleData: Codable {
         case volumeEnforced, fadeSteps, keepNotificationAfterAlarmEnds, activeSnoozeUntilMillis
         case fallbackAnchorMillis, alarmKitManaged, alarmKitSnoozeObserved
         case systemSoundFilePath, alarmKitSoundName
+        case snoozeMaxCount, snoozeCount
     }
 }
 
@@ -117,6 +120,8 @@ extension WarmAlarmScheduleData {
         alarmKitSnoozeObserved = try c.decodeIfPresent(Bool.self, forKey: .alarmKitSnoozeObserved) ?? false
         systemSoundFilePath = try c.decodeIfPresent(String.self, forKey: .systemSoundFilePath)
         alarmKitSoundName = try c.decodeIfPresent(String.self, forKey: .alarmKitSoundName)
+        snoozeMaxCount = try c.decodeIfPresent(Int64.self, forKey: .snoozeMaxCount)
+        snoozeCount = try c.decodeIfPresent(Int64.self, forKey: .snoozeCount) ?? 0
     }
 
     static func from(
@@ -160,7 +165,8 @@ extension WarmAlarmScheduleData {
             fallbackAnchorMillis: fallbackAnchorMillis,
             alarmKitManaged: false,
             alarmKitSnoozeObserved: false,
-            systemSoundFilePath: wire.audio.systemSoundFilePath
+            systemSoundFilePath: wire.audio.systemSoundFilePath,
+            snoozeMaxCount: wire.snooze?.maxCount
         )
     }
 
@@ -240,6 +246,21 @@ extension WarmAlarmScheduleData {
         )
     }
 
+    /// Whether the next ring of this occurrence offers the notification Snooze action.
+    var offersSnooze: Bool {
+        snoozeMaxCount.map { snoozeCount < $0 } ?? true
+    }
+
+    func withSnoozeCount(_ count: Int64) -> WarmAlarmScheduleData {
+        copying(
+            recurrenceHour: recurrenceHour,
+            recurrenceMinute: recurrenceMinute,
+            activeSnoozeUntilMillis: activeSnoozeUntilMillis,
+            fallbackAnchorMillis: fallbackAnchorMillis,
+            snoozeCount: count
+        )
+    }
+
     func clearingActiveSnooze() -> WarmAlarmScheduleData {
         copying(
             recurrenceHour: recurrenceHour,
@@ -257,7 +278,8 @@ extension WarmAlarmScheduleData {
         activeSnoozeUntilMillis: Int64?,
         fallbackAnchorMillis: Int64?,
         alarmKitManaged: Bool? = nil,
-        alarmKitSnoozeObserved: Bool? = nil
+        alarmKitSnoozeObserved: Bool? = nil,
+        snoozeCount: Int64? = nil
     ) -> WarmAlarmScheduleData {
         WarmAlarmScheduleData(
             id: id, scheduledAtMillis: scheduledAtMillis ?? self.scheduledAtMillis,
@@ -280,7 +302,9 @@ extension WarmAlarmScheduleData {
             alarmKitManaged: alarmKitManaged ?? self.alarmKitManaged,
             alarmKitSnoozeObserved: alarmKitSnoozeObserved ?? self.alarmKitSnoozeObserved,
             systemSoundFilePath: systemSoundFilePath,
-            alarmKitSoundName: alarmKitSoundName
+            alarmKitSoundName: alarmKitSoundName,
+            snoozeMaxCount: snoozeMaxCount,
+            snoozeCount: snoozeCount ?? self.snoozeCount
         )
     }
 }

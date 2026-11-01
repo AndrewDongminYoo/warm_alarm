@@ -6662,6 +6662,596 @@ final class WarmAlarmRequestTests: XCTestCase {
         )
     }
 
+    // MARK: - Snooze limit
+
+    func testStopOnlyCategoryIsOwnedAndOffersOnlyStop() {
+        let defaultStopOnly = WarmAlarmDelegate.notificationCategory(stopTitle: nil, snoozeTitle: nil, offersSnooze: false)
+        let customStopOnly = WarmAlarmDelegate.notificationCategory(
+            stopTitle: "Dismiss", snoozeTitle: "Later", offersSnooze: false
+        )
+        let customWithSnooze = WarmAlarmDelegate.notificationCategory(stopTitle: "Dismiss", snoozeTitle: "Later")
+
+        XCTAssertEqual(defaultStopOnly.actions.map(\.identifier), ["STOP"])
+        XCTAssertEqual(defaultStopOnly.actions.map(\.title), ["Stop"])
+        XCTAssertEqual(customStopOnly.actions.map(\.title), ["Dismiss"])
+        XCTAssertEqual(
+            Set([
+                WarmAlarmDelegate.categoryIdentifier,
+                defaultStopOnly.identifier,
+                customStopOnly.identifier,
+                customWithSnooze.identifier,
+            ]).count,
+            4
+        )
+        XCTAssertEqual(
+            WarmAlarmDelegate.notificationCategory(stopTitle: "Dismiss", snoozeTitle: "Other", offersSnooze: false)
+                .identifier,
+            customStopOnly.identifier
+        )
+        XCTAssertTrue(WarmAlarmDelegate.ownsCategory(defaultStopOnly.identifier))
+        XCTAssertTrue(WarmAlarmDelegate.ownsCategory(customStopOnly.identifier))
+        XCTAssertFalse(WarmAlarmDelegate.ownsCategory("WARM_ALARM:HOST_MESSAGES"))
+    }
+
+    func testContentOffersSnoozeUntilTheCountReachesMaxCount() {
+        let delegate = makeSnoozeLimitDelegate(label: "snooze_limit.content")
+        let cases: [(maxCount: Int64?, count: Int64, offersSnooze: Bool)] = [
+            (nil, 0, true), (nil, 7, true), (0, 0, false), (2, 0, true), (2, 1, true), (2, 2, false), (2, 3, false),
+        ]
+        for testCase in cases {
+            var schedule = WarmAlarmScheduleData.from(wire: snoozeLimitedWire(
+                id: 7_171_001, scheduledAtMillis: 1_900_000_000_000, maxCount: testCase.maxCount
+            ))
+            schedule.snoozeCount = testCase.count
+            let content = delegate.makeContent(from: schedule)
+            let message = "maxCount \(String(describing: testCase.maxCount)), count \(testCase.count)"
+
+            XCTAssertEqual(
+                registeredActionIdentifiers(for: [content]).first,
+                testCase.offersSnooze ? ["STOP", "SNOOZE"] : ["STOP"],
+                message
+            )
+            XCTAssertEqual(content.userInfo["warmAlarmStopOnly"] as? Bool == true, !testCase.offersSnooze, message)
+        }
+    }
+
+    func testInitialRequestsOmitSnoozeOnlyWhenMaxCountIsZero() {
+        let delegate = makeSnoozeLimitDelegate(label: "snooze_limit.initial")
+        let recurrences: [[Int64]?] = [nil, [1, 3]]
+        let limits: [(maxCount: Int64?, offersSnooze: Bool)] = [(nil, true), (0, false), (1, true)]
+        for recurrence in recurrences {
+            for limit in limits {
+                let wire = snoozeLimitedWire(
+                    id: 7_171_002,
+                    scheduledAtMillis: 1_900_000_000_000,
+                    recurrenceWeekdays: recurrence,
+                    maxCount: limit.maxCount
+                )
+                let requests = WarmAlarmPlugin.makeRequests(
+                    for: wire,
+                    content: delegate.makeContent(from: WarmAlarmScheduleData.from(wire: wire)),
+                    fallbackAnchorMillis: wire.scheduledAtMillis
+                )
+                let message = "recurrence \(String(describing: recurrence)), maxCount \(String(describing: limit.maxCount))"
+
+                XCTAssertEqual(requests.count, (recurrence?.count ?? 1) + 10, message)
+                XCTAssertEqual(
+                    Set(registeredActionIdentifiers(for: requests.map(\.content))),
+                    [limit.offersSnooze ? ["STOP", "SNOOZE"] : ["STOP"]],
+                    message
+                )
+            }
+        }
+    }
+
+    func testSnoozeRequestAndFallbackChainDropSnoozeWhenTheNextCountReachesMaxCount() {
+        let delegate = makeSnoozeLimitDelegate(label: "snooze_limit.snooze_chain")
+        let alarmId: Int64 = 7_171_003
+        let fireAtMillis: Int64 = 1_900_000_300_000
+        for (nextCount, offersSnooze) in [(Int64(1), true), (Int64(2), false)] {
+            var snoozed = WarmAlarmScheduleData.from(
+                wire: snoozeLimitedWire(id: alarmId, scheduledAtMillis: 1_900_000_000_000, maxCount: 2)
+            ).withActiveSnooze(untilMillis: fireAtMillis, fallbackAnchorMillis: fireAtMillis)
+            snoozed.snoozeMaxCount = 2
+            snoozed.snoozeCount = nextCount
+
+            let requests = WarmAlarmPlugin.makeSnoozeRequests(
+                for: snoozed,
+                fireAtMillis: fireAtMillis,
+                nowMillis: 1_900_000_000_000,
+                content: delegate.makeContent(from: snoozed)
+            )
+
+            XCTAssertEqual(
+                requests.map(\.identifier),
+                WarmAlarmPlugin.requestIdentifiers(for: alarmId, recurrenceWeekdays: nil)
+            )
+            XCTAssertEqual(
+                Set(registeredActionIdentifiers(for: requests.map(\.content))),
+                [offersSnooze ? ["STOP", "SNOOZE"] : ["STOP"]],
+                "next count \(nextCount)"
+            )
+        }
+    }
+
+    func testRegistrationRebuildsStopOnlyAndLegacyCategoriesFromContent() throws {
+        let delegate = makeSnoozeLimitDelegate(label: "snooze_limit.registration")
+        var wire = snoozeLimitedWire(id: 7_171_004, scheduledAtMillis: 1_900_000_000_000, maxCount: 0)
+        wire.notification.stopActionTitle = "Dismiss"
+        wire.notification.snoozeActionTitle = "Later"
+        let stopOnly = delegate.makeContent(from: WarmAlarmScheduleData.from(wire: wire))
+        let legacy = UNMutableNotificationContent()
+        legacy.categoryIdentifier = WarmAlarmDelegate.notificationCategory(stopTitle: "Dismiss", snoozeTitle: "Later")
+            .identifier
+        legacy.userInfo = [
+            "alarmId": "7171004",
+            "warmAlarmStopActionTitle": "Dismiss",
+            "warmAlarmSnoozeActionTitle": "Later",
+        ]
+        XCTAssertNotEqual(stopOnly.categoryIdentifier, legacy.categoryIdentifier)
+        let proxy = WarmAlarmNotificationCenterDelegate(warmAlarmDelegate: delegate, forwardingDelegate: nil)
+        XCTAssertTrue(proxy.target(for: stopOnly) === delegate)
+        var registered: Set<UNNotificationCategory> = []
+        let done = expectation(description: "categories registered")
+
+        WarmAlarmDelegate.registerCategories(
+            for: [stopOnly, legacy], read: { $0(registered) }, write: { registered = $0 }
+        ) { done.fulfill() }
+
+        wait(for: [done], timeout: 2)
+        let stopOnlyCategory = try XCTUnwrap(registered.first { $0.identifier == stopOnly.categoryIdentifier })
+        let legacyCategory = try XCTUnwrap(registered.first { $0.identifier == legacy.categoryIdentifier })
+        XCTAssertEqual(stopOnlyCategory.actions.map(\.title), ["Dismiss"])
+        XCTAssertEqual(legacyCategory.actions.map(\.title), ["Dismiss", "Later"])
+    }
+
+    func testSnoozeCountRestartsOnlyForANewRecurringOccurrence() {
+        let calendar = utcCalendar()
+        let firstOccurrenceMillis = millis(2030, 1, 7, 7, 0, calendar: calendar)
+        let snoozeMillis = firstOccurrenceMillis + 300_000
+        let wire = snoozeLimitedWire(
+            id: 7_171_005, scheduledAtMillis: firstOccurrenceMillis, recurrenceWeekdays: [1], maxCount: 2
+        )
+        var schedule = WarmAlarmScheduleData.from(
+            wire: wire, fallbackAnchorMillis: firstOccurrenceMillis, calendar: calendar
+        ).withActiveSnooze(untilMillis: snoozeMillis, fallbackAnchorMillis: snoozeMillis)
+        schedule.snoozeMaxCount = 2
+        schedule.snoozeCount = 2
+        let recurringContent = WarmAlarmPlugin.makeRequests(
+            for: wire, content: UNMutableNotificationContent(),
+            fallbackAnchorMillis: firstOccurrenceMillis, calendar: calendar
+        )[0].content
+        let activeSnoozeContent = WarmAlarmPlugin.makeSnoozeRequests(
+            for: schedule, fireAtMillis: snoozeMillis, nowMillis: firstOccurrenceMillis,
+            content: UNMutableNotificationContent()
+        )[0].content
+        let staleSnoozeContent = WarmAlarmPlugin.makeSnoozeRequests(
+            for: schedule, fireAtMillis: snoozeMillis - 60_000, nowMillis: firstOccurrenceMillis,
+            content: UNMutableNotificationContent()
+        )[0].content
+        let oneShotWire = snoozeLimitedWire(id: 7_171_006, scheduledAtMillis: firstOccurrenceMillis, maxCount: 2)
+        var oneShot = WarmAlarmScheduleData.from(
+            wire: oneShotWire, fallbackAnchorMillis: firstOccurrenceMillis, calendar: calendar
+        )
+        oneShot.snoozeCount = 2
+        let oneShotContent = WarmAlarmPlugin.makeRequests(
+            for: oneShotWire, content: UNMutableNotificationContent(),
+            fallbackAnchorMillis: firstOccurrenceMillis, calendar: calendar
+        )[0].content
+
+        XCTAssertEqual(WarmAlarmPlugin.snoozeCountBeforeAction(for: schedule, content: recurringContent), 0)
+        XCTAssertEqual(WarmAlarmPlugin.snoozeCountBeforeAction(for: schedule, content: activeSnoozeContent), 2)
+        XCTAssertEqual(WarmAlarmPlugin.snoozeCountBeforeAction(for: schedule, content: staleSnoozeContent), 2)
+        XCTAssertEqual(WarmAlarmPlugin.snoozeCountBeforeAction(for: schedule, content: nil), 2)
+        XCTAssertEqual(WarmAlarmPlugin.snoozeCountBeforeAction(for: oneShot, content: oneShotContent), 2)
+    }
+
+    func testSnoozePastTheLimitIsRefusedAndLeavesTheRingPlaying() {
+        let alarmId: Int64 = 7_171_007
+        let scheduledAtMillis: Int64 = 1_900_000_000_000
+        let snoozeMillis = scheduledAtMillis + 300_000
+        var schedule = WarmAlarmScheduleData.from(
+            wire: snoozeLimitedWire(id: alarmId, scheduledAtMillis: scheduledAtMillis, maxCount: 1),
+            fallbackAnchorMillis: scheduledAtMillis
+        ).withActiveSnooze(untilMillis: snoozeMillis, fallbackAnchorMillis: snoozeMillis)
+        schedule.snoozeMaxCount = 1
+        schedule.snoozeCount = 1
+        let content = WarmAlarmPlugin.makeSnoozeRequests(
+            for: schedule, fireAtMillis: snoozeMillis, nowMillis: scheduledAtMillis,
+            content: UNMutableNotificationContent()
+        )[0].content
+        let occurrenceToken = WarmAlarmPlugin.foregroundOccurrenceToken(
+            content: content, identifier: String(alarmId), alarmId: alarmId,
+            deliveredAtMillis: snoozeMillis, schedule: schedule
+        )
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(schedule)
+        let events = RecordingWarmAlarmEventsApi()
+        let delegate = WarmAlarmDelegate(
+            eventsApi: events,
+            notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.snooze_limit.refused"),
+            currentlyPlayingAlarmId: alarmId,
+            currentlyPlayingOccurrenceToken: occurrenceToken
+        )
+        delegate.clearHandledForegroundOccurrence(alarmId: alarmId)
+        defer {
+            delegate.stopAllIfPlaying()
+            WarmAlarmStore.shared.remove(id: alarmId)
+            UNUserNotificationCenter.current().removePendingNotificationRequests(
+                withIdentifiers: WarmAlarmPlugin.requestIdentifiers(for: alarmId, recurrenceWeekdays: nil)
+            )
+        }
+        let completed = expectation(description: "refused snooze completes")
+
+        delegate.handleSnooze(
+            alarmId: alarmId, occurrenceToken: occurrenceToken,
+            deliveredIdentifier: String(alarmId), content: content
+        ) { completed.fulfill() }
+
+        wait(for: [completed], timeout: 5)
+        XCTAssertEqual(delegate.currentlyPlayingAlarmId, alarmId)
+        XCTAssertEqual(delegate.currentlyPlayingOccurrenceToken, occurrenceToken)
+        XCTAssertTrue(events.events.isEmpty)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.activeSnoozeUntilMillis, snoozeMillis)
+    }
+
+    func testLimitedReplacementStillStopsAudioOfARejectedOldGenerationSnooze() {
+        let alarmId: Int64 = 7_171_008
+        let oldOccurrenceMillis: Int64 = 1_000
+        let oldContent = WarmAlarmPlugin.makeRequests(
+            for: makeWireSchedule(id: alarmId, scheduledAtMillis: oldOccurrenceMillis),
+            content: UNMutableNotificationContent(),
+            fallbackAnchorMillis: oldOccurrenceMillis,
+            calendar: utcCalendar()
+        )[0].content
+        let replacement = WarmAlarmScheduleData.from(
+            wire: snoozeLimitedWire(id: alarmId, scheduledAtMillis: 2_000, maxCount: 0),
+            fallbackAnchorMillis: 2_000,
+            calendar: utcCalendar(),
+            occurrenceSeriesToken: "replacement-generation"
+        )
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(replacement)
+        let delegate = WarmAlarmDelegate(
+            eventsApi: RecordingWarmAlarmEventsApi(),
+            notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.snooze_limit.old_generation"),
+            currentlyPlayingAlarmId: alarmId,
+            currentlyPlayingOccurrenceToken: "series#\(oldOccurrenceMillis)"
+        )
+        defer {
+            delegate.stopIfPlaying(alarmId: alarmId)
+            WarmAlarmStore.shared.remove(id: alarmId)
+        }
+        var didComplete = false
+
+        delegate.handleSnooze(
+            alarmId: alarmId, occurrenceToken: "series#\(oldOccurrenceMillis)", content: oldContent
+        ) { didComplete = true }
+
+        XCTAssertTrue(didComplete)
+        XCTAssertNil(delegate.currentlyPlayingAlarmId)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.occurrenceSeriesToken, "replacement-generation")
+    }
+
+    func testSnoozeWithinTheLimitStoresTheNextCountAndRegistersAStopOnlyChain() throws {
+        let alarmId: Int64 = 7_171_009
+        let scheduledAtMillis = (Int64(Date().timeIntervalSince1970) - 1) * 1_000
+        let wire = snoozeLimitedWire(id: alarmId, scheduledAtMillis: scheduledAtMillis, maxCount: 1)
+        let schedule = WarmAlarmScheduleData.from(wire: wire, fallbackAnchorMillis: scheduledAtMillis)
+        let delegate = makeSnoozeLimitDelegate(label: "snooze_limit.within")
+        let content = WarmAlarmPlugin.makeRequests(
+            for: wire, content: delegate.makeContent(from: schedule),
+            fallbackAnchorMillis: scheduledAtMillis, occurrenceSeriesToken: schedule.occurrenceSeriesToken
+        )[0].content
+        let occurrenceToken = WarmAlarmPlugin.foregroundOccurrenceToken(
+            content: content, identifier: String(alarmId), alarmId: alarmId,
+            deliveredAtMillis: scheduledAtMillis, schedule: schedule
+        )
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(schedule)
+        delegate.clearHandledForegroundOccurrence(alarmId: alarmId)
+        defer {
+            WarmAlarmStore.shared.remove(id: alarmId)
+            UNUserNotificationCenter.current().removePendingNotificationRequests(
+                withIdentifiers: WarmAlarmPlugin.requestIdentifiers(for: alarmId, recurrenceWeekdays: nil)
+            )
+        }
+        let completed = expectation(description: "snooze completes")
+
+        delegate.handleSnooze(
+            alarmId: alarmId, occurrenceToken: occurrenceToken,
+            deliveredIdentifier: String(alarmId), content: content
+        ) { completed.fulfill() }
+
+        wait(for: [completed], timeout: 5)
+        let stored = try XCTUnwrap(WarmAlarmStore.shared.load(id: alarmId))
+        XCTAssertEqual(stored.snoozeCount, 1)
+        XCTAssertNotNil(stored.activeSnoozeUntilMillis)
+        XCTAssertEqual(registeredActionIdentifiers(for: [delegate.makeContent(from: stored)]), [["STOP"]])
+    }
+
+    func testSnoozeOnANewRecurringOccurrenceRestartsTheCount() throws {
+        let alarmId: Int64 = 7_171_010
+        let calendar = Calendar.current
+        let now = Date()
+        let minuteStart = calendar.date(from: calendar.dateComponents([.year, .month, .day, .hour, .minute], from: now))!
+        let scheduledAtMillis = Int64(minuteStart.timeIntervalSince1970 * 1_000)
+        let isoWeekday = Int64((calendar.component(.weekday, from: now) + 5) % 7 + 1)
+        let wire = snoozeLimitedWire(
+            id: alarmId, scheduledAtMillis: scheduledAtMillis, recurrenceWeekdays: [isoWeekday], maxCount: 2
+        )
+        let lastWeekSnoozeMillis = scheduledAtMillis - 7 * 86_400_000 + 300_000
+        var schedule = WarmAlarmScheduleData.from(wire: wire, fallbackAnchorMillis: scheduledAtMillis)
+            .withActiveSnooze(untilMillis: lastWeekSnoozeMillis, fallbackAnchorMillis: lastWeekSnoozeMillis)
+        schedule.snoozeMaxCount = 2
+        schedule.snoozeCount = 2
+        let delegate = makeSnoozeLimitDelegate(label: "snooze_limit.new_occurrence")
+        let deliveredIdentifier = "\(alarmId)#\(isoWeekday)"
+        let content = WarmAlarmPlugin.makeRequests(
+            for: wire, content: delegate.makeContent(from: schedule),
+            fallbackAnchorMillis: scheduledAtMillis, occurrenceSeriesToken: schedule.occurrenceSeriesToken
+        )[0].content
+        let occurrenceToken = WarmAlarmPlugin.foregroundOccurrenceToken(
+            content: content, identifier: deliveredIdentifier, alarmId: alarmId,
+            deliveredAtMillis: scheduledAtMillis + 1_000, schedule: schedule
+        )
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(schedule)
+        delegate.clearHandledForegroundOccurrence(alarmId: alarmId)
+        defer {
+            WarmAlarmStore.shared.remove(id: alarmId)
+            UNUserNotificationCenter.current().removePendingNotificationRequests(
+                withIdentifiers: WarmAlarmPlugin.requestIdentifiers(for: alarmId, recurrenceWeekdays: [isoWeekday])
+            )
+        }
+        let completed = expectation(description: "new occurrence snooze completes")
+
+        delegate.handleSnooze(
+            alarmId: alarmId, occurrenceToken: occurrenceToken,
+            deliveredIdentifier: deliveredIdentifier, content: content
+        ) { completed.fulfill() }
+
+        wait(for: [completed], timeout: 5)
+        let stored = try XCTUnwrap(WarmAlarmStore.shared.load(id: alarmId))
+        XCTAssertEqual(stored.snoozeCount, 1)
+        XCTAssertNotEqual(stored.activeSnoozeUntilMillis, lastWeekSnoozeMillis)
+        XCTAssertEqual(registeredActionIdentifiers(for: [delegate.makeContent(from: stored)]), [["STOP", "SNOOZE"]])
+    }
+
+    func testStoppingTheSnoozedRingResetsTheRecurringSnoozeCount() {
+        let alarmId: Int64 = 7_171_011
+        let nowMillis = Int64(Date().timeIntervalSince1970) * 1_000
+        let snoozeMillis = nowMillis + 300_000
+        let wire = snoozeLimitedWire(
+            id: alarmId, scheduledAtMillis: nowMillis - 86_400_000, recurrenceWeekdays: [1, 2, 3, 4, 5, 6, 7],
+            maxCount: 2
+        )
+        var schedule = WarmAlarmScheduleData.from(wire: wire, fallbackAnchorMillis: nowMillis - 86_400_000)
+            .withActiveSnooze(untilMillis: snoozeMillis, fallbackAnchorMillis: snoozeMillis)
+        schedule.snoozeMaxCount = 2
+        schedule.snoozeCount = 1
+        let content = WarmAlarmPlugin.makeSnoozeRequests(
+            for: schedule, fireAtMillis: snoozeMillis, nowMillis: nowMillis, content: UNMutableNotificationContent()
+        )[0].content
+        let occurrenceToken = WarmAlarmPlugin.foregroundOccurrenceToken(
+            content: content, identifier: String(alarmId), alarmId: alarmId,
+            deliveredAtMillis: snoozeMillis, schedule: schedule
+        )
+        WarmAlarmStore.shared.remove(id: alarmId)
+        WarmAlarmStore.shared.save(schedule)
+        let delegate = makeSnoozeLimitDelegate(label: "snooze_limit.stop_reset")
+        delegate.clearHandledForegroundOccurrence(alarmId: alarmId)
+        defer { WarmAlarmStore.shared.remove(id: alarmId) }
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.snoozeCount, 1, "precondition: the count is stored")
+
+        delegate.handleStop(
+            alarmId: alarmId, occurrenceToken: occurrenceToken,
+            deliveredIdentifier: String(alarmId), content: content
+        )
+
+        XCTAssertNotNil(WarmAlarmStore.shared.load(id: alarmId))
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.snoozeCount, 0)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.snoozeMaxCount, 2)
+    }
+
+    func testSchedulingAgainAndCancellingResetTheSnoozeCount() {
+        let alarmId: Int64 = 7_171_012
+        let plugin = makeSoundLifecyclePlugin(
+            backend: RecordingAlarmKitBackend(scheduleError: nil, authorizationState: .denied)
+        )
+        defer {
+            WarmAlarmStore.shared.remove(id: alarmId)
+            UNUserNotificationCenter.current().removePendingNotificationRequests(
+                withIdentifiers: WarmAlarmPlugin.requestIdentifiers(for: alarmId, recurrenceWeekdays: nil)
+            )
+            withExtendedLifetime(plugin) {}
+        }
+        var stale = WarmAlarmScheduleData.from(
+            wire: snoozeLimitedWire(id: alarmId, scheduledAtMillis: 1_900_000_000_000, maxCount: 2)
+        )
+        stale.snoozeMaxCount = 2
+        stale.snoozeCount = 2
+        WarmAlarmStore.shared.save(stale)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.snoozeCount, 2, "precondition: the count is stored")
+        let scheduled = expectation(description: "schedule completes")
+
+        plugin.scheduleAlarm(
+            schedule: snoozeLimitedWire(id: alarmId, scheduledAtMillis: 1_900_000_600_000, maxCount: 3)
+        ) { result in
+            if case let .failure(error) = result { XCTFail("Scheduling failed: \(error)") }
+            scheduled.fulfill()
+        }
+
+        wait(for: [scheduled], timeout: 10)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.snoozeCount, 0)
+        XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.snoozeMaxCount, 3)
+        var snoozed = WarmAlarmStore.shared.load(id: alarmId)!
+        snoozed.snoozeCount = 1
+        WarmAlarmStore.shared.save(snoozed)
+        let cancelled = expectation(description: "cancel completes")
+        plugin.cancelAlarm(id: alarmId) { result in
+            if case let .failure(error) = result { XCTFail("Cancel failed: \(error)") }
+            cancelled.fulfill()
+        }
+        wait(for: [cancelled], timeout: 10)
+        XCTAssertNil(WarmAlarmStore.shared.load(id: alarmId))
+    }
+
+    func testSnoozeRollbackRequestsKeepThePreviousCategory() {
+        let delegate = makeSnoozeLimitDelegate(label: "snooze_limit.rollback")
+        let nowMillis: Int64 = 1_900_000_000_000
+        let previousSnoozeMillis = nowMillis + 120_000
+        let replacementSnoozeMillis = nowMillis + 300_000
+        var existing = WarmAlarmScheduleData.from(
+            wire: snoozeLimitedWire(id: 7_171_013, scheduledAtMillis: nowMillis - 300_000, maxCount: 2)
+        ).withActiveSnooze(untilMillis: previousSnoozeMillis, fallbackAnchorMillis: previousSnoozeMillis)
+        existing.snoozeMaxCount = 2
+        existing.snoozeCount = 1
+        var updated = existing.withActiveSnooze(
+            untilMillis: replacementSnoozeMillis, fallbackAnchorMillis: replacementSnoozeMillis
+        )
+        updated.snoozeMaxCount = 2
+        updated.snoozeCount = 2
+        let previousRequests = WarmAlarmPlugin.makeSnoozeRequests(
+            for: existing, fireAtMillis: previousSnoozeMillis, nowMillis: nowMillis - 60_000,
+            content: delegate.makeContent(from: existing)
+        )
+        let replacementRequests = WarmAlarmPlugin.makeSnoozeRequests(
+            for: updated, fireAtMillis: replacementSnoozeMillis, nowMillis: nowMillis,
+            content: delegate.makeContent(from: updated)
+        )
+
+        let rollbackRequests = WarmAlarmPlugin.makeSnoozeRollbackRequests(
+            for: existing, restoring: previousRequests, nowMillis: nowMillis,
+            content: delegate.makeContent(from: existing)
+        )
+
+        XCTAssertFalse(rollbackRequests.isEmpty)
+        XCTAssertEqual(Set(registeredActionIdentifiers(for: replacementRequests.map(\.content))), [["STOP"]])
+        XCTAssertEqual(Set(registeredActionIdentifiers(for: rollbackRequests.map(\.content))), [["STOP", "SNOOZE"]])
+    }
+
+    func testRecoveryRebuildsTheLimitedSnoozeChainAndKeepsSnoozeOnNewOccurrences() {
+        let delegate = makeSnoozeLimitDelegate(label: "snooze_limit.recovery")
+        let calendar = utcCalendar()
+        let nowMillis = millis(2030, 1, 7, 7, 1, calendar: calendar)
+        let snoozeMillis = nowMillis + 240_000
+        let alarmId: Int64 = 7_171_014
+        var recurring = WarmAlarmScheduleData.from(
+            wire: snoozeLimitedWire(
+                id: alarmId, scheduledAtMillis: millis(2030, 1, 7, 7, 0, calendar: calendar),
+                recurrenceWeekdays: [1, 3], maxCount: 1
+            ),
+            calendar: calendar
+        ).withActiveSnooze(untilMillis: snoozeMillis, fallbackAnchorMillis: snoozeMillis)
+        recurring.snoozeMaxCount = 1
+        recurring.snoozeCount = 1
+        var newOccurrence = recurring
+        newOccurrence.snoozeCount = 0
+
+        let requests = WarmAlarmPlugin.makeRecoveryRequests(
+            for: recurring, nowMillis: nowMillis, pendingIdentifiers: [],
+            content: delegate.makeContent(from: recurring),
+            newOccurrenceContent: delegate.makeContent(from: newOccurrence),
+            calendar: calendar
+        )
+
+        let recurringRequests = requests.filter { $0.identifier.hasPrefix("\(alarmId)#") && !$0.identifier.contains("fallback") }
+        let snoozeChain = requests.filter { !recurringRequests.map(\.identifier).contains($0.identifier) }
+        XCTAssertEqual(recurringRequests.map(\.identifier).sorted(), ["\(alarmId)#1", "\(alarmId)#3"])
+        XCTAssertEqual(snoozeChain.count, 11)
+        XCTAssertEqual(Set(registeredActionIdentifiers(for: recurringRequests.map(\.content))), [["STOP", "SNOOZE"]])
+        XCTAssertEqual(Set(registeredActionIdentifiers(for: snoozeChain.map(\.content))), [["STOP"]])
+    }
+
+    func testAlarmKitScheduleReportsThatTheSystemPerformsTheSnooze() throws {
+        guard #available(iOS 26.0, *) else { throw XCTSkip("AlarmKit requires iOS 26") }
+        let alarmId: Int64 = 7_171_016
+        let cases: [(scheduleError: Error?, systemPerformsSnooze: Bool)] = [
+            (nil, true),
+            (NSError(domain: "AlarmKitTests", code: 1), false),
+        ]
+        for testCase in cases {
+            let plugin = makeSoundLifecyclePlugin(backend: RecordingAlarmKitBackend(scheduleError: testCase.scheduleError))
+            var outcome: WarmAlarmScheduleResultWire?
+            let completed = expectation(description: "schedule completes")
+
+            plugin.scheduleAlarm(
+                schedule: snoozeLimitedWire(id: alarmId, scheduledAtMillis: 1_900_000_000_000, maxCount: 1)
+            ) { result in
+                if case let .failure(error) = result { XCTFail("Scheduling failed: \(error)") }
+                outcome = try? result.get()
+                completed.fulfill()
+            }
+
+            wait(for: [completed], timeout: 10)
+            XCTAssertEqual(outcome?.systemPerformsSnooze, testCase.systemPerformsSnooze)
+            XCTAssertEqual(WarmAlarmStore.shared.load(id: alarmId)?.alarmKitManaged, testCase.systemPerformsSnooze)
+            WarmAlarmStore.shared.remove(id: alarmId)
+            UNUserNotificationCenter.current().removePendingNotificationRequests(
+                withIdentifiers: WarmAlarmPlugin.requestIdentifiers(for: alarmId, recurrenceWeekdays: nil)
+            )
+            withExtendedLifetime(plugin) {}
+        }
+    }
+
+    func testScheduledAlarmSnapshotsReturnTheSnoozeMaxCount() throws {
+        let alarmId: Int64 = 7_171_017
+        WarmAlarmStore.shared.save(WarmAlarmScheduleData.from(
+            wire: snoozeLimitedWire(id: alarmId, scheduledAtMillis: 1_900_000_000_000, maxCount: 3)
+        ))
+        let plugin = makeSoundLifecyclePlugin(
+            backend: RecordingAlarmKitBackend(scheduleError: nil, authorizationState: .denied)
+        )
+        defer {
+            WarmAlarmStore.shared.remove(id: alarmId)
+            withExtendedLifetime(plugin) {}
+        }
+        var snapshots = [WarmAlarmSnapshotWire]()
+        let completed = expectation(description: "query completes")
+
+        plugin.getScheduledAlarms { result in
+            if case let .failure(error) = result { XCTFail("Query failed: \(error)") }
+            snapshots = (try? result.get()) ?? []
+            completed.fulfill()
+        }
+
+        wait(for: [completed], timeout: 5)
+        let snapshot = try XCTUnwrap(snapshots.first { $0.id == alarmId })
+        XCTAssertEqual(snapshot.snooze?.durationMillis, 300_000)
+        XCTAssertEqual(snapshot.snooze?.maxCount, 3)
+    }
+
+    private func snoozeLimitedWire(
+        id: Int64,
+        scheduledAtMillis: Int64,
+        recurrenceWeekdays: [Int64]? = nil,
+        maxCount: Int64?
+    ) -> WarmAlarmScheduleWire {
+        var wire = makeWireSchedule(id: id, scheduledAtMillis: scheduledAtMillis, recurrenceWeekdays: recurrenceWeekdays)
+        wire.snooze = WarmAlarmSnoozeWire(durationMillis: 300_000, maxCount: maxCount)
+        return wire
+    }
+
+    private func makeSnoozeLimitDelegate(label: String) -> WarmAlarmDelegate {
+        WarmAlarmDelegate(
+            eventsApi: RecordingWarmAlarmEventsApi(),
+            notificationMutationQueue: WarmAlarmMutationQueue(label: "warm_alarm_tests.\(label)")
+        )
+    }
+
+    private func registeredActionIdentifiers(for contents: [UNNotificationContent]) -> [[String]] {
+        var registered = Set<UNNotificationCategory>()
+        let done = expectation(description: "categories registered")
+        WarmAlarmDelegate.registerCategories(for: contents, read: { $0([]) }, write: { registered = $0 }) {
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 2)
+        return contents.map { content in
+            registered.first { $0.identifier == content.categoryIdentifier }?.actions.map(\.identifier) ?? []
+        }
+    }
+
     private func makeWireSchedule(
         id: Int64 = 42,
         scheduledAtMillis: Int64,

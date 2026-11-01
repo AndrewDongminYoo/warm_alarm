@@ -151,6 +151,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     static let categoryIdentifier = "WARM_ALARM"
     static let stopActionIdentifier = "STOP"
     static let snoozeActionIdentifier = "SNOOZE"
+    static let stopOnlyUserInfoKey = "warmAlarmStopOnly"
     private static let categoryMutationQueue = WarmAlarmMutationQueue(label: "warm_alarm.categories")
 
     private let playAudio: (AVAudioPlayer) -> Bool
@@ -398,7 +399,9 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         // the series.
         let isRecurring = !(schedule?.recurrenceWeekdays?.isEmpty ?? true)
         if isRecurring, let schedule {
-            WarmAlarmStore.shared.save(preservesActiveSnooze ? schedule : schedule.clearingFallbackAnchor())
+            WarmAlarmStore.shared.save(
+                preservesActiveSnooze ? schedule : schedule.clearingFallbackAnchor().withSnoozeCount(0)
+            )
         } else {
             WarmAlarmStore.shared.remove(id: alarmId)
         }
@@ -423,6 +426,21 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         completion: @escaping () -> Void
     ) {
         let schedule = WarmAlarmStore.shared.load(id: alarmId)
+        let snoozeCount = schedule.map {
+            WarmAlarmPlugin.snoozeCountBeforeAction(for: $0, content: content)
+        } ?? 0
+        // Only the current generation's limit applies; a stale action falls through to the occurrence checks below.
+        if let schedule, let maxCount = schedule.snoozeMaxCount, snoozeCount >= maxCount,
+           content.map({ WarmAlarmPlugin.notificationContent(schedule, matches: $0) }) ?? true {
+            NSLog(
+                "[warm_alarm_ios] alarmId=%lld ignored Snooze after %lld of %lld snoozes",
+                alarmId,
+                snoozeCount,
+                maxCount
+            )
+            completion()
+            return
+        }
         let actionLowerBound = schedule.flatMap {
             WarmAlarmPlugin.actionOccurrenceLowerBound(
                 for: $0,
@@ -453,7 +471,8 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         let fireAt = nowMillis() + snoozeDurationMillis
         reschedule(
             fireAtMillis: fireAt,
-            existing: schedule
+            existing: schedule,
+            snoozeCount: snoozeCount + 1
         ) { [weak self] error in
             guard let self else {
                 completion()
@@ -591,8 +610,13 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         content.userInfo = ["alarmId": String(schedule.id)]
         content.userInfo["warmAlarmStopActionTitle"] = schedule.stopActionTitle ?? "Stop"
         content.userInfo["warmAlarmSnoozeActionTitle"] = schedule.snoozeActionTitle ?? "Snooze"
+        if !schedule.offersSnooze {
+            content.userInfo[Self.stopOnlyUserInfoKey] = true
+        }
         content.categoryIdentifier = Self.notificationCategory(
-            stopTitle: schedule.stopActionTitle, snoozeTitle: schedule.snoozeActionTitle
+            stopTitle: schedule.stopActionTitle,
+            snoozeTitle: schedule.snoozeActionTitle,
+            offersSnooze: schedule.offersSnooze
         ).identifier
         if #available(iOS 15.0, *) {
             content.interruptionLevel = .timeSensitive
@@ -621,26 +645,41 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         return digest.count == 64 && digest.allSatisfy { "0123456789abcdef".contains($0) }
     }
 
-    static func notificationCategory(stopTitle: String?, snoozeTitle: String?) -> UNNotificationCategory {
+    static func notificationCategory(
+        stopTitle: String?,
+        snoozeTitle: String?,
+        offersSnooze: Bool = true
+    ) -> UNNotificationCategory {
         let stopTitle = stopTitle ?? "Stop"
         let snoozeTitle = snoozeTitle ?? "Snooze"
+        let stopAction = UNNotificationAction(identifier: stopActionIdentifier, title: stopTitle, options: .destructive)
+        guard offersSnooze else {
+            // The non-digit prefix keeps Stop-only inputs apart from the length-prefixed Stop and Snooze inputs.
+            return UNNotificationCategory(
+                identifier: categoryIdentifier + ":" + categoryDigest("stop-only:\(stopTitle)"),
+                actions: [stopAction],
+                intentIdentifiers: [], options: []
+            )
+        }
         let identifier: String
         if stopTitle == "Stop", snoozeTitle == "Snooze" {
             identifier = categoryIdentifier
         } else {
             // Length-prefixing keeps distinct title pairs distinct, including Unicode and delimiter text.
-            let input = "\(stopTitle.utf8.count):\(stopTitle)\(snoozeTitle)"
-            let digest = SHA256.hash(data: Data(input.utf8)).map { String(format: "%02x", $0) }.joined()
-            identifier = categoryIdentifier + ":" + digest
+            identifier = categoryIdentifier + ":" + categoryDigest("\(stopTitle.utf8.count):\(stopTitle)\(snoozeTitle)")
         }
         return UNNotificationCategory(
             identifier: identifier,
             actions: [
-                UNNotificationAction(identifier: stopActionIdentifier, title: stopTitle, options: .destructive),
+                stopAction,
                 UNNotificationAction(identifier: snoozeActionIdentifier, title: snoozeTitle, options: [])
             ],
             intentIdentifiers: [], options: []
         )
+    }
+
+    private static func categoryDigest(_ input: String) -> String {
+        SHA256.hash(data: Data(input.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
     static func registerCategories(
@@ -657,7 +696,8 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
         for content in contents where ownsCategory(content.categoryIdentifier) {
             required.insert(notificationCategory(
                 stopTitle: content.userInfo["warmAlarmStopActionTitle"] as? String,
-                snoozeTitle: content.userInfo["warmAlarmSnoozeActionTitle"] as? String
+                snoozeTitle: content.userInfo["warmAlarmSnoozeActionTitle"] as? String,
+                offersSnooze: content.userInfo[stopOnlyUserInfoKey] as? Bool != true
             ))
         }
         let categories = required
@@ -815,6 +855,7 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
     private func reschedule(
         fireAtMillis: Int64,
         existing: WarmAlarmScheduleData?,
+        snoozeCount: Int64,
         completion: @escaping (Error?) -> Void
     ) {
         guard let existing else {
@@ -825,10 +866,11 @@ final class WarmAlarmDelegate: NSObject, UNUserNotificationCenterDelegate, @unch
             ))
             return
         }
+        // The snoozed ring's category is fixed here, so it carries the count this snooze reaches.
         let updated = existing.withActiveSnooze(
             untilMillis: fireAtMillis,
             fallbackAnchorMillis: fireAtMillis
-        )
+        ).withSnoozeCount(snoozeCount)
         let content = makeContent(from: updated)
         let center = UNUserNotificationCenter.current()
         var previousSnoozeRequests = [UNNotificationRequest]()

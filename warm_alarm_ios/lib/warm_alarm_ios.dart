@@ -153,6 +153,7 @@ class WarmAlarmIOS extends WarmAlarmPlatform implements WarmAlarmEventsApi {
     await api.scheduleAlarm(_scheduleToWire(schedule)),
     wakeCheckRequested: schedule.wakeCheck != null,
     fadeRequested: _fadeRequested(schedule.audio),
+    snoozeLimitRequested: schedule.snooze?.maxCount != null,
   );
 
   @override
@@ -444,6 +445,7 @@ WarmAlarmScheduleResult _scheduleResultFromWire(
   WarmAlarmScheduleResultWire wire, {
   required bool wakeCheckRequested,
   required bool fadeRequested,
+  required bool snoozeLimitRequested,
 }) {
   return WarmAlarmScheduleResult.withWarnings(
     alarmId: wire.alarmId,
@@ -458,6 +460,11 @@ WarmAlarmScheduleResult _scheduleResultFromWire(
         const WarmAlarmWarning(
           code: WarmAlarmWarningCode.unsupportedFadeIn,
           message: "The system plays this alarm's sound on iOS, so fadeInDuration and fadeSteps are not applied.",
+        ),
+      if (snoozeLimitRequested && (wire.systemPerformsSnooze ?? false))
+        const WarmAlarmWarning(
+          code: WarmAlarmWarningCode.unsupportedSnoozeLimit,
+          message: 'The system performs the snooze on iOS with AlarmKit, so snooze maxCount is not applied.',
         ),
       ...wire.warnings.map((warning) => WarmAlarmWarning(message: warning.message)),
     ],
@@ -495,6 +502,7 @@ WarmAlarmSnapshot _snapshotFromWire(WarmAlarmSnapshotWire wire) {
         ? null
         : WarmAlarmSnooze(
             duration: Duration(milliseconds: wire.snooze!.durationMillis),
+            maxCount: wire.snooze!.maxCount,
           ),
     payload: wire.payload,
   );
@@ -505,7 +513,7 @@ WarmAlarmSnoozeWire? _snoozeToWire(WarmAlarmSnooze? snooze) {
     return null;
   }
 
-  return WarmAlarmSnoozeWire(durationMillis: snooze.duration.inMilliseconds);
+  return WarmAlarmSnoozeWire(durationMillis: snooze.duration.inMilliseconds, maxCount: snooze.maxCount);
 }
 
 WarmAlarmSupportStatus _supportStatusFromWire(WarmAlarmSupportStatusWire wire) {

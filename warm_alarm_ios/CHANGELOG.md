@@ -1,3 +1,12 @@
+# 0.1.15
+
+- Honor `WarmAlarmSnooze.maxCount` in the User Notifications backend: once one occurrence has been snoozed `maxCount` times, the snoozed ring and its fallback chain use a Stop-only category, and a `maxCount` of 0 never offers Snooze. A null `maxCount` keeps Snooze on every ring.
+- Count snoozes per occurrence. The count starts again when the alarm is scheduled again with the same id, when it is cancelled, and when the snoozed ring of a recurring alarm is stopped; a Snooze from a new weekly occurrence counts as that occurrence's first snooze.
+- Ignore and log a Snooze response that arrives after the limit is reached, and keep the ring playing.
+- Persist `maxCount` and the count with the stored schedule, rebuild the same categories on recovery, and return `maxCount` from `getScheduledAlarms`. Schedules stored by an earlier release load with no limit.
+- Report `unsupportedSnoozeLimit` after any wake-check and fade warnings and before native warnings when `maxCount` is set but AlarmKit performs the snooze. A schedule that falls back to User Notifications honors the limit instead.
+- Require platform interface 0.3.0 for `WarmAlarmSnooze.maxCount`.
+
 # 0.1.14
 
 - Apply `fadeInDuration` on the plugin `AVAudioPlayer` as a linear fade from silence to `volume`, or to 1.0 when `volume` is null, in 10 steps or one step per 100 ms, whichever is fewer. `fadeSteps` still wins when both are set, and a zero duration plays without a fade.

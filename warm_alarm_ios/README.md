@@ -127,6 +127,11 @@ Those system actions cannot emit `WarmAlarmStopped` or `WarmAlarmSnoozed` while 
 On the next `initialize()`, the plugin emits one `WarmAlarmSnoozed` event for an unobserved countdown or paused state.
 It emits `WarmAlarmStopped` when a missing AlarmKit one-shot has expired.
 
+AlarmKit performs the snooze itself, and the plugin cannot remove the snooze button from a running alarm.
+An AlarmKit schedule with a non-null `WarmAlarmSnooze.maxCount` is scheduled as usual, and its result reports `unsupportedSnoozeLimit`.
+The warning follows any wake-check and fade warnings and precedes native warnings.
+A schedule that falls back to User Notifications honors `maxCount` and does not report the warning.
+
 ---
 
 ## Native implementation
@@ -235,6 +240,17 @@ Foreground delivery then requests the notification sound instead of suppressing 
 A default notification tap cannot replay the original system notification sound, so custom-audio failure remains observable through the failure event.
 Stop and Snooze only stop a player owned by the same alarm and occurrence.
 An accepted foreground delivery stops any earlier playback before it resolves its own source, so the newest alarm owns audio even when it falls back to the notification sound.
+
+### Snooze limit
+
+`WarmAlarmSnooze.maxCount` limits how many times one occurrence can be snoozed from the notification.
+Null sets no limit, 0 removes the Snooze action, and a positive value removes it from the ring that follows the last allowed snooze.
+The category of a ring is fixed when its request is built, so the snooze reschedule decides it: the snoozed ring and its fallback chain use a Stop-only plugin category once the count reaches `maxCount`.
+The Stop-only category has its own identifier and a `warmAlarmStopOnly` flag in the notification `userInfo`, so registration, recovery and the host-delegate proxy treat it as a plugin category.
+The count and `maxCount` are stored with the schedule, so `initialize()` recovery rebuilds the same categories; schedules stored by an earlier release load with no limit.
+The count starts again when the alarm is scheduled again with the same id, when it is cancelled, and when the snoozed ring of a recurring alarm is stopped.
+A recurring alarm has no fire callback while the app is not running, so a Snooze from a new weekly occurrence counts as that occurrence's first snooze, and the weekly requests always offer Snooze unless `maxCount` is 0.
+A Snooze response that arrives after the limit is reached, for example from a notification kept by `keepNotificationAfterAlarmEnds`, is ignored and logged, and the ring keeps playing.
 
 ### Recurrence
 

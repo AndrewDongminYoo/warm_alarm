@@ -590,6 +590,8 @@ struct WarmAlarmScheduleResultWire: Hashable, CustomStringConvertible {
   var warnings: [WarmAlarmWarningWire]
   /// True when delivery hands audio to the system and the plugin player does not play.
   var customPlayerUnavailable: Bool? = nil
+  /// True when the system performs the snooze, so the plugin cannot limit the Snooze action.
+  var systemPerformsSnooze: Bool? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -598,12 +600,14 @@ struct WarmAlarmScheduleResultWire: Hashable, CustomStringConvertible {
     let readiness = pigeonVar_list[1] as! WarmAlarmReadinessWire
     let warnings = pigeonVar_list[2] as! [WarmAlarmWarningWire]
     let customPlayerUnavailable: Bool? = nilOrValue(pigeonVar_list[3])
+    let systemPerformsSnooze: Bool? = nilOrValue(pigeonVar_list[4])
 
     return WarmAlarmScheduleResultWire(
       alarmId: alarmId,
       readiness: readiness,
       warnings: warnings,
-      customPlayerUnavailable: customPlayerUnavailable
+      customPlayerUnavailable: customPlayerUnavailable,
+      systemPerformsSnooze: systemPerformsSnooze
     )
   }
   func toList() -> [Any?] {
@@ -612,13 +616,14 @@ struct WarmAlarmScheduleResultWire: Hashable, CustomStringConvertible {
       readiness,
       warnings,
       customPlayerUnavailable,
+      systemPerformsSnooze,
     ]
   }
   static func == (lhs: WarmAlarmScheduleResultWire, rhs: WarmAlarmScheduleResultWire) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return MessagesPigeonInternal.deepEquals(lhs.alarmId, rhs.alarmId) && MessagesPigeonInternal.deepEquals(lhs.readiness, rhs.readiness) && MessagesPigeonInternal.deepEquals(lhs.warnings, rhs.warnings) && MessagesPigeonInternal.deepEquals(lhs.customPlayerUnavailable, rhs.customPlayerUnavailable)
+    return MessagesPigeonInternal.deepEquals(lhs.alarmId, rhs.alarmId) && MessagesPigeonInternal.deepEquals(lhs.readiness, rhs.readiness) && MessagesPigeonInternal.deepEquals(lhs.warnings, rhs.warnings) && MessagesPigeonInternal.deepEquals(lhs.customPlayerUnavailable, rhs.customPlayerUnavailable) && MessagesPigeonInternal.deepEquals(lhs.systemPerformsSnooze, rhs.systemPerformsSnooze)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -627,10 +632,11 @@ struct WarmAlarmScheduleResultWire: Hashable, CustomStringConvertible {
     MessagesPigeonInternal.deepHash(value: readiness, hasher: &hasher)
     MessagesPigeonInternal.deepHash(value: warnings, hasher: &hasher)
     MessagesPigeonInternal.deepHash(value: customPlayerUnavailable, hasher: &hasher)
+    MessagesPigeonInternal.deepHash(value: systemPerformsSnooze, hasher: &hasher)
   }
 
   public var description: String {
-    return "WarmAlarmScheduleResultWire(alarmId: \(String(describing: alarmId)), readiness: \(String(describing: readiness)), warnings: \(String(describing: warnings)), customPlayerUnavailable: \(String(describing: customPlayerUnavailable)))"
+    return "WarmAlarmScheduleResultWire(alarmId: \(String(describing: alarmId)), readiness: \(String(describing: readiness)), warnings: \(String(describing: warnings)), customPlayerUnavailable: \(String(describing: customPlayerUnavailable)), systemPerformsSnooze: \(String(describing: systemPerformsSnooze)))"
   }
 }
 
@@ -852,35 +858,40 @@ struct WarmAlarmRecurrenceWire: Hashable, CustomStringConvertible {
 /// Generated class from Pigeon that represents data sent in messages.
 struct WarmAlarmSnoozeWire: Hashable, CustomStringConvertible {
   var durationMillis: Int64
+  var maxCount: Int64? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
   static func fromList(_ pigeonVar_list: [Any?]) -> WarmAlarmSnoozeWire? {
     let durationMillis = pigeonVar_list[0] as! Int64
+    let maxCount: Int64? = nilOrValue(pigeonVar_list[1])
 
     return WarmAlarmSnoozeWire(
-      durationMillis: durationMillis
+      durationMillis: durationMillis,
+      maxCount: maxCount
     )
   }
   func toList() -> [Any?] {
     return [
-      durationMillis
+      durationMillis,
+      maxCount,
     ]
   }
   static func == (lhs: WarmAlarmSnoozeWire, rhs: WarmAlarmSnoozeWire) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return MessagesPigeonInternal.deepEquals(lhs.durationMillis, rhs.durationMillis)
+    return MessagesPigeonInternal.deepEquals(lhs.durationMillis, rhs.durationMillis) && MessagesPigeonInternal.deepEquals(lhs.maxCount, rhs.maxCount)
   }
 
   func hash(into hasher: inout Hasher) {
     hasher.combine("WarmAlarmSnoozeWire")
     MessagesPigeonInternal.deepHash(value: durationMillis, hasher: &hasher)
+    MessagesPigeonInternal.deepHash(value: maxCount, hasher: &hasher)
   }
 
   public var description: String {
-    return "WarmAlarmSnoozeWire(durationMillis: \(String(describing: durationMillis)))"
+    return "WarmAlarmSnoozeWire(durationMillis: \(String(describing: durationMillis)), maxCount: \(String(describing: maxCount)))"
   }
 }
 

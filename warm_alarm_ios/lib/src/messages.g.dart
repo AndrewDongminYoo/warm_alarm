@@ -578,6 +578,7 @@ class WarmAlarmScheduleResultWire {
     required this.readiness,
     required this.warnings,
     this.customPlayerUnavailable,
+    this.systemPerformsSnooze,
   });
 
   int alarmId;
@@ -589,12 +590,16 @@ class WarmAlarmScheduleResultWire {
   /// True when delivery hands audio to the system and the plugin player does not play.
   bool? customPlayerUnavailable;
 
+  /// True when the system performs the snooze, so the plugin cannot limit the Snooze action.
+  bool? systemPerformsSnooze;
+
   List<Object?> _toList() {
     return <Object?>[
       alarmId,
       readiness,
       warnings,
       customPlayerUnavailable,
+      systemPerformsSnooze,
     ];
   }
 
@@ -608,6 +613,7 @@ class WarmAlarmScheduleResultWire {
       readiness: result[1]! as WarmAlarmReadinessWire,
       warnings: (result[2]! as List<Object?>).cast<WarmAlarmWarningWire>(),
       customPlayerUnavailable: result[3] as bool?,
+      systemPerformsSnooze: result[4] as bool?,
     );
   }
 
@@ -620,7 +626,7 @@ class WarmAlarmScheduleResultWire {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(alarmId, other.alarmId) && _deepEquals(readiness, other.readiness) && _deepEquals(warnings, other.warnings) && _deepEquals(customPlayerUnavailable, other.customPlayerUnavailable);
+    return _deepEquals(alarmId, other.alarmId) && _deepEquals(readiness, other.readiness) && _deepEquals(warnings, other.warnings) && _deepEquals(customPlayerUnavailable, other.customPlayerUnavailable) && _deepEquals(systemPerformsSnooze, other.systemPerformsSnooze);
   }
 
   @override
@@ -629,7 +635,7 @@ class WarmAlarmScheduleResultWire {
 
   @override
   String toString() {
-    return 'WarmAlarmScheduleResultWire(alarmId: $alarmId, readiness: $readiness, warnings: $warnings, customPlayerUnavailable: $customPlayerUnavailable)';
+    return 'WarmAlarmScheduleResultWire(alarmId: $alarmId, readiness: $readiness, warnings: $warnings, customPlayerUnavailable: $customPlayerUnavailable, systemPerformsSnooze: $systemPerformsSnooze)';
   }
 }
 
@@ -891,13 +897,17 @@ class WarmAlarmRecurrenceWire {
 class WarmAlarmSnoozeWire {
   WarmAlarmSnoozeWire({
     required this.durationMillis,
+    this.maxCount,
   });
 
   int durationMillis;
 
+  int? maxCount;
+
   List<Object?> _toList() {
     return <Object?>[
       durationMillis,
+      maxCount,
     ];
   }
 
@@ -908,6 +918,7 @@ class WarmAlarmSnoozeWire {
     result as List<Object?>;
     return WarmAlarmSnoozeWire(
       durationMillis: result[0]! as int,
+      maxCount: result[1] as int?,
     );
   }
 
@@ -920,7 +931,7 @@ class WarmAlarmSnoozeWire {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(durationMillis, other.durationMillis);
+    return _deepEquals(durationMillis, other.durationMillis) && _deepEquals(maxCount, other.maxCount);
   }
 
   @override
@@ -929,7 +940,7 @@ class WarmAlarmSnoozeWire {
 
   @override
   String toString() {
-    return 'WarmAlarmSnoozeWire(durationMillis: $durationMillis)';
+    return 'WarmAlarmSnoozeWire(durationMillis: $durationMillis, maxCount: $maxCount)';
   }
 }
 
