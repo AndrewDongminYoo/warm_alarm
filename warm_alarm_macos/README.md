@@ -65,7 +65,7 @@ If restoration also fails, the failure message includes both causes so the host 
 ### Notification delegate integration
 
 Registration preserves the previously installed `UNUserNotificationCenterDelegate` through a weak forwarding reference.
-The default `WARM_ALARM` category and the plugin categories for custom action titles go only to the plugin; other notifications keep the host's foreground presentation and response callbacks.
+The default `WARM_ALARM` category and the plugin categories for custom action titles and Stop-only rings go only to the plugin; other notifications keep the host's foreground presentation and response callbacks.
 The host controls presentation options and completion timing.
 If the host does not implement an optional callback, presentation defaults to no options and responses complete immediately.
 Settings callbacks also forward to the host.
@@ -91,6 +91,18 @@ A default notification tap cannot replay the original system notification sound,
 Stop and Snooze only stop a player owned by the same alarm and occurrence.
 An accepted foreground delivery stops any earlier playback before it resolves its own source, so the newest alarm owns audio even when it falls back to the notification sound.
 Stopping a recurring occurrence records it as consumed, so a retained notification of that occurrence can no longer snooze or replay it while later occurrences still fire.
+
+### Snooze limit
+
+`WarmAlarmSnooze.maxCount` limits how many times one occurrence can be snoozed from the notification.
+Null sets no limit, 0 removes the Snooze action, and a positive value removes it from the ring that follows the last allowed snooze.
+The category of a ring is fixed when its request is built, so the snooze reschedule decides it: the snoozed ring uses a Stop-only plugin category once the count reaches `maxCount`.
+The Stop-only category has its own identifier and a `warmAlarmStopOnly` flag in the notification `userInfo`, so registration, recovery and the host-delegate proxy treat it as a plugin category.
+The count and `maxCount` are stored with the schedule, so `initialize()` recovery rebuilds the same categories; schedules stored by an earlier release load with no limit.
+The count starts again when the alarm is scheduled again with the same id, when it is cancelled, and when a recurring occurrence is stopped, unless a weekly ring is stopped while the snooze of an earlier occurrence is still pending.
+A recurring alarm has no fire callback while the app is not running, so a Snooze from a weekly request counts as that occurrence's first snooze, and the weekly requests always offer Snooze unless `maxCount` is 0.
+A Snooze response that arrives after the limit is reached is ignored and logged, and the ring keeps playing.
+macOS has no AlarmKit backend, so the plugin always performs the snooze and never reports `unsupportedSnoozeLimit`.
 
 ### Recurrence
 
