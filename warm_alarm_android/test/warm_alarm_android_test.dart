@@ -676,6 +676,55 @@ void main() {
     });
   });
 
+  group('WarmAlarmAndroid scheduleAlarm snooze wire mapping', () {
+    Future<WarmAlarmSnoozeWire?> scheduleWithSnooze(WarmAlarmSnooze? snooze) async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+      final captured = <WarmAlarmScheduleWire>[];
+      when(() => api.scheduleAlarm(any())).thenAnswer((invocation) async {
+        captured.add(invocation.positionalArguments[0] as WarmAlarmScheduleWire);
+        return WarmAlarmScheduleResultWire(
+          warnings: [],
+          alarmId: 4,
+          readiness: WarmAlarmReadinessWire(
+            level: WarmAlarmReadinessLevelWire.ready,
+            reasons: <WarmAlarmReadinessReasonWire>[],
+          ),
+        );
+      });
+      await platform.scheduleAlarm(
+        WarmAlarmSchedule(
+          id: 4,
+          scheduledAt: DateTime(2026, 5, 1, 7),
+          notification: const WarmAlarmNotification(title: 'T', body: 'B', snoozeActionTitle: 'Snooze'),
+          audio: const WarmAlarmAudio(),
+          snooze: snooze,
+        ),
+      );
+      return captured.single.snooze;
+    }
+
+    test('scheduleAlarm passes snooze maxCount to api', () async {
+      final wire = await scheduleWithSnooze(const WarmAlarmSnooze(duration: Duration(minutes: 5), maxCount: 2));
+
+      expect(wire!.durationMillis, 5 * 60 * 1000);
+      expect(wire.maxCount, 2);
+    });
+
+    test('scheduleAlarm passes a zero snooze maxCount to api', () async {
+      final wire = await scheduleWithSnooze(const WarmAlarmSnooze(duration: Duration(minutes: 5), maxCount: 0));
+
+      expect(wire!.maxCount, 0);
+    });
+
+    test('scheduleAlarm passes a null snooze maxCount when there is no limit', () async {
+      final wire = await scheduleWithSnooze(const WarmAlarmSnooze(duration: Duration(minutes: 5)));
+
+      expect(wire!.durationMillis, 5 * 60 * 1000);
+      expect(wire.maxCount, isNull);
+    });
+  });
+
   group('WarmAlarmAndroid scheduleAlarm wakeCheck wire mapping', () {
     test('scheduleAlarm passes wakeCheck fields to api', () async {
       final api = _MockWarmAlarmApi();
@@ -955,6 +1004,35 @@ void main() {
       expect(snapshots.single.wakeCheck!.body, isNull);
       expect(snapshots.single.wakeCheck!.confirmActionTitle, isNull);
       expect(snapshots.single.payload, '{"key":"val"}');
+    });
+
+    test('getScheduledAlarms maps snooze maxCount', () async {
+      final api = _MockWarmAlarmApi();
+      final platform = WarmAlarmAndroid(api: api);
+
+      when(api.getScheduledAlarms).thenAnswer(
+        (_) async => <WarmAlarmSnapshotWire>[
+          for (final (id, maxCount) in [(1, 3), (2, null)])
+            WarmAlarmSnapshotWire(
+              id: id,
+              scheduledAtMillis: DateTime(2026, 5, 1, 7).millisecondsSinceEpoch,
+              notification: WarmAlarmNotificationWire(
+                title: 'Morning Alarm',
+                body: 'Wake up!',
+                keepNotificationAfterAlarmEnds: false,
+              ),
+              audio: WarmAlarmAudioWire(loop: true, vibrate: true, volumeEnforced: false),
+              snooze: WarmAlarmSnoozeWire(durationMillis: 300000, maxCount: maxCount),
+              androidFullScreenIntent: true,
+            ),
+        ],
+      );
+
+      final snapshots = await platform.getScheduledAlarms();
+
+      expect(snapshots[0].snooze!.maxCount, 3);
+      expect(snapshots[0].snooze!.duration, const Duration(minutes: 5));
+      expect(snapshots[1].snooze!.maxCount, isNull);
     });
   });
 

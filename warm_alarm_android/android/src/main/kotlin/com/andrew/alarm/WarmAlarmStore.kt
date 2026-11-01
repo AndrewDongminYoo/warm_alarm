@@ -9,6 +9,7 @@ internal object WarmAlarmStore {
     private const val PREFS = "warm_alarm_store"
     private const val KEY = "schedules"
     private const val ACTIVE_SNOOZE_PREFIX = "active_snooze_"
+    private const val SNOOZE_COUNT_PREFIX = "snooze_count_"
     private const val RETRIGGER_MIGRATION_PREFIX = "retrigger_migration_"
     private const val RETRIGGER_TOMBSTONE_PREFIX = "retrigger_tombstone_"
     private const val RETRIGGER_MIGRATION_IMPORTED = "imported"
@@ -22,6 +23,7 @@ internal object WarmAlarmStore {
         all[schedule.id] = schedule
         persist(context, all)
         clearActiveSnooze(context, schedule.id)
+        clearSnoozeCount(context, schedule.id)
     }
 
     fun load(
@@ -38,6 +40,7 @@ internal object WarmAlarmStore {
         persist(context, all)
         clearRetriggerCount(context, id)
         clearActiveSnooze(context, id)
+        clearSnoozeCount(context, id)
     }
 
     fun getRetriggerCount(
@@ -97,6 +100,36 @@ internal object WarmAlarmStore {
         }
     }
 
+    /** How many times the plugin has snoozed the current occurrence of [id]. */
+    fun snoozeCount(
+        context: Context,
+        id: Long,
+    ): Long {
+        val key = snoozeCountKey(id)
+        return (listOf(schedulePrefs(context)) + allPrefs(context)).distinct().firstNotNullOfOrNull { preferences ->
+            if (preferences.contains(key)) preferences.getLong(key, 0L) else null
+        } ?: 0L
+    }
+
+    fun incrementSnoozeCount(
+        context: Context,
+        id: Long,
+    ) {
+        val next = snoozeCount(context, id) + 1
+        allPrefs(context).forEach { preferences ->
+            preferences.edit().putLong(snoozeCountKey(id), next).apply()
+        }
+    }
+
+    fun clearSnoozeCount(
+        context: Context,
+        id: Long,
+    ) {
+        allPrefs(context).forEach { preferences ->
+            preferences.edit().remove(snoozeCountKey(id)).apply()
+        }
+    }
+
     fun loadAll(context: Context): Map<Long, WarmAlarmScheduleWire> {
         val schedulePrefs = schedulePrefs(context)
         migrateLegacySchedules(context, schedulePrefs)
@@ -110,7 +143,7 @@ internal object WarmAlarmStore {
         allPrefs(context).forEach { preferences ->
             val editor = preferences.edit().putString(KEY, "[]")
             preferences.all.keys
-                .filter { it.startsWith(ACTIVE_SNOOZE_PREFIX) }
+                .filter { it.startsWith(ACTIVE_SNOOZE_PREFIX) || it.startsWith(SNOOZE_COUNT_PREFIX) }
                 .forEach { editor.remove(it) }
             editor.apply()
         }
@@ -241,6 +274,8 @@ internal object WarmAlarmStore {
 
     private fun activeSnoozeKey(id: Long) = "$ACTIVE_SNOOZE_PREFIX$id"
 
+    private fun snoozeCountKey(id: Long) = "$SNOOZE_COUNT_PREFIX$id"
+
     private fun retriggerKey(id: Long) = "retrigger_$id"
 
     private fun retriggerMigrationKey(id: Long) = "$RETRIGGER_MIGRATION_PREFIX$id"
@@ -300,7 +335,15 @@ internal object WarmAlarmStore {
             s.recurrence?.let { recurrence ->
                 put("recurrence", JSONArray(recurrence.weekdays))
             }
-            s.snooze?.let { put("snooze", JSONObject().apply { put("durationMillis", it.durationMillis) }) }
+            s.snooze?.let {
+                put(
+                    "snooze",
+                    JSONObject().apply {
+                        put("durationMillis", it.durationMillis)
+                        it.maxCount?.let { m -> put("maxCount", m) }
+                    },
+                )
+            }
             s.wakeCheck?.let {
                 put(
                     "wakeCheck",
@@ -368,7 +411,11 @@ internal object WarmAlarmStore {
                 },
             snooze =
                 if (obj.has("snooze")) {
-                    WarmAlarmSnoozeWire(obj.getJSONObject("snooze").getLong("durationMillis"))
+                    val sn = obj.getJSONObject("snooze")
+                    WarmAlarmSnoozeWire(
+                        durationMillis = sn.getLong("durationMillis"),
+                        maxCount = if (sn.has("maxCount")) sn.getLong("maxCount") else null,
+                    )
                 } else {
                     null
                 },

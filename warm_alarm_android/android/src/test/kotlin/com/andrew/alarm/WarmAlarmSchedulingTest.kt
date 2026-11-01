@@ -186,6 +186,83 @@ class WarmAlarmSchedulingTest {
         }
     }
 
+    @Test
+    fun schedulingTheSameIdAgainResetsTheSnoozeCount() =
+        assertSnoozeCountCleared { harness, schedule -> WarmAlarmStore.save(harness.context, schedule) }
+
+    @Test
+    fun cancellingResetsTheSnoozeCount() =
+        assertSnoozeCountCleared { harness, schedule -> WarmAlarmStore.remove(harness.context, schedule.id) }
+
+    @Test
+    fun cancellingAllAlarmsResetsTheSnoozeCount() = assertSnoozeCountCleared { harness, _ -> WarmAlarmStore.clear(harness.context) }
+
+    private fun assertSnoozeCountCleared(action: (SchedulingHarness, WarmAlarmScheduleWire) -> Unit) {
+        SchedulingHarness(31, exactGranted = true).use { harness ->
+            val schedule = snoozeSchedule()
+            WarmAlarmStore.save(harness.context, schedule)
+            WarmAlarmStore.incrementSnoozeCount(harness.context, schedule.id)
+            WarmAlarmStore.incrementSnoozeCount(harness.context, schedule.id)
+            assertEquals(2L, WarmAlarmStore.snoozeCount(harness.context, schedule.id))
+
+            action(harness, schedule)
+
+            assertEquals(0L, WarmAlarmStore.snoozeCount(harness.context, schedule.id))
+        }
+    }
+
+    @Test
+    fun aNewOccurrenceResetsTheSnoozeCount() {
+        assertEquals(0L, snoozeCountAfterFire(activeSnooze = false, isRetrigger = false))
+    }
+
+    @Test
+    fun aSnoozedRingKeepsTheSnoozeCount() {
+        assertEquals(1L, snoozeCountAfterFire(activeSnooze = true, isRetrigger = false))
+    }
+
+    @Test
+    fun aWakeCheckRetriggerRingKeepsTheSnoozeCount() {
+        assertEquals(1L, snoozeCountAfterFire(activeSnooze = false, isRetrigger = true))
+    }
+
+    private fun snoozeCountAfterFire(
+        activeSnooze: Boolean,
+        isRetrigger: Boolean,
+    ): Long =
+        SchedulingHarness(31, exactGranted = true).use { harness ->
+            val schedule = snoozeSchedule()
+            WarmAlarmStore.save(harness.context, schedule)
+            WarmAlarmStore.incrementSnoozeCount(harness.context, schedule.id)
+            if (activeSnooze) WarmAlarmStore.setActiveSnooze(harness.context, schedule.id, System.currentTimeMillis())
+            val intent = Mockito.mock(Intent::class.java)
+            Mockito.`when`(intent.action).thenReturn(WarmAlarmReceiver.ACTION_FIRE)
+            Mockito.`when`(intent.hasExtra(WarmAlarmReceiver.EXTRA_ALARM_ID)).thenReturn(true)
+            Mockito.`when`(intent.getLongExtra(WarmAlarmReceiver.EXTRA_ALARM_ID, -1L)).thenReturn(schedule.id)
+            Mockito.`when`(intent.getBooleanExtra(WarmAlarmReceiver.EXTRA_IS_RETRIGGER, false)).thenReturn(isRetrigger)
+
+            WarmAlarmReceiver().onReceive(harness.context, intent)
+
+            if (!isRetrigger) assertEquals(null, WarmAlarmStore.activeSnoozeUntilMillis(harness.context, schedule.id))
+            WarmAlarmStore.snoozeCount(harness.context, schedule.id)
+        }
+
+    private fun snoozeSchedule() =
+        WarmAlarmScheduleWire(
+            id = 41,
+            scheduledAtMillis = System.currentTimeMillis() + 60_000,
+            notification =
+                WarmAlarmNotificationWire(
+                    title = "Alarm",
+                    body = "Snooze",
+                    snoozeActionTitle = "Snooze",
+                    keepNotificationAfterAlarmEnds = false,
+                ),
+            audio = WarmAlarmAudioWire(loop = true, vibrate = false, volumeEnforced = false),
+            snooze = WarmAlarmSnoozeWire(durationMillis = 300_000, maxCount = 2),
+            androidFullScreenIntent = false,
+        )
+
     private fun assertModernScheduling(entry: SchedulingEntry) {
         assertScheduling(entry, 23, "setExactAndAllowWhileIdle")
         assertScheduling(entry, 31, "setExactAndAllowWhileIdle")
@@ -397,6 +474,7 @@ private class SchedulingHarness(
         val preferences = Mockito.mock(SharedPreferences::class.java)
         val editor = Mockito.mock(SharedPreferences.Editor::class.java, Mockito.RETURNS_SELF)
         Mockito.`when`(preferences.contains(Mockito.anyString())).thenAnswer { it.getArgument<String>(0) in values }
+        Mockito.`when`(preferences.all).thenAnswer { values.toMap() }
         Mockito.`when`(preferences.getString(Mockito.anyString(), Mockito.nullable(String::class.java))).thenAnswer {
             values[it.getArgument<String>(0)] as String? ?: it.getArgument<String?>(1)
         }

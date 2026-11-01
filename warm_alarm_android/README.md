@@ -76,7 +76,7 @@ broadcast and starts `WarmAlarmForegroundService`. The service:
   - The ramp uses 10 steps or one step per 100 ms, whichever is fewer; a zero `fadeInDuration` means no fade
   - When both are set, `fadeSteps` wins and no warning is reported
 - Runs optional repeating vibration with the alarm and stops it on Stop, Snooze, playback failure, cancellation, or service destruction
-- Posts the alarm notification with configurable Stop/Snooze actions
+- Posts the alarm notification with a configurable Stop action, and a Snooze action when `notification.snoozeActionTitle` is set and the snooze limit allows it
 - Boosts and periodically enforces the maximum alarm stream volume only when `volumeEnforced` is enabled
 
 Only one alarm plays at a time.
@@ -89,6 +89,15 @@ API 24 and later detach it from the foreground-service lifetime; API 19–23 rem
 The retained notification is dismissible and has no Stop/Snooze actions or full-screen intent.
 The ordinary replacement uses low priority with sound, vibration, and default alerts disabled.
 With retention disabled, completion removes the foreground notification.
+
+### Snooze limit
+
+`WarmAlarmSnooze.maxCount` limits how many times one occurrence can be snoozed from the notification.
+Null sets no limit, 0 removes the Snooze action, and a positive value removes it from the ring that follows the last allowed snooze.
+The count is stored next to the active snooze in credential-protected and device-protected storage, so it survives a reboot during a snooze.
+It starts again when a ring arrives with no active snooze, which is a new occurrence, when the same id is scheduled again, when it is cancelled, and on `cancelAllAlarms()`.
+A snoozed ring and a wake-check retrigger ring keep it.
+A Snooze action that arrives after the limit is reached, for example from an earlier notification, is ignored and logged, and the ring keeps playing.
 
 ### Wake-check
 

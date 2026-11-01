@@ -805,18 +805,21 @@ data class WarmAlarmRecurrenceWire (
 
 /** Generated class from Pigeon that represents data sent in messages. */
 data class WarmAlarmSnoozeWire (
-  val durationMillis: Long
+  val durationMillis: Long,
+  val maxCount: Long? = null
 )
  {
   companion object {
     fun fromList(pigeonVar_list: List<Any?>): WarmAlarmSnoozeWire {
       val durationMillis = pigeonVar_list[0] as Long
-      return WarmAlarmSnoozeWire(durationMillis)
+      val maxCount = pigeonVar_list[1] as Long?
+      return WarmAlarmSnoozeWire(durationMillis, maxCount)
     }
   }
   fun toList(): List<Any?> {
     return listOf(
       durationMillis,
+      maxCount,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -827,16 +830,17 @@ data class WarmAlarmSnoozeWire (
       return true
     }
     val other = other as WarmAlarmSnoozeWire
-    return MessagesPigeonUtils.deepEquals(this.durationMillis, other.durationMillis)
+    return MessagesPigeonUtils.deepEquals(this.durationMillis, other.durationMillis) && MessagesPigeonUtils.deepEquals(this.maxCount, other.maxCount)
   }
 
   override fun hashCode(): Int {
     var result = javaClass.hashCode()
     result = 31 * result + MessagesPigeonUtils.deepHash(this.durationMillis)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.maxCount)
     return result
   }
   override fun toString(): String {
-    return "WarmAlarmSnoozeWire(durationMillis=$durationMillis)"
+    return "WarmAlarmSnoozeWire(durationMillis=$durationMillis, maxCount=$maxCount)"
   }
 }
 

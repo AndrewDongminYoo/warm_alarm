@@ -13,9 +13,12 @@ import android.media.AudioManager
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Handler
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import org.json.JSONArray
 import org.mockito.ArgumentCaptor
+import org.mockito.MockedConstruction
+import org.mockito.MockedStatic
 import org.mockito.Mockito
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -92,6 +95,103 @@ class WarmAlarmForegroundServiceTest {
             }
         }
     }
+
+    @Test
+    fun snoozeActionIsOfferedWhileTheOccurrenceIsUnderTheLimit() {
+        snoozeHarness(maxCount = 2).use { harness ->
+            WarmAlarmStore.incrementSnoozeCount(harness.service, 72)
+
+            harness.fire(72)
+
+            assertEquals(1, harness.actionsTitled("Snooze"))
+        }
+    }
+
+    @Test
+    fun snoozeActionIsOmittedOnceTheOccurrenceReachedTheLimit() {
+        snoozeHarness(maxCount = 2).use { harness ->
+            WarmAlarmStore.incrementSnoozeCount(harness.service, 72)
+            WarmAlarmStore.incrementSnoozeCount(harness.service, 72)
+
+            harness.fire(72)
+
+            assertEquals(0, harness.actionsTitled("Snooze"), "The ring after the last allowed snooze must not offer Snooze")
+            assertEquals(1, harness.actionsTitled("Stop"))
+        }
+    }
+
+    @Test
+    fun aZeroLimitNeverOffersTheSnoozeAction() {
+        snoozeHarness(maxCount = 0).use { harness ->
+            harness.fire(72)
+
+            assertEquals(0, harness.actionsTitled("Snooze"))
+        }
+    }
+
+    @Test
+    fun noLimitOffersTheSnoozeActionOnEveryRing() {
+        snoozeHarness(maxCount = null).use { harness ->
+            repeat(5) { WarmAlarmStore.incrementSnoozeCount(harness.service, 72) }
+
+            harness.fire(72)
+
+            assertEquals(1, harness.actionsTitled("Snooze"))
+        }
+    }
+
+    @Test
+    fun snoozingCountsTheSnoozeForTheOccurrence() {
+        snoozeHarness(maxCount = 2).use { harness ->
+            harness.fire(72)
+
+            harness.command(WarmAlarmForegroundService.ACTION_SNOOZE, 72)
+
+            assertEquals(1L, WarmAlarmStore.snoozeCount(harness.service, 72))
+            assertTrue(WarmAlarmStore.activeSnoozeUntilMillis(harness.service, 72) != null)
+            assertFalse(WarmAlarmForegroundService.isRinging)
+        }
+    }
+
+    @Test
+    fun aSnoozePastTheLimitIsRefusedAndTheRingContinues() {
+        snoozeHarness(maxCount = 1).use { harness ->
+            WarmAlarmStore.incrementSnoozeCount(harness.service, 72)
+            harness.fire(72)
+            val player = harness.players.single()
+
+            harness.command(WarmAlarmForegroundService.ACTION_SNOOZE, 72)
+
+            assertTrue(player.isPlaying, "A refused snooze must not stop the ring")
+            assertTrue(WarmAlarmForegroundService.isRinging)
+            assertEquals(72L, WarmAlarmForegroundService.currentAlarmId)
+            assertEquals(1L, WarmAlarmStore.snoozeCount(harness.service, 72))
+            assertEquals(null, WarmAlarmStore.activeSnoozeUntilMillis(harness.service, 72))
+            Mockito.verifyNoInteractions(harness.alarmManager)
+            Mockito.verify(harness.service, Mockito.never()).stopSelf()
+            harness.log.verify { Log.w(Mockito.eq("WarmAlarm"), Mockito.anyString()) }
+        }
+    }
+
+    @Test
+    fun aStaleSnoozePastTheLimitWithNoRingStopsTheIdleService() {
+        snoozeHarness(maxCount = 1).use { harness ->
+            WarmAlarmStore.incrementSnoozeCount(harness.service, 72)
+
+            harness.command(WarmAlarmForegroundService.ACTION_SNOOZE, 72)
+
+            assertEquals(1L, WarmAlarmStore.snoozeCount(harness.service, 72))
+            assertEquals(null, WarmAlarmStore.activeSnoozeUntilMillis(harness.service, 72))
+            Mockito.verifyNoInteractions(harness.alarmManager)
+            Mockito.verify(harness.service).stopSelf()
+        }
+    }
+
+    private fun snoozeHarness(maxCount: Long?) =
+        PlaybackHarness(
+            snoozeActionTitle = "Snooze",
+            snooze = WarmAlarmSnoozeWire(durationMillis = 300_000, maxCount = maxCount),
+        )
 
     private fun assertCompletedNotification(harness: PlaybackHarness): Notification {
         val capture = ArgumentCaptor.forClass(Notification::class.java)
@@ -370,13 +470,19 @@ class WarmAlarmForegroundServiceTest {
 private class PlaybackHarness(
     configurePlayer: (MediaPlayer) -> Unit = {},
     private val keepNotification: Boolean = false,
+    private val snoozeActionTitle: String? = null,
+    private val snooze: WarmAlarmSnoozeWire? = null,
 ) : AutoCloseable {
     val notifications = Mockito.mock(NotificationManager::class.java)
+    val alarmManager: AlarmManager = Mockito.mock(AlarmManager::class.java)
     val service = Mockito.mock(WarmAlarmForegroundService::class.java, Mockito.CALLS_REAL_METHODS)
     val fadeCallbacks = mutableListOf<Runnable>()
     val enforcementCallbacks = mutableListOf<Runnable>()
     val vibration = Mockito.spy(PlaybackVibrationBackend())
     private val resources = mutableListOf<AutoCloseable>()
+    private val storedLongs = mutableMapOf<String, Long>()
+    private lateinit var builders: MockedConstruction<NotificationCompat.Builder>
+    val log: MockedStatic<Log> = Mockito.mockStatic(Log::class.java).also { resources += it }
     private val constructedPlayers =
         Mockito
             .mockConstruction(MediaPlayer::class.java) { player, _ ->
@@ -430,9 +536,24 @@ private class PlaybackHarness(
         Mockito.`when`(preferences.getString(Mockito.anyString(), Mockito.nullable(String::class.java))).thenAnswer {
             storedStrings[it.getArgument<String>(0)] ?: it.getArgument<String?>(1)
         }
+        Mockito.`when`(preferences.getLong(Mockito.anyString(), Mockito.anyLong())).thenAnswer {
+            storedLongs[it.getArgument<String>(0)] ?: it.getArgument<Long>(1)
+        }
+        Mockito.`when`(preferences.contains(Mockito.anyString())).thenAnswer {
+            it.getArgument<String>(0).let { key -> key in storedStrings || key in storedLongs }
+        }
         Mockito.`when`(preferences.edit()).thenReturn(editor)
         Mockito.`when`(editor.putString(Mockito.anyString(), Mockito.anyString())).thenAnswer {
             storedStrings[it.getArgument<String>(0)] = it.getArgument<String>(1)
+            editor
+        }
+        Mockito.`when`(editor.putLong(Mockito.anyString(), Mockito.anyLong())).thenAnswer {
+            storedLongs[it.getArgument<String>(0)] = it.getArgument<Long>(1)
+            editor
+        }
+        Mockito.`when`(editor.remove(Mockito.anyString())).thenAnswer {
+            storedStrings.remove(it.getArgument<String>(0))
+            storedLongs.remove(it.getArgument<String>(0))
             editor
         }
         Mockito.`when`(editor.commit()).thenReturn(true)
@@ -445,7 +566,7 @@ private class PlaybackHarness(
         val audioManager = Mockito.mock(AudioManager::class.java)
         Mockito.`when`(audioManager.getStreamMaxVolume(AudioManager.STREAM_ALARM)).thenReturn(10)
         Mockito.doReturn(audioManager).`when`(service).getSystemService(Context.AUDIO_SERVICE)
-        Mockito.doReturn(Mockito.mock(AlarmManager::class.java)).`when`(service).getSystemService(Context.ALARM_SERVICE)
+        Mockito.doReturn(alarmManager).`when`(service).getSystemService(Context.ALARM_SERVICE)
         Mockito.doReturn(notifications).`when`(service).getSystemService(Context.NOTIFICATION_SERVICE)
 
         val pendingIntents = Mockito.mockStatic(PendingIntent::class.java)
@@ -461,7 +582,7 @@ private class PlaybackHarness(
             }.thenReturn(Mockito.mock(PendingIntent::class.java))
         resources += Mockito.mockStatic(Uri::class.java)
         resources += Mockito.mockConstruction(Intent::class.java)
-        resources +=
+        builders =
             Mockito.mockConstruction(NotificationCompat.Builder::class.java, Mockito.withSettings().defaultAnswer(Mockito.RETURNS_SELF)) {
                 builder,
                 _,
@@ -478,6 +599,7 @@ private class PlaybackHarness(
                     }
                 Mockito.`when`(builder.build()).thenReturn(notification)
             }
+        resources += builders
         resources +=
             Mockito.mockConstruction(AudioAttributes.Builder::class.java, Mockito.withSettings().defaultAnswer(Mockito.RETURNS_SELF)) {
                 builder,
@@ -488,6 +610,12 @@ private class PlaybackHarness(
     }
 
     fun fire(id: Long) = command(null, id)
+
+    /** How many notification actions titled [title] every built notification received. */
+    fun actionsTitled(title: String): Int =
+        builders.constructed().sumOf { builder ->
+            Mockito.mockingDetails(builder).invocations.count { it.method.name == "addAction" && it.arguments.getOrNull(1) == title }
+        }
 
     fun command(
         action: String?,
@@ -532,7 +660,13 @@ private class PlaybackHarness(
         WarmAlarmScheduleWire(
             id = id,
             scheduledAtMillis = 1_234,
-            notification = WarmAlarmNotificationWire(title = "Alarm", body = "Overlap", keepNotificationAfterAlarmEnds = keepNotification),
+            notification =
+                WarmAlarmNotificationWire(
+                    title = "Alarm",
+                    body = "Overlap",
+                    snoozeActionTitle = snoozeActionTitle,
+                    keepNotificationAfterAlarmEnds = keepNotification,
+                ),
             audio =
                 WarmAlarmAudioWire(
                     filePath = "/alarm.wav",
@@ -543,6 +677,7 @@ private class PlaybackHarness(
                     fadeInDurationMillis = if (id == 73L || id == 74L) 1_000L else null,
                     fadeSteps = if (id == 71L || id == 74L) listOf(WarmAlarmVolumeFadeStepWire(timeMillis = 100, volume = 0.2)) else null,
                 ),
+            snooze = snooze,
             androidFullScreenIntent = false,
         )
 

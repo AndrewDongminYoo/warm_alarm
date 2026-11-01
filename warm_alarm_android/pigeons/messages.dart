@@ -209,9 +209,11 @@ class WarmAlarmRecurrenceWire {
 class WarmAlarmSnoozeWire {
   const WarmAlarmSnoozeWire({
     required this.durationMillis,
+    this.maxCount,
   });
 
   final int durationMillis;
+  final int? maxCount;
 }
 
 class WarmAlarmWakeCheckWire {

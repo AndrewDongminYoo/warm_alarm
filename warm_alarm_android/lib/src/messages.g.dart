@@ -797,13 +797,17 @@ class WarmAlarmRecurrenceWire {
 class WarmAlarmSnoozeWire {
   WarmAlarmSnoozeWire({
     required this.durationMillis,
+    this.maxCount,
   });
 
   int durationMillis;
 
+  int? maxCount;
+
   List<Object?> _toList() {
     return <Object?>[
       durationMillis,
+      maxCount,
     ];
   }
 
@@ -814,6 +818,7 @@ class WarmAlarmSnoozeWire {
     result as List<Object?>;
     return WarmAlarmSnoozeWire(
       durationMillis: result[0]! as int,
+      maxCount: result[1] as int?,
     );
   }
 
@@ -826,7 +831,7 @@ class WarmAlarmSnoozeWire {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(durationMillis, other.durationMillis);
+    return _deepEquals(durationMillis, other.durationMillis) && _deepEquals(maxCount, other.maxCount);
   }
 
   @override
@@ -835,7 +840,7 @@ class WarmAlarmSnoozeWire {
 
   @override
   String toString() {
-    return 'WarmAlarmSnoozeWire(durationMillis: $durationMillis)';
+    return 'WarmAlarmSnoozeWire(durationMillis: $durationMillis, maxCount: $maxCount)';
   }
 }
 

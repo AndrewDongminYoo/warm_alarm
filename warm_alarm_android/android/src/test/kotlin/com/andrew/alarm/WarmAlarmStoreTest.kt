@@ -7,6 +7,7 @@ import org.mockito.ArgumentCaptor
 import org.mockito.Mockito
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 
 class WarmAlarmStoreTest {
     @Test
@@ -48,6 +49,25 @@ class WarmAlarmStoreTest {
     }
 
     @Test
+    fun snoozeMaxCountSurvivesJsonRoundTrip() {
+        for (maxCount in listOf(0L, 3L)) {
+            val snooze = WarmAlarmSnoozeWire(durationMillis = 300_000, maxCount = maxCount)
+
+            val decoded = WarmAlarmStore.decode(WarmAlarmStore.encode(schedule(id = 42, snooze = snooze)))
+
+            assertEquals(snooze, decoded.snooze)
+        }
+    }
+
+    @Test
+    fun snoozeWithoutMaxCountIsStoredWithoutTheKeyAndLoadsAsNoLimit() {
+        val stored = WarmAlarmStore.encode(schedule(id = 42, snooze = WarmAlarmSnoozeWire(durationMillis = 300_000)))
+
+        assertFalse(stored.getJSONObject("snooze").has("maxCount"))
+        assertEquals(WarmAlarmSnoozeWire(durationMillis = 300_000), WarmAlarmStore.decode(stored).snooze)
+    }
+
+    @Test
     fun wakeCheckPromptTextSurvivesJsonRoundTrip() {
         val wakeCheck =
             WarmAlarmWakeCheckWire(
@@ -83,6 +103,7 @@ class WarmAlarmStoreTest {
     private fun schedule(
         id: Long,
         recurrence: WarmAlarmRecurrenceWire? = null,
+        snooze: WarmAlarmSnoozeWire? = null,
         wakeCheck: WarmAlarmWakeCheckWire? = null,
     ) = WarmAlarmScheduleWire(
         id = id,
@@ -100,6 +121,7 @@ class WarmAlarmStoreTest {
                 volumeEnforced = false,
             ),
         recurrence = recurrence,
+        snooze = snooze,
         wakeCheck = wakeCheck,
         androidFullScreenIntent = true,
     )

@@ -107,6 +107,11 @@ class WarmAlarmReceiver : BroadcastReceiver() {
                 ),
             )
         } else {
+            // A ring with no active snooze starts a new occurrence, so its snooze
+            // limit starts again. Read it before the clear below erases the marker.
+            if (WarmAlarmStore.activeSnoozeUntilMillis(context, alarmId) == null) {
+                WarmAlarmStore.clearSnoozeCount(context, alarmId)
+            }
             WarmAlarmStore.clearActiveSnooze(context, alarmId)
             WarmAlarmPlugin.emitEventFromBackground(
                 context,
