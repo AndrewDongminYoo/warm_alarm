@@ -2,7 +2,10 @@
 # To learn more about the format of this file, see https://docs.trunk.io/reference/trunk-yaml
 version: 0.1
 cli:
-  version: 1.25.0
+  version: 1.29.0
+  options:
+    - commands: [ALL]
+      args: --monitor=false
 # Trunk provides extensibility via plugins. (https://docs.trunk.io/plugins)
 plugins:
   sources:
@@ -17,6 +20,11 @@ runtimes:
     - python@3.14.4
 # This is the section where you manage your linters. (https://docs.trunk.io/check/configuration)
 lint:
+  definitions:
+    - name: pinact
+      commands:
+        - name: upgrade
+          enabled: true
   disabled:
     - bandit
     - dart
@@ -24,21 +32,20 @@ lint:
   enabled:
     - actionlint@1.7.12
     - black@26.10.1
-    - checkov@3.3.30
+    - checkov@3.4.3
     - cspell@10.4.0
     - git-diff-check
     - isort@9.0.2
     - ktlint@1.8.0
     - markdownlint@0.50.0
     - oxipng@10.2.1
-    - pinact@4.1.1!:
-        commands: [lint]
+    - pinact@4.1.1!
     - prettier@3.9.10
     - ruff@0.17.3
     - shellcheck@0.11.0
-    - shfmt@3.13.1
+    - shfmt@3.14.1
     - svgo@4.1.0
-    - trufflehog@3.99.2
+    - trufflehog@3.99.8
     - yamllint@1.38.0
   ignore:
     - linters: [git-diff-check, ktlint]
