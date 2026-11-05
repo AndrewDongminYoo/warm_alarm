@@ -15,11 +15,11 @@ Oracle retrieval for personal project `warm_alarm`, topics `fallback rollback` a
 3. Check affected README, AGENTS, and CLAUDE claims and run scoped local formatting, Flutter analysis/tests, and Trunk.
    Verify: record command results and distinguish Dart/static checks from native execution.
 4. Review the complete candidate, fix findings within the bounded review budget, and complete hosted code/security review and CI.
-   Verify: current-head evidence is clean before requesting operator merge.
+   Verify: current-head evidence is clean before requesting merge.
 
 ## Constraints
 
 Use the assigned main workspace and preserve unrelated branches and control records.
 Do not run a local heavy mobile job while the Data volume is near capacity.
 Keep existing CI gates and hooks active; the initial draft PR is for regression-first execution, not merge readiness.
-Merge remains an operator action.
+Merge remains my action.

@@ -13,7 +13,7 @@ Reuse the current capacity, recovery, rollback, and cancellation paths so every 
 
 ## Global Constraints
 
-- Obtain operator approval for the spec before changing Swift or package metadata.
+- Obtain approval for the spec before changing Swift or package metadata.
 - Follow Red, Green, Refactor.
 - Do not introduce a repeating-notification abstraction or change AlarmKit.
 - Do not edit generated Pigeon or Flutter files.
@@ -137,11 +137,11 @@ Wait for explicit approval before pushing or publishing.
 
 Push a scoped branch, open a PR against `main`, and link AND-170.
 Require current-head CI and resolve only findings that the current diff actually fixes.
-Leave merge to the operator.
+Leave merge to me.
 
 - [ ] **Step 3: Verify the merged source before tagging**
 
-After the operator confirms or performs the merge, fetch the remote and verify the exact merged head, package version, changelog, and clean local `main`.
+After I confirm or perform the merge, fetch the remote and verify the exact merged head, package version, changelog, and clean local `main`.
 Do not infer merge state from a gone-upstream branch.
 
 - [ ] **Step 4: Request approval and publish the package**
@@ -207,7 +207,7 @@ git commit -m "fix(ios): adopt extended fallback window"
 ```
 
 Request separate approval before pushing the Mirae branch or opening its PR.
-Leave merge to the operator.
+Leave merge to me.
 
 ### Task 5: Verify the physical User Notifications window
 

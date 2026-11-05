@@ -3,10 +3,10 @@
 ## Delivery state
 
 This record captures implementation and local review before PR publication.
-The operator subsequently authorized scoped commits, pushes, and PR review through `pr-loop`.
+I subsequently authorized scoped commits, pushes, and PR review through `pr-loop`.
 Current remote check and review results belong to the PR and Git-local loop state.
 No GitHub issue has been closed during this task.
-The operator's physical iPhone has not been installed, launched, or otherwise changed.
+My physical iPhone has not been installed, launched, or otherwise changed.
 
 | Issue | Change or assessment                                                                                                            | Evidence and remaining acceptance                                                                                                                                                            |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -84,7 +84,7 @@ Earlier evidence in PR #50 does not cover final-build Stop acceptance.
 For #21, build the app and Widget targets described in `warm_alarm_ios/example/live_activity/README.md`, then verify start, visible update, end, disabled authorization, and accessibility in the rendered presentations.
 The repository's general Flutter example does not yet embed this optional Widget sample.
 
-Physical-phone installation or launch requires explicit action-specific operator approval.
+Physical-phone installation or launch requires explicit action-specific approval.
 The authorized PR loop covers scoped commits, pushes, PR creation, and review replies.
 Merge, issue closure, package publication, cleanup, and memory recording have not been authorized.
 Future publication must preserve the existing interface → platform packages → facade release order and raise sibling constraints to the releases that supply new APIs.
@@ -123,7 +123,7 @@ The pub.dev version endpoints confirm all three versions and their interface `^0
 
 The configured example now embeds the Widget and package-local Swift sources.
 Simulator checks covered start, updates, end, unknown identifiers, permission-disabled rejection, and permission restoration.
-The operator approved the scheduled, ringing, and snoozed presentation, and that approval carried to the final platform head because visual inputs remained equivalent.
+I approved the scheduled, ringing, and snoozed presentation, and that approval carried to the final platform head because visual inputs remained equivalent.
 The final platform head passed 249 iOS native tests and 18 macOS native tests; its Apple Dart acknowledgement repair passed 93 Dart tests.
 A native callback now stays pending while the Dart stream has no listener, including after the last listener cancels.
 

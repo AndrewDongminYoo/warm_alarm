@@ -41,7 +41,7 @@ Oracle returned no relevant precedent for the other scoped topics.
 
 ## Authority
 
-The operator requested implementation of all eight issues with Sol/Terra parallel agents.
+I requested implementation of all eight issues with Sol/Terra parallel agents.
 Local implementation and verification are authorized.
-The operator subsequently invoked `pr-loop` and authorized scoped commits, pushes, PR creation, and hosted review replies.
-Merge, issue closure, package publication, and installation on the operator's daily phone retain separate approval boundaries.
+I subsequently invoked `pr-loop` and authorized scoped commits, pushes, PR creation, and hosted review replies.
+Merge, issue closure, package publication, and installation on my daily phone retain separate approval boundaries.

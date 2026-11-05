@@ -26,12 +26,12 @@ The fixture uses the public platform interface because facade forwarding is a la
 Issue #19 remains open until a supported physical iPhone exercises final-build Schedule, Stop, and Snooze.
 Simulator results cannot establish that acceptance, and the daily iPhone has not been authorized for installation or launch.
 Issue #21 requires actual configured-host ActivityKit lifecycle and rendered Widget evidence.
-The PR remains draft while operator visual approval is pending.
+The PR remains draft while visual approval is pending.
 No issue is closed by the release extraction alone.
 
 ## Authority and precedent
 
-The operator resumed the approved PR loop after merging #57, following the explicit request to merge and publish interface 0.1.4.
+I resumed the approved PR loop after merging #57, following the explicit request to merge and publish interface 0.1.4.
 That continuation covers the interface publication and preparation of the next platform PR.
 Future platform merges and publications retain their explicit approval boundary.
 Cleanup and durable memory recording were not requested.

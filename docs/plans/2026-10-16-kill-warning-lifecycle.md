@@ -2,7 +2,7 @@
 
 ## Approved direction
 
-Continue the operator-requested pr-loop with issue #79 as the sole open, unblocked issue.
+Continue the requested pr-loop with issue #79 as the sole open, unblocked issue.
 The assigned workspace is the existing warm_alarm checkout; no worktree is needed.
 
 ## Steps and verification
@@ -14,7 +14,7 @@ The assigned workspace is the existing warm_alarm checkout; no worktree is neede
 3. Run scoped Trunk formatting/checks, Flutter analysis and Dart formatting checks.
    Use a structured local review of the complete documentation diff and source-to-claim mapping.
 4. Create one documentation commit and PR, then observe current-head CI and Codex code/security review.
-   Stop for operator merge after the gates pass.
+   Stop for merge after the gates pass.
 
 ## Owned files
 

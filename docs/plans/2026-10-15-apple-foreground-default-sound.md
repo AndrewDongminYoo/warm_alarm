@@ -16,7 +16,7 @@ No dependency or generated-file changes are planned.
 5. Verify the workspace → run `flutter analyze --no-pub`, `melos run test`, read-only 120-column Dart formatting, scoped `trunk check`, and `git diff --check`.
 6. Check actual foreground delivery on macOS and the iOS simulator → record notification delivery and audio evidence separately from callback assertions; retain a named manual acceptance blocker if sound cannot be observed.
 7. Review the complete candidate, commit by concern, push, and open a PR closing #70 → verify current-head CI, Codex, CodeRabbit, and all review threads under the PR-loop budget.
-8. Request operator merge when the applicable gates pass; merge, branch cleanup, and memory recording are not delegated.
+8. Request merge when the applicable gates pass; merge, branch cleanup, and memory recording are not delegated.
 
 ## Hosted-review repairs
 

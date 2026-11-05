@@ -2,8 +2,8 @@
 
 ## Scope
 
-Carry the operator-approved correction through a PR using [the initialization cleanup contract](../specs/2026-10-16-android-player-initialization.md).
-Reuse the implementation and verification completed before the operator invoked the PR loop.
+Carry the approved correction through a PR using [the initialization cleanup contract](../specs/2026-10-16-android-player-initialization.md).
+Reuse the implementation and verification completed before I invoked the PR loop.
 The root owns the foreground service, its existing native test file, and these two documents on `fix/android-player-initialization` in the main workspace.
 
 ## Execution and verification
@@ -13,7 +13,7 @@ The root owns the foreground service, its existing native test file, and these t
 3. Verify the relevant surface → run `./gradlew :warm_alarm_android:testDebugUnitTest --console=plain --max-workers=2` from `warm_alarm/example/android`, Android package `flutter test --no-pub`, root `flutter analyze --no-pub`, explicit formatting checks, and scoped Trunk checks.
 4. Review the complete candidate for ownership transfer, invalid-state cleanup, original-error preservation, and test fidelity → record findings and verification evidence in Git-local loop state.
 5. Commit the cohesive fix, tests, and contract; push and open a PR → require current-head CI, Codex completion, an applicable CodeRabbit review or explicit skip, and zero unresolved review threads.
-6. Request operator merge → cleanup and memory recording for this new PR remain separately authorized actions.
+6. Request merge → cleanup and memory recording for this new PR remain separately authorized actions.
 
 ## Boundaries
 

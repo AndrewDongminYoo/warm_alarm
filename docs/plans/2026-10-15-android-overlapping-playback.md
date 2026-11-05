@@ -13,7 +13,7 @@ Use the existing test dependencies and preserve generated files.
 3. Check the surrounding service behavior and all native unit tests → run `./gradlew :warm_alarm_android:testDebugUnitTest --console=plain`.
 4. Check the Flutter workspace → run `flutter analyze --no-pub`, `dart run melos run test`, explicit read-only Dart formatting, scoped `trunk check`, and `git diff --check`.
 5. Review the complete candidate, repair confirmed findings, commit by concern, and open a PR closing #71 → require current-head CI, Codex completion, an applicable CodeRabbit review or skip, and zero unresolved review threads.
-6. Request operator merge after the terminal gates; merge, cleanup, and logging for this new PR require separate authorization.
+6. Request merge after the terminal gates; merge, cleanup, and logging for this new PR require separate authorization.
 
 ## Limits
 

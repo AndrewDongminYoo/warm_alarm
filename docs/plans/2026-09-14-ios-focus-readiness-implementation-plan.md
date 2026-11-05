@@ -751,7 +751,7 @@ Launch without `--terminate-existing` unless the scenario explicitly requires it
 xcrun devicectl device process launch --device 00008140-001938282206801C kr.mirae.app.dev
 ```
 
-- [ ] **Step 5: Run the operator-observed Focus scenario**
+- [ ] **Step 5: Run the manually observed Focus scenario**
 
 Enable Focus, schedule a User Notifications fallback scenario where supported, and record the authorization, alerts, sounds, and Time Sensitive Notifications settings.
 Observe scheduled time, first audible time, lifecycle state, Stop, and Snooze.
@@ -759,7 +759,7 @@ Automation does not infer audibility.
 
 - [ ] **Step 6: Record and publish the evidence**
 
-Add the exact device, OS, app version, build, SHA, settings, timing, and operator observation to the device matrix.
+Add the exact device, OS, app version, build, SHA, settings, timing, and manual observation to the device matrix.
 Update AND-50 and AND-148 with the result.
 Mark AND-148 complete only if every acceptance criterion is satisfied.
 

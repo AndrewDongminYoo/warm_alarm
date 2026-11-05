@@ -3,10 +3,10 @@
 ## Scope and status
 
 Prepare the next coordinated release from merged revision `97315fb021d83d3585a3b210add13281bd55e4e2`.
-The operator authorized a documentation PR and a separate Android API 19–22 compatibility PR, including tests and reviews, after PR #93.
-Scoped commits, pushes, PR creation, and review follow-through are authorized; merge, release tags, and package publication remain operator decisions.
+I authorized a documentation PR and a separate Android API 19–22 compatibility PR, including tests and reviews, after PR #93.
+Scoped commits, pushes, PR creation, and review follow-through are authorized; merge, release tags, and package publication remain my decisions.
 The documentation and compatibility PRs leave package versions and dependency constraints unchanged.
-The Android repair below must pass its tests and reviews and receive operator merge approval before release preparation advances to version assignment.
+The Android repair below must pass its tests and reviews and receive merge approval before release preparation advances to version assignment.
 
 ## Documentation contract
 
@@ -56,7 +56,7 @@ The repair is tracked separately in [PR #95](https://github.com/AndrewDongminYoo
 
 ## Approved release follow-ups
 
-The operator also authorized the reported wake-check compatibility repair, legacy Android runtime checks, and bounded Gradle warning cleanup before release.
+I also authorized the reported wake-check compatibility repair, legacy Android runtime checks, and bounded Gradle warning cleanup before release.
 Wake-check registration keeps its inexact behavior with `set()` below API 23.
 The same service used API 21 audio attributes without a guard; API 19–20 now uses the alarm stream instead.
 The regression fixtures reproduce both failures before those changes and retain the modern branches.
@@ -66,7 +66,7 @@ The example Gradle wrapper is regenerated at 9.2.1, whose embedded Kotlin versio
 This removes the Gradle 9.0 support warning and the embedded-Kotlin mismatch.
 The example uses the current Kotlin compiler-options DSL while retaining its JVM 11 target.
 Sources: [Gradle compatibility table](https://docs.gradle.org/current/userguide/compatibility.html) and [Gradle 9.2.1 release notes](https://docs.gradle.org/9.2.1/release-notes.html).
-The operator subsequently approved upgrading the example host to AGP 9.0.1 and Kotlin 2.3.20 in the same compatibility PR.
+I subsequently approved upgrading the example host to AGP 9.0.1 and Kotlin 2.3.20 in the same compatibility PR.
 Its checked-in `android.newDsl=false` and `android.builtInKotlin=false` settings retain the Flutter legacy DSL and external Kotlin plugin integration for direct Gradle CI jobs.
 The public plugin keeps its existing Flutter constraint and Kotlin plugin application.
 AGP 9 reports deprecation notices for these compatibility settings and the existing Jetifier setting; this migration removes Flutter version recommendations, not every build warning.
@@ -98,10 +98,10 @@ The direct wake-check and Gradle-warning queries returned \[no precedent found\]
 ## Ordered release steps
 
 1. Review and commit the documentation reconciliation and Unreleased notes as one concern, then open its authorized documentation PR.
-2. Verify and obtain operator merge approval for the Android compatibility repair before any coordinated release tags.
+2. Verify and obtain merge approval for the Android compatibility repair before any coordinated release tags.
 3. For stage 1, assign interface 0.1.7 and replace only its Unreleased heading with that version.
    Resolve the workspace with `flutter pub get`, run package tests, scoped formatting and Trunk, and complete the interface Pana job.
-   Complete PR review, obtain operator merge, verify the merge, and then obtain or reuse explicit tag/publication authority.
+   Complete PR review, have the PR merged, verify the merge, and then obtain or reuse explicit tag/publication authority.
 4. Confirm interface 0.1.7 exists on pub.dev before changing the three platform versions and their interface floors.
    Convert only their Unreleased sections, run the stage's Dart and native checks, and complete Pana against the published interface.
    Merge and publish the three matching package tags only under explicit authority.
@@ -121,7 +121,7 @@ Each package's private pub.dev automated-publishing setting still needs confirma
 
 The local review receipt at `/Users/dongminyu/Development/01_personal/pr-loop-reviews/warm_alarm/release-preparation-2026-10-16/REVIEW.md` retains the verification summary and review outcome outside Git-local control state.
 Its adjacent `evidence/` directory contains `docs-check.log`, `standalone-validation-results.json`, and per-package downgrade and test logs.
-These are local operator paths, not GitHub links or files included in the repository or published packages.
+These are my local paths, not GitHub links or files included in the repository or published packages.
 
 Current-bound checks used isolated copies of the five packages with only `resolution: workspace` removed from their copied manifests.
 `flutter pub downgrade --no-example` resolved every sibling dependency from hosted pub.dev packages rather than the local workspace.

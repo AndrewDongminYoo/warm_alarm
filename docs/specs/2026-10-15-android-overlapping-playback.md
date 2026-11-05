@@ -33,5 +33,5 @@ Do not change Apple playback, stale notification-action handling, or volume rest
 Use the existing Android unit-test setup and mock only platform boundaries; the regression must execute the service's real command and playback logic.
 These tests verify player and callback lifecycle calls, not physical speaker output.
 Run heavy Android jobs sequentially on the local Mac.
-There is no visual design change requiring operator approval.
+There is no visual design change requiring approval.
 Oracle returned `[no precedent found]` for this project's overlapping-alarm and playback-lifecycle topics; current source and the issue contract determine the change.

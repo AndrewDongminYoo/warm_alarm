@@ -38,7 +38,7 @@ Do not raise facade floors until the platform versions exist on pub.dev.
    Run native tests/builds sequentially when machine load permits; hosted platform jobs remain required.
    Android uses the declared Gradle unit-test job, macOS uses `bash tool/run_macos_native_tests.sh`, and iOS uses the app-hosted RunnerTests job.
 6. Perform independent local review at the actual diff tier, repair confirmed findings, commit by concern, push, and open the PR.
-   Complete current-head CI/Pana, hosted review, and full thread pagination before requesting operator merge.
+   Complete current-head CI/Pana, hosted review, and full thread pagination before requesting merge.
 
 ## Precedent and verification limits
 

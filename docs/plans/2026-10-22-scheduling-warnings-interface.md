@@ -6,7 +6,7 @@ Implement the interface stage of [#122](https://github.com/AndrewDongminYoo/warm
 Keep the existing const constructor and optional `warning` argument compatible, add a read-only `warnings` list in detection order, and derive `warning` from its first entry or null.
 Use `WarmAlarmScheduleResult.withWarnings` to copy a supplied warning list into a stable result while keeping the existing const constructor for a single optional warning.
 Separate constructors prevent combining the single-warning and list arguments.
-The operator approved proceeding with #122 on 2026-10-22.
+I approved proceeding with #122 on 2026-10-22.
 
 The interface implementation started from an uncommitted draft and model tests.
 That work was completed in the main workspace and merged in PR #130.
@@ -51,6 +51,6 @@ This stage owns only the interface pubspec, CHANGELOG, README, and this plan.
 3. Run the interface test suite, root analysis, scoped Dart format check, and Trunk checks for the four owned paths.
 4. Commit the release preparation, then run `flutter pub publish --dry-run` from the interface package with a clean Git tree.
    The dry run validates package contents without publishing.
-5. Open the release-preparation PR and complete current-head CI and review gates before requesting operator merge.
-   Publication remains a separate operator approval and uses tag `warm_alarm_platform_interface-v0.1.8`.
+5. Open the release-preparation PR and complete current-head CI and review gates before requesting merge.
+   Publication remains a separate approval and uses tag `warm_alarm_platform_interface-v0.1.8`.
    Start platform consumers only after the pub.dev API confirms that 0.1.8 is published.

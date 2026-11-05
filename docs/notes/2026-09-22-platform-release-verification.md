@@ -59,7 +59,7 @@ A separate active Activity successfully transitioned scheduled → ringing → s
 Evidence: `/tmp/warm-alarm-platform-adapter-build.log` and `/tmp/warm-alarm-live-activity-evidence/08-ended-update-not-found.png`.
 
 Device Hub menu navigation reached the actual simulator Lock Screen and displayed the sample Widget.
-The system then requested Live Activity permission; permission changes are awaiting operator approval.
+The system then requested Live Activity permission; permission changes are awaiting approval.
 Earlier app-only screenshots did not establish Widget rendering, and accessibility actions sometimes returned before the system view changed.
 
 ## Hosted validation and review repair
@@ -85,4 +85,4 @@ Simulator lifecycle, Widget rendering, and accessibility evidence are being coll
 The runtime fixture does not schedule or ring a real alarm.
 Issue #19 remains open for final-build physical iPhone Schedule, Stop, and Snooze acceptance.
 No physical iPhone was installed or launched during this work.
-Operator visual approval, platform merge/publication, cleanup, and durable memory recording remain separate boundaries.
+Visual approval, platform merge/publication, cleanup, and durable memory recording remain separate boundaries.
