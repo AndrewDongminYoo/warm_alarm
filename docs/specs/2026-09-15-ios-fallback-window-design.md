@@ -130,4 +130,4 @@ If no compatible device can exercise the User Notifications backend, record the 
 
 ## Approval Gate
 
-The operator approved these exact semantics on 2026-09-15: one primary request plus ten fallbacks, with the last fallback at T+5 minutes.
+I approved these exact semantics on 2026-09-15: one primary request plus ten fallbacks, with the last fallback at T+5 minutes.

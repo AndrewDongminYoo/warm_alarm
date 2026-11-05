@@ -2,7 +2,7 @@
 
 ## Scope and authority
 
-The operator requested the next issue through `pr-loop`.
+I requested the next issue through `pr-loop`.
 Issue #73 is an open P1 defect confirmed in the current cancellation paths.
 Use the main workspace on `fix/macos-cancellation-playback`, based on merge commit `6e83ee43b620f5bda1bfd9588e7866a9f0d3a713`.
 The root owns the macOS `WarmAlarmPlugin.swift`, `WarmAlarmDelegate.swift`, `WarmAlarmCancellationTests.swift`, and these two documents.
@@ -19,6 +19,6 @@ Keep the prior branch intact because cleanup was not requested.
 
 ## Completion boundary
 
-Merge remains the operator's action.
+Merge remains my action.
 Cleanup and memory recording for this PR were not requested.
 Run at most one heavy mobile job at a time and check load before native testing.

@@ -1,7 +1,7 @@
 # Example host AGP 10 migration deferral
 
 **Date:** 2026-10-17
-**Decision owner:** operator
+**Decision owner:** me
 **Issues:** [#112](https://github.com/AndrewDongminYoo/warm_alarm/issues/112) (decision), [#113](https://github.com/AndrewDongminYoo/warm_alarm/issues/113) (deferred migration)
 
 ## Current state
@@ -28,5 +28,5 @@ When #113 starts, it must pass the native unit suite, both example APK builds, a
 ## Update 2026-10-25: template sync, trigger not met
 
 A fresh `flutter create` on Flutter 3.47.8 still writes `android.newDsl=false` and `android.builtInKotlin=false`, so neither trigger above has fired and those two settings stay deferred.
-The template no longer sets Jetifier and uses AGP 9.1.0, Kotlin 2.4.0 and Gradle 9.3.1, so the example host follows it: Jetifier is removed and the three versions moved (operator decision on #113).
+The template no longer sets Jetifier and uses AGP 9.1.0, Kotlin 2.4.0 and Gradle 9.3.1, so the example host follows it: Jetifier is removed and the three versions moved (decided on #113).
 #113 stays open for the two flags under the same trigger.

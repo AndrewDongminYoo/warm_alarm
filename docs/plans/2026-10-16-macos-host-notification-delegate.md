@@ -24,7 +24,7 @@ Oracle retrieval returned `[no precedent found]`; the existing iOS forwarding im
 4. Add a native CI job and affected documentation, then run Flutter checks and scoped Trunk checks.
    Verify: `flutter analyze --no-pub`, the macOS Dart test suite, explicit Dart formatting, and the non-Dart quality gate.
 5. Review the final change, create semantic commits, open the PR, and verify current-head CI and hosted reviews.
-   Stop for operator merge after the readiness gates pass.
+   Stop for merge after the readiness gates pass.
 
 The existing reusable workflow remains unchanged because its pin-update gate would require an unrelated major version upgrade.
 Bare SwiftPM runs explicitly skip the nine application-only tests; the added app-host job rejects any skips.

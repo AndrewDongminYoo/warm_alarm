@@ -31,6 +31,6 @@ Do not expand playback recovery for invalid custom audio files or implement the 
 ## Constraints and precedent
 
 Run heavy native builds sequentially on the local Mac.
-Use a simulator for iOS; the operator's daily phone is outside this task's device scope.
+Use a simulator for iOS; my daily phone is outside this task's device scope.
 There are no visual design changes requiring visual approval.
 The Oracle source `wiki/sources/warm_alarm--readme.md` establishes platform-honest behavior and private Pigeon boundaries; the fix restores the existing native notification path without extending public capability claims.

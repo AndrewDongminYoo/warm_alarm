@@ -2,7 +2,7 @@
 
 ## Scope
 
-The operator authorized the next issue through `pr-loop`.
+I authorized the next issue through `pr-loop`.
 Implement #74 in the main workspace on `fix/macos-replacement-rollback` from `e4b185639fed241d7c2adbf20c0ea48a51522d30`.
 The root owns macOS `WarmAlarmPlugin.swift`, `WarmAlarmReplacementTests.swift`, `README.md`, and these spec and plan files.
 Oracle returned no applicable project precedent for replacement or rollback.
@@ -18,7 +18,7 @@ Advisor confirmed snapshot restoration with explicit pending removal before stor
 
 ## Boundary
 
-Merge remains the operator's action.
+Merge remains my action.
 Cleanup and memory recording for this PR were not requested.
 Use at most two local repair rounds and five hosted review rounds within five hours.
 Run heavy mobile jobs sequentially after checking machine load.

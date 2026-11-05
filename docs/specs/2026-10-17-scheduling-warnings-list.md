@@ -1,7 +1,7 @@
 # Scheduling warnings list
 
 **Date:** 2026-10-17
-**Decision owner:** operator
+**Decision owner:** me
 **Issues:** [#115](https://github.com/AndrewDongminYoo/warm_alarm/issues/115) (decision), [#122](https://github.com/AndrewDongminYoo/warm_alarm/issues/122) (implementation)
 
 ## Problem
@@ -14,7 +14,7 @@ A null warning also does not guarantee that every platform-specific option was a
 ## Decision
 
 Add a list of warnings to the scheduling result and keep the existing single field.
-The operator selected this option over two others on 2026-10-17:
+I selected this option over two others on 2026-10-17:
 
 - Keep the single field and document the limit.
 - Add a strict mode that fails scheduling when any option is unsupported.

@@ -56,7 +56,7 @@ updates:
           - version-update:semver-patch
           - version-update:semver-minor
           - version-update:semver-major
-      # Runtime majors without a security fix stay off (operator, 2026-10-24); org.json:json 20260814 came as #138.
+      # Runtime majors without a security fix stay off (decided 2026-10-24); org.json:json 20260814 came as #138.
       # update-types limits this to version updates; security updates still open.
       - dependency-name: org.json:json
         update-types:

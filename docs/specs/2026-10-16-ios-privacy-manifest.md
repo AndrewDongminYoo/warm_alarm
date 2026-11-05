@@ -34,4 +34,4 @@ Oracle returned `[no precedent found]` for this project's privacy-manifest and U
 
 No App Store submission or rejection is reproduced or claimed.
 Builds and report generation do not require a physical-device install or a publication.
-No product visual output changes, so operator visual approval is not applicable.
+No product visual output changes, so visual approval is not applicable.

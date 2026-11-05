@@ -18,5 +18,5 @@ Confirm the new pub.dev version before preparing the next stage because workspac
 
 ## Merge boundary
 
-Prepare each PR and complete its checks and review before requesting operator merge.
+Prepare each PR and complete its checks and review before requesting merge.
 Resume publication only after the merge SHA is verified on `main`.

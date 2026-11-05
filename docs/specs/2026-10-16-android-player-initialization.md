@@ -15,7 +15,7 @@ File, asset, and default-alarm sources continue to use this shared helper.
 Preserve the existing failure event, vibration cleanup, and service shutdown behavior.
 
 Do not change source selection, overlap policy, public APIs, dependencies, permissions, Pigeon output, or Apple behavior.
-There is no visual output requiring operator approval.
+There is no visual output requiring approval.
 
 ## Acceptance and limits
 

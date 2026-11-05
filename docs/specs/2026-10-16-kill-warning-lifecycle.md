@@ -27,5 +27,5 @@ Each claim must map to the current set/clear implementation, lifecycle callback 
 Preserve the iOS pending-slot reservation and configuration-failure descriptions.
 Keep unrelated README issues outside this change.
 Scoped Trunk checks, Flutter analysis and Dart format checks must pass.
-Hosted CI and current-head code/security review must settle before requesting operator merge.
+Hosted CI and current-head code/security review must settle before requesting merge.
 Content review is required; no UI or physical-device validation is claimed.
