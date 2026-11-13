@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:warm_alarm/warm_alarm.dart';
 import 'package:warm_alarm_example/voice_audio.dart';
 

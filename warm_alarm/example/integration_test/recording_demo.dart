@@ -12,10 +12,9 @@
 //
 // iOS: run `flutter run --profile -t integration_test/recording_demo.dart -d <device>`. Grant the microphone and local
 // network prompts first, and disconnect Xcode DeviceHub: while it mirrors the device, recordings contain no audio.
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-
+import 'package:material_ui/material_ui.dart';
 import 'package:warm_alarm/warm_alarm.dart';
 import 'package:warm_alarm_example/main.dart' as app;
 

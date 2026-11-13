@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:warm_alarm_platform_interface/warm_alarm_platform_interface.dart';
 
 void main() {
