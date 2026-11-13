@@ -38,7 +38,7 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
-          flutter-version: 3.47.8
+          flutter-version: 3.50.0
           cache: true
 
       - name: Create a host using the selected package manager
@@ -66,6 +66,8 @@ jobs:
               "dependencies:",
               "  flutter:",
               "    sdk: flutter",
+              # The flutter create template's lib/main.dart imports material_ui since Flutter 3.50.0.
+              "  material_ui: ^1.1.0",
               "  warm_alarm:",
               f"    path: {json.dumps(str(root / 'warm_alarm'))}",
               "dependency_overrides:",
