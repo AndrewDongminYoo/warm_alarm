@@ -66,6 +66,8 @@ jobs:
               "dependencies:",
               "  flutter:",
               "    sdk: flutter",
+              # The flutter create template's lib/main.dart imports material_ui since Flutter 3.50.0.
+              "  material_ui: ^1.1.0",
               "  warm_alarm:",
               f"    path: {json.dumps(str(root / 'warm_alarm'))}",
               "dependency_overrides:",
