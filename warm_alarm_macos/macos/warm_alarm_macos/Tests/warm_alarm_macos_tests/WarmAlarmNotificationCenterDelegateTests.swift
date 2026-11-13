@@ -247,8 +247,10 @@ private final class NotificationTestRegistrar: NSObject, FlutterPluginRegistrar 
     var view: NSView? { nil }
     var viewController: NSViewController? { nil }
     var published: NSObject?
+    var engineIdentifier: Int64 { 0 }
 
     func publish(_ value: NSObject) { published = value }
+    func valuePublished(byPlugin pluginKey: String) -> NSObject? { published }
     func addMethodCallDelegate(_ delegate: FlutterPlugin, channel: FlutterMethodChannel) {}
     func addApplicationDelegate(_ delegate: FlutterAppLifecycleDelegate) {}
     func register(_ factory: FlutterPlatformViewFactory, withId factoryId: String) {}
